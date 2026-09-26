@@ -310,21 +310,40 @@ export function calculateVariantCostBreakdown(
   const seafoodTotalCost = shrimpCost + squidCost;
   const totalIngredientCost = shrimpCost + squidCost + meatCost + sauceCost + centralIngredientCost;
   
-  // Overhead cost (per dish)
-  const overheadCost =
-    variant.overheadCost !== undefined && variant.overheadCost !== null
-      ? variant.overheadCost
-      : settings.defaultOverheadCostPerDish;
-
-  const totalCost = totalIngredientCost + overheadCost;
-
   // Selling Prices
   const sellingPrice = variant.sellingPrice || 0;
   const takeawayPrice = variant.takeawayPrice || sellingPrice;
   const deliveryPrice = variant.deliveryPrice || sellingPrice;
 
+  // Overhead cost (per dish)
+  // Automatically computed from overheadRatePercent and overheadCalculationBase:
+  // Overhead cost in baht = overhead% × (selling price OR food cost, per the selected base)
+  let overheadCost = 0;
+  if (typeof settings.overheadRatePercent === 'number' && Number.isFinite(settings.overheadRatePercent)) {
+    const rate = Math.max(0, settings.overheadRatePercent) / 100;
+    const baseAmount = settings.overheadCalculationBase === 'FOOD_COST'
+      ? totalIngredientCost
+      : sellingPrice;
+    overheadCost = rate * baseAmount;
+  } else {
+    overheadCost =
+      variant.overheadCost !== undefined && variant.overheadCost !== null
+        ? variant.overheadCost
+        : (settings.defaultOverheadCostPerDish ?? 0);
+  }
+
+  // Packaging cost (per sub-item/variant):
+  // Sum of packaging line items into "โสหุ้ยแพ็กเกจจิ้งรวม / Total packaging cost"
+  const variantPackagingItems = Array.isArray(variant.packagingItems) ? variant.packagingItems : [];
+  const packagingCost = variantPackagingItems.length > 0
+    ? variantPackagingItems.reduce((acc, item) => acc + (Number(item.cost) || 0), 0)
+    : (Number(variant.packagingCost) || 0);
+
+  // All three (Food Cost + Overhead% + Packaging) sum into ต้นทุนรวม (total cost):
+  const totalCost = totalIngredientCost + overheadCost + packagingCost;
+
   // 1. Restaurant / Dine-in Profitability
-  // Food Cost % is ingredient cost only. Overhead, GP and packaging are tracked separately.
+  // Food Cost % is ingredient cost only. Overhead, packaging, and profit are tracked deterministically.
   const restaurantProfit = sellingPrice - totalCost;
   const restaurantFoodCostPercent = sellingPrice > 0 ? (totalIngredientCost / sellingPrice) * 100 : 0;
   const restaurantMarginPercent = sellingPrice > 0 ? (restaurantProfit / sellingPrice) * 100 : 0;
@@ -333,14 +352,14 @@ export function calculateVariantCostBreakdown(
   const takeawayPackagingCost = Number.isFinite(settings.takeawayPackagingCost)
     ? Math.max(0, settings.takeawayPackagingCost)
     : 0;
-  const takeawayProfit = takeawayPrice - totalCost - takeawayPackagingCost;
+  const takeawayProfit = takeawayPrice - totalCost;
   const takeawayFoodCostPercent = takeawayPrice > 0 ? (totalIngredientCost / takeawayPrice) * 100 : 0;
 
-  // 3. Delivery Platform Profitability. Platform is explicit; never infer it from channel order.
+  // 3. Delivery Platform Profitability. Sourced from sub-item packaging cost (fallback to channel setting if 0)
   const deliveryCommissionPercent = getDeliveryCommissionPercent(settings, deliveryChannel);
   const deliveryCommissionAmount = deliveryPrice * (deliveryCommissionPercent / 100);
-  const deliveryPackagingCost = getDeliveryPackagingCost(settings, deliveryChannel);
-  const deliveryProfit = deliveryPrice - deliveryCommissionAmount - totalCost - deliveryPackagingCost;
+  const deliveryPackagingCost = packagingCost > 0 ? packagingCost : getDeliveryPackagingCost(settings, deliveryChannel);
+  const deliveryProfit = deliveryPrice - deliveryCommissionAmount - (totalIngredientCost + overheadCost + deliveryPackagingCost);
   const deliveryFoodCostPercent =
     deliveryPrice > 0 ? (totalIngredientCost / deliveryPrice) * 100 : 0;
 
@@ -369,6 +388,7 @@ export function calculateVariantCostBreakdown(
     totalIngredientCost,
     totalFoodCost: totalIngredientCost,
     overheadCost,
+    packagingCost,
     totalCost,
     totalCostWithOverhead: totalCost,
 

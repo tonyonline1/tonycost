@@ -12,8 +12,10 @@ import {
 
 export const INITIAL_SETTINGS: RestaurantSettings = {
   restaurantName: "Tony's Kitchen",
-  defaultOverheadCostPerDish: 25.0, // Fixed overhead per dish (gas, electricity, labor, cleaning)
+  defaultOverheadCostPerDish: 25.0, // Fixed overhead per dish (legacy backward compatibility)
   defaultOverheadCost: 25.0,
+  overheadRatePercent: 10.0, // อัตราโสหุ้ย (%)
+  overheadCalculationBase: 'SELLING_PRICE', // คิดโสหุ้ยจาก: 'SELLING_PRICE' (DEFAULT) หรือ 'FOOD_COST'
   targetFoodCostPercent: 40.0, // 40% target food cost
   targetProfitAmount: 25.0, // Target 25 THB profit
   takeawayPackagingCost: 5.0,

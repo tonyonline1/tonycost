@@ -18,6 +18,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     ...settings,
     restaurantName: settings.restaurantName || '',
     targetFoodCostPercent: settings.targetFoodCostPercent ?? 40,
+    overheadRatePercent: settings.overheadRatePercent ?? 10,
+    overheadCalculationBase: settings.overheadCalculationBase || 'SELLING_PRICE',
     defaultOverheadCost: settings.defaultOverheadCost ?? settings.defaultOverheadCostPerDish ?? 25,
     defaultOverheadCostPerDish: settings.defaultOverheadCostPerDish ?? settings.defaultOverheadCost ?? 25,
     packagingCostTakeaway: settings.packagingCostTakeaway ?? settings.takeawayPackagingCost ?? 5,
@@ -32,6 +34,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       ...settings,
       restaurantName: settings.restaurantName || '',
       targetFoodCostPercent: settings.targetFoodCostPercent ?? 40,
+      overheadRatePercent: settings.overheadRatePercent ?? 10,
+      overheadCalculationBase: settings.overheadCalculationBase || 'SELLING_PRICE',
       defaultOverheadCost: settings.defaultOverheadCost ?? settings.defaultOverheadCostPerDish ?? 25,
       defaultOverheadCostPerDish: settings.defaultOverheadCostPerDish ?? settings.defaultOverheadCost ?? 25,
       packagingCostTakeaway: settings.packagingCostTakeaway ?? settings.takeawayPackagingCost ?? 5,
@@ -86,7 +90,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             <h2 className="text-base font-bold text-white">ข้อมูลร้านและเป้าหมายต้นทุน</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             <div>
               <label className="block font-bold text-white/80 mb-1">ชื่อร้านอาหาร</label>
               <input
@@ -126,33 +130,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
             <div>
               <label className="block font-bold text-white/80 mb-1">
-                ค่าโสหุ้ยมาตรฐานต่อจาน (Overhead Cost)
+                อัตราโสหุ้ย (%) / Overhead rate (%)
               </label>
               <div className="relative">
                 <input
                   type="number"
                   step="0.5"
+                  min="0"
+                  max="100"
                   required
-                  value={localSettings.defaultOverheadCost ?? localSettings.defaultOverheadCostPerDish ?? 25}
+                  value={localSettings.overheadRatePercent ?? 10}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0;
                     setLocalSettings({
                       ...localSettings,
-                      defaultOverheadCost: val,
-                      defaultOverheadCostPerDish: val,
+                      overheadRatePercent: val,
                     });
                   }}
                   className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white focus:outline-none focus:border-[#F27D26]"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">
-                  บาท
+                  %
                 </span>
               </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-white/80 mb-1">
+                คิดโสหุ้ยจาก / Calculate overhead based on
+              </label>
+              <select
+                value={localSettings.overheadCalculationBase || 'SELLING_PRICE'}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    overheadCalculationBase: e.target.value as 'SELLING_PRICE' | 'FOOD_COST',
+                  })
+                }
+                className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:outline-none focus:border-[#F27D26]"
+              >
+                <option value="SELLING_PRICE" className="bg-[#1a1a1a] text-white">
+                  ราคาขาย / Selling price (DEFAULT)
+                </option>
+                <option value="FOOD_COST" className="bg-[#1a1a1a] text-white">
+                  ต้นทุนวัตถุดิบ (Food Cost) / Raw material cost
+                </option>
+              </select>
             </div>
           </div>
         </div>
 
-        {/* Delivery Channels GP & Packaging */}
+        {/* Delivery Channels GP (Owner-Defined GP%) */}
         <div className="bg-white/5 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-xl space-y-4">
           <div className="flex items-center gap-2 border-b border-white/10 pb-3">
             <Package className="w-5 h-5 text-[#F27D26]" />
@@ -166,7 +194,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             {/* GrabFood GP */}
             <div className="p-4 bg-black/30 rounded-2xl border border-emerald-500/20">
               <div className="flex items-center justify-between mb-1.5">
@@ -240,36 +268,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               </div>
               <span className="text-[11px] text-white/40 mt-1.5 block">
                 สูตร: GP = ยอดขาย LINE MAN × GP%
-              </span>
-            </div>
-
-            {/* Packaging */}
-            <div className="p-4 bg-black/30 rounded-2xl border border-white/10">
-              <label className="block font-bold text-white/80 mb-1.5">
-                ต้นทุนกล่องบรรจุภัณฑ์ (Packaging)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.5"
-                  required
-                  value={localSettings.packagingCostTakeaway ?? localSettings.takeawayPackagingCost ?? 5}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 5;
-                    setLocalSettings({
-                      ...localSettings,
-                      packagingCostTakeaway: val,
-                      takeawayPackagingCost: val,
-                    });
-                  }}
-                  className="w-full p-2.5 bg-black/60 border border-white/15 rounded-xl font-mono font-bold text-white focus:outline-none focus:border-[#F27D26]"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">
-                  บาท
-                </span>
-              </div>
-              <span className="text-[11px] text-white/40 mt-1.5 block">
-                กล่องข้าว, ช้อนส้อม, ถุงหิ้ว
               </span>
             </div>
           </div>

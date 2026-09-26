@@ -15,6 +15,8 @@ import {
   Layers,
   ArrowUpRight,
   SlidersHorizontal,
+  Package,
+  Trash2,
 } from 'lucide-react';
 import {
   MenuItem,
@@ -180,6 +182,125 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
     onSaveMenu(finalMenu);
     setIsMenuModalOpen(false);
+  };
+
+  // Packaging Line Items Management for Sub-Items
+  const handleAddPackagingLine = () => {
+    if (!selectedBreakdown) return;
+    const { menu, variant } = selectedBreakdown;
+    const currentItems = variant.packagingItems ? [...variant.packagingItems] : [];
+    const newLine = {
+      id: `pkg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: 'กล่องข้าว',
+      cost: 5.0,
+    };
+    const updatedItems = [...currentItems, newLine];
+    const totalPkgCost = updatedItems.reduce((acc, it) => acc + (Number(it.cost) || 0), 0);
+
+    const updatedVariant: MenuVariant = {
+      ...variant,
+      packagingItems: updatedItems,
+      packagingCost: totalPkgCost,
+    };
+
+    const updatedMenu: MenuItem = {
+      ...menu,
+      variants: menu.variants.map((v) => (v.id === variant.id ? updatedVariant : v)),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedBreakdown = calculateVariantCostBreakdown(
+      updatedVariant,
+      updatedMenu.name,
+      ingredientsMap,
+      saucesMap,
+      settings,
+      activeChannel === 'LINEMAN' ? 'lineman' : 'grab'
+    );
+
+    onSaveMenu(updatedMenu);
+    setSelectedBreakdown({
+      menu: updatedMenu,
+      variant: updatedVariant,
+      breakdown: updatedBreakdown,
+    });
+  };
+
+  const handleUpdatePackagingLine = (index: number, field: 'name' | 'cost', value: any) => {
+    if (!selectedBreakdown) return;
+    const { menu, variant } = selectedBreakdown;
+    const currentItems = variant.packagingItems ? [...variant.packagingItems] : [];
+    if (!currentItems[index]) return;
+
+    currentItems[index] = {
+      ...currentItems[index],
+      [field]: value,
+    };
+    const totalPkgCost = currentItems.reduce((acc, it) => acc + (Number(it.cost) || 0), 0);
+
+    const updatedVariant: MenuVariant = {
+      ...variant,
+      packagingItems: currentItems,
+      packagingCost: totalPkgCost,
+    };
+
+    const updatedMenu: MenuItem = {
+      ...menu,
+      variants: menu.variants.map((v) => (v.id === variant.id ? updatedVariant : v)),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedBreakdown = calculateVariantCostBreakdown(
+      updatedVariant,
+      updatedMenu.name,
+      ingredientsMap,
+      saucesMap,
+      settings,
+      activeChannel === 'LINEMAN' ? 'lineman' : 'grab'
+    );
+
+    onSaveMenu(updatedMenu);
+    setSelectedBreakdown({
+      menu: updatedMenu,
+      variant: updatedVariant,
+      breakdown: updatedBreakdown,
+    });
+  };
+
+  const handleDeletePackagingLine = (index: number) => {
+    if (!selectedBreakdown) return;
+    const { menu, variant } = selectedBreakdown;
+    const currentItems = variant.packagingItems ? [...variant.packagingItems] : [];
+    const updatedItems = currentItems.filter((_, i) => i !== index);
+    const totalPkgCost = updatedItems.reduce((acc, it) => acc + (Number(it.cost) || 0), 0);
+
+    const updatedVariant: MenuVariant = {
+      ...variant,
+      packagingItems: updatedItems,
+      packagingCost: totalPkgCost,
+    };
+
+    const updatedMenu: MenuItem = {
+      ...menu,
+      variants: menu.variants.map((v) => (v.id === variant.id ? updatedVariant : v)),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedBreakdown = calculateVariantCostBreakdown(
+      updatedVariant,
+      updatedMenu.name,
+      ingredientsMap,
+      saucesMap,
+      settings,
+      activeChannel === 'LINEMAN' ? 'lineman' : 'grab'
+    );
+
+    onSaveMenu(updatedMenu);
+    setSelectedBreakdown({
+      menu: updatedMenu,
+      variant: updatedVariant,
+      breakdown: updatedBreakdown,
+    });
   };
 
   // Check if a breakdown has seafood
@@ -368,133 +489,158 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
             <div className="divide-y divide-white/5">
               {filteredMenus.map((menu) => {
                 const isSelected = selectedMenuId === menu.id;
-                return (
-                  <div
-                    key={menu.id}
-                    className={`group flex items-center gap-3 px-5 py-4 transition-all ${
-                      isSelected ? 'bg-[#F27D26]/10' : 'hover:bg-white/5'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMenuId(isSelected ? null : menu.id)}
-                      className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer"
-                    >
-                      <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                        isSelected
-                          ? 'bg-[#F27D26]/15 border-[#F27D26]/30 text-[#F27D26]'
-                          : 'bg-white/5 border-white/10 text-white/45'
-                      }`}>
-                        <UtensilsCrossed className="w-4 h-4" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-white truncate">{menu.name}</span>
-                      </span>
-                      <ChevronRight className={`w-4 h-4 ml-auto shrink-0 transition-transform ${
-                        isSelected ? 'rotate-90 text-[#F27D26]' : 'text-white/30'
-                      }`} />
-                    </button>
+                const menuRows = isSelected ? allRows.filter((r) => r.menu.id === menu.id) : [];
 
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditMenu(menu)}
-                      className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
-                      title="แก้ไขเมนู"
+                return (
+                  <React.Fragment key={menu.id}>
+                    <div
+                      className={`group flex items-center gap-3 px-5 py-4 transition-all ${
+                        isSelected ? 'bg-[#F27D26]/10' : 'hover:bg-white/5'
+                      }`}
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMenuId(isSelected ? null : menu.id)}
+                        className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer"
+                      >
+                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                          isSelected
+                            ? 'bg-[#F27D26]/15 border-[#F27D26]/30 text-[#F27D26]'
+                            : 'bg-white/5 border-white/10 text-white/45'
+                        }`}>
+                          <UtensilsCrossed className="w-4 h-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-white truncate">{menu.name}</span>
+                        </span>
+                        <ChevronRight className={`w-4 h-4 ml-auto shrink-0 transition-transform ${
+                          isSelected ? 'rotate-90 text-[#F27D26]' : 'text-white/30'
+                        }`} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditMenu(menu)}
+                        className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
+                        title="แก้ไขเมนู"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Inline accordion detail panel directly beneath this menu row */}
+                    {isSelected && (
+                      <div className="bg-black/30 border-t border-b border-white/10 overflow-hidden shadow-inner">
+                        <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between gap-3 bg-white/5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-bold text-white truncate">{menu.name}</h3>
+                              <span className="text-[9px] px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/45 shrink-0">
+                                {menuRows.length} ตัวเลือก
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-white/40 mt-0.5">ตารางวิเคราะห์ต้นทุนตัวเลือกเนื้อสัตว์ (คลิกที่แถวเพื่อเปิดดู/แก้ไขแพ็กเกจจิ้ง)</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMenuId(null)}
+                            className="p-1.5 rounded-xl text-white/40 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
+                            title="ปิดรายละเอียด"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Compact Spreadsheet Table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-white/5 border-b border-white/10 text-white/50 font-semibold text-[10px] uppercase tracking-wider">
+                                <th className="py-2.5 px-4 font-sans">ชื่อเมนูย่อย / Sub-item</th>
+                                <th className="py-2.5 px-3 text-right">ราคาขาย</th>
+                                <th className="py-2.5 px-3 text-right">Food Cost</th>
+                                <th className="py-2.5 px-3 text-right">FC %</th>
+                                <th className="py-2.5 px-3 text-right">โสหุ้ย</th>
+                                <th className="py-2.5 px-3 text-right text-[#00B1FF]">แพ็กเกจจิ้ง</th>
+                                <th className="py-2.5 px-3 text-right">ต้นทุนรวม</th>
+                                <th className="py-2.5 px-3 text-right">กำไร</th>
+                                <th className="py-2.5 px-3 text-center w-8"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 font-mono text-xs">
+                              {menuRows.map(({ variant, breakdown }, idx) => {
+                                const profit = breakdown.restaurantProfit;
+                                const foodCost = breakdown.totalIngredientCost;
+                                const pkgCost = breakdown.packagingCost || 0;
+                                const isHighCost = breakdown.restaurantFoodCostPercent > 40;
+                                const isEven = idx % 2 === 0;
+
+                                return (
+                                  <tr
+                                    key={variant.id}
+                                    onClick={() => setSelectedBreakdown({ menu, variant, breakdown })}
+                                    className={`cursor-pointer transition-colors group ${
+                                      isEven ? 'bg-black/20' : 'bg-transparent'
+                                    } hover:bg-[#F27D26]/15`}
+                                  >
+                                    <td className="py-2.5 px-4 font-sans font-medium text-white">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="truncate group-hover:text-[#F27D26] transition-colors font-medium">
+                                          {variant.name || variant.proteinType}
+                                        </span>
+                                        {isSeafoodVariant(breakdown) && (
+                                          <span className="text-[8px] px-1.5 py-0.2 rounded bg-[#F27D26]/20 text-[#F27D26] font-bold shrink-0">
+                                            ทะเล
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-bold text-[#FFC107]">
+                                      ฿{variant.sellingPrice.toLocaleString()}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right text-white/80">
+                                      ฿{foodCost.toFixed(2)}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-bold">
+                                      <span className={isHighCost ? 'text-rose-400' : 'text-emerald-400'}>
+                                        {breakdown.restaurantFoodCostPercent.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right text-white/70">
+                                      ฿{breakdown.overheadCost.toFixed(2)}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-semibold text-[#00B1FF]">
+                                      ฿{pkgCost.toFixed(2)}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-bold text-white">
+                                      ฿{breakdown.totalCost.toFixed(2)}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-bold">
+                                      <span className={profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                        ฿{profit.toFixed(2)}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-center text-white/30 group-hover:text-white transition-colors">
+                                      <ChevronRight className="w-3.5 h-3.5 inline-block group-hover:translate-x-0.5 transition-transform" />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="px-5 py-2.5 text-[10px] text-white/35 flex items-center justify-between border-t border-white/5 bg-black/20">
+                          <span>💡 คลิกแถวเพื่อเปิดรายละเอียดการคำนวณและจัดการแพ็กเกจจิ้งของเมนูย่อย</span>
+                          <span className="font-mono">{menuRows.length} รายการ</span>
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </div>
           </div>
-
-          {/* Variant details appear only after a menu is selected */}
-          {selectedMenuId && (() => {
-            const menu = filteredMenus.find((m) => m.id === selectedMenuId);
-            if (!menu) return null;
-            const menuRows = allRows.filter((r) => r.menu.id === menu.id);
-
-            return (
-              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-xl">
-                <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-bold text-white truncate">{menu.name}</h3>
-                      <span className="text-[9px] px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/45 shrink-0">
-                        {menuRows.length} ตัวเลือก
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-white/40 mt-0.5">รายละเอียดตัวเลือกเนื้อสัตว์และต้นทุนของเมนูนี้</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMenuId(null)}
-                    className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
-                    title="ปิดรายละเอียด"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3">
-                  {menuRows.map(({ variant, breakdown }) => {
-                    const profit = breakdown.restaurantProfit;
-                    const foodCost = breakdown.totalIngredientCost;
-                    return (
-                      <button
-                        key={variant.id}
-                        type="button"
-                        onClick={() => setSelectedBreakdown({ menu, variant, breakdown })}
-                        className="w-full rounded-2xl border border-white/10 bg-black/20 hover:bg-white/5 hover:border-white/20 p-4 text-left transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <div className="min-w-0 flex items-center gap-2">
-                            <span className="text-sm font-bold text-white truncate">{variant.name || variant.proteinType}</span>
-                            {isSeafoodVariant(breakdown) && (
-                              <span className="text-[8px] px-1.5 py-0.5 rounded-md bg-[#F27D26]/15 text-[#F27D26] font-bold shrink-0">ทะเล</span>
-                            )}
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-white/30 shrink-0" />
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                          <div>
-                            <span className="block text-[9px] text-white/35 mb-1">ราคาขาย</span>
-                            <span className="text-sm font-mono font-bold text-[#FFC107]">฿{variant.sellingPrice.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            <span className="block text-[9px] text-white/35 mb-1">Food Cost</span>
-                            <span className="text-xs font-mono text-white/75">฿{foodCost.toFixed(2)}</span>
-                          </div>
-                          <div>
-                            <span className="block text-[9px] text-white/35 mb-1">FC %</span>
-                            <span className={`text-xs font-mono font-bold ${breakdown.restaurantFoodCostPercent > 40 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                              {breakdown.restaurantFoodCostPercent.toFixed(1)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="block text-[9px] text-white/35 mb-1">ต้นทุนรวม</span>
-                            <span className="text-xs font-mono text-white/70">฿{breakdown.totalCost.toFixed(2)}</span>
-                          </div>
-                          <div>
-                            <span className="block text-[9px] text-white/35 mb-1">กำไร</span>
-                            <span className={`text-xs font-mono font-bold ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              ฿{profit.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="px-5 pb-4 text-[10px] text-white/30">
-                  กดที่ตัวเลือกเนื้อสัตว์เพื่อเปิดรายละเอียดวัตถุดิบและการคำนวณต้นทุนแบบละเอียด
-                </div>
-              </div>
-            );
-          })()}
         </div>
       )}
 
@@ -719,8 +865,97 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 </div>
               </div>
 
+              {/* Packaging Line Items Card (Scoped per sub-item) */}
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-[#00B1FF]" />
+                    <span className="font-bold text-white text-xs">
+                      ต้นทุนกล่อง & บรรจุภัณฑ์ (Packaging Items)
+                    </span>
+                    <span className="text-[10px] text-white/50">
+                      (กำหนดเฉพาะตัวเลือกนี้)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddPackagingLine}
+                    className="px-2.5 py-1 bg-[#00B1FF]/20 hover:bg-[#00B1FF]/30 border border-[#00B1FF]/40 text-[#00B1FF] rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ เพิ่มแพ็กเกจจิ้ง</span>
+                  </button>
+                </div>
+
+                {(!selectedBreakdown.variant.packagingItems || selectedBreakdown.variant.packagingItems.length === 0) ? (
+                  <div className="p-3 text-center text-white/40 text-xs border border-dashed border-white/10 rounded-xl">
+                    ยังไม่มีรายการแพ็กเกจจิ้ง (กดปุ่ม "+ เพิ่มแพ็กเกจจิ้ง" ด้านบนเพื่อระบุ เช่น กล่องข้าว, ถุงพลาสติก, ช้อนส้อม)
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedBreakdown.variant.packagingItems.map((pkg, pIdx) => (
+                      <div key={pkg.id || pIdx} className="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
+                        {/* Packaging Name with common datalist */}
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            list={`pkg-common-${pIdx}`}
+                            value={pkg.name}
+                            placeholder="ชื่อแพ็กเกจจิ้ง เช่น กล่องข้าว, ถุงหิ้ว"
+                            onChange={(e) => handleUpdatePackagingLine(pIdx, 'name', e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-black/50 border border-white/15 rounded-lg text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#00B1FF]"
+                          />
+                          <datalist id={`pkg-common-${pIdx}`}>
+                            <option value="กล่องข้าว" />
+                            <option value="กล่องกระดาษรักษ์โลก" />
+                            <option value="ถุงพลาสติกหิ้ว" />
+                            <option value="ถุงกระดาษ" />
+                            <option value="ชุดช้อนส้อมพลาสติก" />
+                            <option value="กระปุกน้ำจิ้ม / ถ้วยซอส" />
+                            <option value="กระดาษทิชชู่ / สติกเกอร์" />
+                          </datalist>
+                        </div>
+
+                        {/* Price */}
+                        <div className="w-28 relative">
+                          <input
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={pkg.cost || ''}
+                            placeholder="0.00"
+                            onChange={(e) => handleUpdatePackagingLine(pIdx, 'cost', parseFloat(e.target.value) || 0)}
+                            className="w-full pl-2 pr-6 py-1.5 bg-black/50 border border-white/15 rounded-lg text-xs font-mono font-bold text-white text-right focus:outline-none focus:border-[#00B1FF]"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40 font-bold">
+                            บาท
+                          </span>
+                        </div>
+
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePackagingLine(pIdx)}
+                          className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="ลบรายการนี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+
+                    <div className="flex justify-between items-center px-3 py-2 bg-[#00B1FF]/10 border border-[#00B1FF]/20 rounded-xl text-xs font-mono">
+                      <span className="font-sans text-white/70 font-semibold">โสหุ้ยแพ็กเกจจิ้งรวม (Total packaging cost):</span>
+                      <span className="font-bold text-[#00B1FF] text-sm">
+                        ฿{(selectedBreakdown.breakdown.packagingCost || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Cost Summary Breakdown */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 font-mono">
                 <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                   <span className="text-[10px] font-sans text-white/50 block">ต้นทุนวัตถุดิบรวม</span>
                   <span className="text-base font-bold text-white block mt-1">
@@ -732,6 +967,13 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   <span className="text-[10px] font-sans text-white/50 block">ค่าโสหุ้ยต่อจาน</span>
                   <span className="text-base font-bold text-white block mt-1">
                     ฿{selectedBreakdown.breakdown.overheadCost.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="bg-white/5 p-3 rounded-2xl border border-[#00B1FF]/30">
+                  <span className="text-[10px] font-sans text-[#00B1FF] block">แพ็กเกจจิ้งรวม</span>
+                  <span className="text-base font-bold text-[#00B1FF] block mt-1">
+                    ฿{(selectedBreakdown.breakdown.packagingCost || 0).toFixed(2)}
                   </span>
                 </div>
 
@@ -757,96 +999,106 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               </div>
 
               {/* Delivery Channel Split Details (GrabFood vs LINE MAN) */}
-              <div className="bg-black/30 border border-white/10 rounded-2xl p-4">
-                <span className="font-bold text-white/80 block mb-2 font-sans">
-                  เปรียบเทียบกำไรสุทธิแยกตามช่องทาง Delivery
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
-                  {/* GrabFood Card */}
-                  <div className="p-3 rounded-xl bg-white/5 border border-[#00B14F]/30">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-sans font-bold text-[#00B14F]">GrabFood</span>
-                      <span className="text-[10px] text-white/50">GP {grabCommissionPct}%</span>
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="font-sans text-white/60">ราคาขาย:</span>
-                        <span className="text-white font-bold">
-                          ฿{selectedBreakdown.variant.deliveryPrice}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-rose-400">
-                        <span className="font-sans text-white/60">หัก GP ({grabCommissionPct}%):</span>
-                        <span>
-                          -฿
-                          {(
-                            selectedBreakdown.variant.deliveryPrice *
-                            (grabCommissionPct / 100)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-rose-400">
-                        <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
-                        <span>-฿{(settings.deliveryPackagingCost || 8).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
-                        <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
-                        <span className="text-emerald-400">
-                          ฿
-                          {(
-                            selectedBreakdown.variant.deliveryPrice -
-                            selectedBreakdown.variant.deliveryPrice * (grabCommissionPct / 100) -
-                            selectedBreakdown.breakdown.totalCost -
-                            (settings.deliveryPackagingCost || 8)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+              {(() => {
+                const pkgCostToUse =
+                  (selectedBreakdown.breakdown.packagingCost || 0) > 0
+                    ? selectedBreakdown.breakdown.packagingCost
+                    : (settings.deliveryPackagingCost || 8);
+                const baseCost =
+                  selectedBreakdown.breakdown.totalIngredientCost +
+                  selectedBreakdown.breakdown.overheadCost;
+                const grabProfit =
+                  selectedBreakdown.variant.deliveryPrice -
+                  selectedBreakdown.variant.deliveryPrice * (grabCommissionPct / 100) -
+                  baseCost -
+                  pkgCostToUse;
+                const linemanProfit =
+                  selectedBreakdown.variant.deliveryPrice -
+                  selectedBreakdown.variant.deliveryPrice * (linemanCommissionPct / 100) -
+                  baseCost -
+                  pkgCostToUse;
 
-                  {/* LINE MAN Card */}
-                  <div className="p-3 rounded-xl bg-white/5 border border-[#06C755]/30">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-sans font-bold text-[#06C755]">LINE MAN</span>
-                      <span className="text-[10px] text-white/50">GP {linemanCommissionPct}%</span>
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="font-sans text-white/60">ราคาขาย:</span>
-                        <span className="text-white font-bold">
-                          ฿{selectedBreakdown.variant.deliveryPrice}
-                        </span>
+                return (
+                  <div className="bg-black/30 border border-white/10 rounded-2xl p-4">
+                    <span className="font-bold text-white/80 block mb-2 font-sans">
+                      เปรียบเทียบกำไรสุทธิแยกตามช่องทาง Delivery
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+                      {/* GrabFood Card */}
+                      <div className="p-3 rounded-xl bg-white/5 border border-[#00B14F]/30">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-sans font-bold text-[#00B14F]">GrabFood</span>
+                          <span className="text-[10px] text-white/50">GP {grabCommissionPct}%</span>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="font-sans text-white/60">ราคาขาย:</span>
+                            <span className="text-white font-bold">
+                              ฿{selectedBreakdown.variant.deliveryPrice}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-rose-400">
+                            <span className="font-sans text-white/60">หัก GP ({grabCommissionPct}%):</span>
+                            <span>
+                              -฿
+                              {(
+                                selectedBreakdown.variant.deliveryPrice *
+                                (grabCommissionPct / 100)
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-rose-400">
+                            <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
+                            <span>-฿{pkgCostToUse.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
+                            <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
+                            <span className="text-emerald-400">
+                              ฿{grabProfit.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-rose-400">
-                        <span className="font-sans text-white/60">หัก GP ({linemanCommissionPct}%):</span>
-                        <span>
-                          -฿
-                          {(
-                            selectedBreakdown.variant.deliveryPrice *
-                            (linemanCommissionPct / 100)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-rose-400">
-                        <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
-                        <span>-฿{(settings.deliveryPackagingCost || 8).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
-                        <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
-                        <span className="text-emerald-400">
-                          ฿
-                          {(
-                            selectedBreakdown.variant.deliveryPrice -
-                            selectedBreakdown.variant.deliveryPrice * (linemanCommissionPct / 100) -
-                            selectedBreakdown.breakdown.totalCost -
-                            (settings.deliveryPackagingCost || 8)
-                          ).toFixed(2)}
-                        </span>
+
+                      {/* LINE MAN Card */}
+                      <div className="p-3 rounded-xl bg-white/5 border border-[#06C755]/30">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-sans font-bold text-[#06C755]">LINE MAN</span>
+                          <span className="text-[10px] text-white/50">GP {linemanCommissionPct}%</span>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="font-sans text-white/60">ราคาขาย:</span>
+                            <span className="text-white font-bold">
+                              ฿{selectedBreakdown.variant.deliveryPrice}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-rose-400">
+                            <span className="font-sans text-white/60">หัก GP ({linemanCommissionPct}%):</span>
+                            <span>
+                              -฿
+                              {(
+                                selectedBreakdown.variant.deliveryPrice *
+                                (linemanCommissionPct / 100)
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-rose-400">
+                            <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
+                            <span>-฿{pkgCostToUse.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
+                            <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
+                            <span className="text-emerald-400">
+                              ฿{linemanProfit.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Dynamic Suggested Price by Target Food Cost */}
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4">

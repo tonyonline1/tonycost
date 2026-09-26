@@ -78,6 +78,10 @@ export const StorageService = {
     return {
       ...INITIAL_SETTINGS,
       ...loaded,
+      overheadRatePercent: typeof loaded.overheadRatePercent === 'number' && Number.isFinite(loaded.overheadRatePercent)
+        ? loaded.overheadRatePercent
+        : 10.0,
+      overheadCalculationBase: loaded.overheadCalculationBase || 'SELLING_PRICE',
       grabFoodCommissionPercent: grabPercent,
       lineManCommissionPercent: linemanPercent,
     };

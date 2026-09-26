@@ -118,6 +118,12 @@ export interface RecipeItem {
   isReviewRequired?: boolean;
 }
 
+export interface PackagingLineItem {
+  id: string;
+  name: string;
+  cost: number;
+}
+
 export interface MenuVariant {
   id: string;
   menuId?: string;
@@ -130,6 +136,8 @@ export interface MenuVariant {
   deliveryPrice: number; // Delivery price
   recipeItems: RecipeItem[];
   overheadCost: number; // specific or inherited
+  packagingCost?: number; // total packaging cost
+  packagingItems?: PackagingLineItem[]; // line items for packaging
   directFoodCost?: number; // snapshot or precalculated direct food cost
   kitchenStation?: string; // e.g. 'WOK', 'FRY', 'PREP'
   taxType?: 'INCLUSIVE' | 'EXCLUSIVE' | 'NONE';
@@ -168,6 +176,7 @@ export interface RecipeCostBreakdown {
   totalIngredientCost: number;
   totalFoodCost?: number;
   overheadCost: number;
+  packagingCost: number;
   totalCost: number;
   totalCostWithOverhead?: number;
 
@@ -209,10 +218,14 @@ export interface ChannelSettings {
   active: boolean;
 }
 
+export type OverheadCalculationBase = 'SELLING_PRICE' | 'FOOD_COST';
+
 export interface RestaurantSettings {
   restaurantName: string;
   defaultOverheadCostPerDish: number;
   defaultOverheadCost?: number;
+  overheadRatePercent?: number; // อัตราโสหุ้ย (%) / Overhead rate (%)
+  overheadCalculationBase?: OverheadCalculationBase; // คิดโสหุ้ยจาก: 'SELLING_PRICE' (DEFAULT) หรือ 'FOOD_COST'
   targetFoodCostPercent: number;
   defaultTargetFoodCostPercent?: number;
   primeCostTargetPercent?: number;
