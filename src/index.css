@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@layer utilities {
+  /* Frosted Glass Theme Utilities */
+  .glass-panel {
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-panel-subtle {
+    background-color: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-card-interactive {
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-card-interactive:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .glass-input {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    transition: all 0.15s ease-in-out;
+  }
+  .glass-input:focus {
+    border-color: #F27D26;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(242, 125, 38, 0.25);
+  }
+}
+
+/* Custom scrollbar for frosted dark UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Full-width desktop navigation layout: the legacy Sidebar is mobile-only. */
+@media (min-width: 768px) {
+  .desktop-nav-removed {
+    display: none !important;
+  }
+}
+
+/* Keep dense financial tables readable while giving the application more horizontal room. */
+@media (min-width: 1280px) {
+  main {
+    font-variant-numeric: tabular-nums;
+  }
+}

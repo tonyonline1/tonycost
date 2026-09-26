@@ -1,0 +1,6 @@
+{
+  "name": "Tony's Kitchen - Food Cost & Management",
+  "description": "ระบบจัดการต้นทุนอาหารและควบคุมกำไรภัตตาคาร Tony's Kitchen พร้อมเครื่องคิดคำนวณต้นทุนตามจริงและวิเคราะห์ยอดขาย P&L",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
