@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Calendar, Plus } from 'lucide-react';
 import { Ingredient } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface PriceHistoryViewProps {
   ingredients: Ingredient[];
@@ -148,7 +149,7 @@ export const PriceHistoryView: React.FC<PriceHistoryViewProps> = ({
               <label className="block text-xs text-white/60 mb-1">
                 ราคาซื้อต่อหน่วย (฿/{selectedIng?.purchaseUnit})
               </label>
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 required
@@ -161,7 +162,7 @@ export const PriceHistoryView: React.FC<PriceHistoryViewProps> = ({
 
             <div>
               <label className="block text-xs text-white/60 mb-1">ปริมาณที่ซื้อ ({selectedIng?.purchaseUnit})</label>
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 required

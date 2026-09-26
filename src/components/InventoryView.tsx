@@ -12,6 +12,7 @@ import {
   WasteRecord,
   Ingredient,
 } from '../types';
+import { NumericInput } from './common/NumericInput';
 
 interface InventoryViewProps {
   inventory: InventoryItem[];
@@ -396,7 +397,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <label className="block font-bold text-white/80 mb-1">
                   จำนวน ({adjustType === 'WASTE' ? 'จำนวนที่ทิ้ง' : '+เพิ่ม หรือ -ลด'})
                 </label>
-                <input
+                <NumericInput
                   type="number"
                   step="any"
                   required

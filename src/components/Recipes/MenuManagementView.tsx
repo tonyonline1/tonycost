@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Search, UtensilsCrossed, AlertTriangle, ArrowUpRight, DollarSign, Package } from 'lucide-react';
 import { MenuItem, PortionVariant, SalesChannel, Ingredient, SubRecipe, PackagingItem } from '../../types/domain';
 import { calculatePortionCost } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface MenuManagementViewProps {
   menuItems: MenuItem[];
@@ -356,7 +357,7 @@ export const MenuManagementView: React.FC<MenuManagementViewProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-white/60 mb-1">ราคาขายหน้าร้าน (฿)</label>
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       required
@@ -368,7 +369,7 @@ export const MenuManagementView: React.FC<MenuManagementViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs text-white/60 mb-1">ค่ากล่อง/บรรจุภัณฑ์ (฿)</label>
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       min="0"

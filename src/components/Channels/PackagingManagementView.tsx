@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Package, Search } from 'lucide-react';
 import { PackagingItem } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface PackagingManagementViewProps {
   packaging: PackagingItem[];
@@ -218,7 +219,7 @@ export const PackagingManagementView: React.FC<PackagingManagementViewProps> = (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">ต้นทุนต่อชิ้น (฿) *</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
@@ -230,7 +231,7 @@ export const PackagingManagementView: React.FC<PackagingManagementViewProps> = (
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">จำนวนคงเหลือ</label>
-                  <input
+                  <NumericInput
                     type="number"
                     min="0"
                     value={formData.stockQuantity}

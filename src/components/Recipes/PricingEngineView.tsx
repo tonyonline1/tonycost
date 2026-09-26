@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DollarSign, Percent, ArrowRight, Sparkles, Scale, Smartphone, ShoppingBag } from 'lucide-react';
 import { SalesChannel, MenuItem } from '../../types/domain';
 import { calculateDeliveryGrossPrice, calculateTargetPriceFromCost } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface PricingEngineViewProps {
   channels: SalesChannel[];
@@ -72,7 +73,7 @@ export const PricingEngineView: React.FC<PricingEngineViewProps> = ({
           </label>
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-white/40">฿</span>
-            <input
+            <NumericInput
               type="number"
               step="any"
               min="1"
@@ -124,7 +125,7 @@ export const PricingEngineView: React.FC<PricingEngineViewProps> = ({
               <label className="block text-xs text-white/60 mb-1">
                 เป้าหมาย % Food Cost ที่ต้องการ (%)
               </label>
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 min="1"
@@ -171,7 +172,7 @@ export const PricingEngineView: React.FC<PricingEngineViewProps> = ({
               <label className="block text-xs text-white/60 mb-1">
                 เป้าหมาย % Gross Margin ที่ต้องการ (%)
               </label>
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 min="1"
@@ -217,7 +218,7 @@ export const PricingEngineView: React.FC<PricingEngineViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs text-white/60 mb-1">ราคาขายหน้าร้าน (Dine-in Price ฿)</label>
-            <input
+            <NumericInput
               type="number"
               step="any"
               min="1"

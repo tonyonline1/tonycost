@@ -203,7 +203,7 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
                 <span>฿{directKitchenLabor.toLocaleString()}</span>
               </div>
             </div>
-            <div className="flex justify-between px-3 py-1.5 font-bold text-purple-200 bg-purple-500/5 rounded-lg">
+            <div className="flex justify-between px-3 py-1.5 font-bold text-purple-900 bg-purple-500/10 rounded-lg">
               <span className="font-sans">ยอดรวม PRIME COST ทั้งหมด</span>
               <span>฿{Math.round(pnl.primeCost).toLocaleString()}</span>
             </div>

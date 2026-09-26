@@ -329,12 +329,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white flex flex-col font-sans relative overflow-x-hidden selection:bg-[#F27D26] selection:text-black">
-      {/* Frosted Glass Background Ambient Orbs */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-35 overflow-hidden">
+    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col font-sans relative overflow-x-hidden selection:bg-[#F27D26] selection:text-white">
+      {/* Soft Ambient Background Orbs */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-20 overflow-hidden">
         <div className="absolute top-[-15%] left-[-15%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-full bg-[#F27D26] blur-[140px]" />
         <div className="absolute bottom-[-15%] right-[-15%] w-[60vw] h-[60vw] max-w-[750px] max-h-[750px] rounded-full bg-[#FFC107] blur-[160px]" />
-        <div className="absolute top-[40%] right-[10%] w-[35vw] h-[35vw] max-w-[400px] max-h-[400px] rounded-full bg-[#F27D26] blur-[150px] opacity-20" />
+        <div className="absolute top-[40%] right-[10%] w-[35vw] h-[35vw] max-w-[400px] max-h-[400px] rounded-full bg-[#F27D26] blur-[150px] opacity-15" />
       </div>
 
       {/* Top Navigation Bar */}
@@ -492,16 +492,16 @@ export default function App() {
         </main>
       </div>
 
-      {/* Frosted Glass Footer */}
-      <footer className="relative z-10 px-6 sm:px-8 py-3 bg-black/40 backdrop-blur-md border-t border-white/10 text-[11px] text-white/40 flex flex-col sm:flex-row justify-between items-center gap-2">
+      {/* Light Theme Footer */}
+      <footer className="relative z-10 px-6 sm:px-8 py-3.5 bg-white/90 backdrop-blur-md border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2 shadow-xs">
         <div className="flex items-center gap-4">
           <span>DATA SOURCE: Tony_Kitchen_Costing.xlsx · 1 SYSTEM / 3 MODULES</span>
-          <span className="hidden sm:inline text-white/20">|</span>
+          <span className="hidden sm:inline text-slate-300">|</span>
           <span>LAST SYNC: 2026-09-07 10:32:49</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-white/60 font-mono">Deterministic Calculation Engine V1.0.4</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-slate-600 font-mono font-medium">Deterministic Calculation Engine V1.0.4</span>
         </div>
       </footer>
     </div>

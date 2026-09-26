@@ -7,6 +7,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { RestaurantSettings } from '../types';
+import { NumericInput } from './common/NumericInput';
 
 interface SettingsViewProps {
   settings: RestaurantSettings;
@@ -109,7 +110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 เป้าหมาย Food Cost % (Target FC %)
               </label>
               <div className="relative">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   required
@@ -133,7 +134,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 อัตราโสหุ้ย (%) / Overhead rate (%)
               </label>
               <div className="relative">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -201,10 +202,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 <label className="font-bold text-emerald-400">
                   GrabFood GP %
                 </label>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Active</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-900 font-bold">Active</span>
               </div>
               <div className="relative">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -239,10 +240,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 <label className="font-bold text-green-400">
                   LINE MAN GP %
                 </label>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 font-semibold">Active</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-950 font-bold">Active</span>
               </div>
               <div className="relative">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"

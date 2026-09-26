@@ -99,7 +99,7 @@ export const MenuEngineeringView: React.FC<MenuEngineeringViewProps> = ({
             </span>
             <span className="text-xl font-light font-mono text-white">{stars.length}</span>
           </div>
-          <p className="text-xs text-amber-300 mt-3 font-semibold">กำไรสูง + ขายดีมาก</p>
+          <p className="text-xs text-amber-950 mt-3 font-semibold">กำไรสูง + ขายดีมาก</p>
           <p className="text-[11px] text-white/40 mt-1 leading-relaxed">
             กลยุทธ์: รักษาคุณภาพและความสม่ำเสมอ จัดวางในตำแหน่งที่เห็นชัดเจนที่สุด
           </p>
@@ -121,7 +121,7 @@ export const MenuEngineeringView: React.FC<MenuEngineeringViewProps> = ({
             </span>
             <span className="text-xl font-light font-mono text-white">{plowhorses.length}</span>
           </div>
-          <p className="text-xs text-blue-300 mt-3 font-semibold">กำไรน้อย + ขายดีมาก</p>
+          <p className="text-xs text-blue-950 mt-3 font-semibold">กำไรน้อย + ขายดีมาก</p>
           <p className="text-[11px] text-white/40 mt-1 leading-relaxed">
             กลยุทธ์: ปรับขึ้นราคา 5-10 บาท ลดต้นทุนสูตร หรือขายพ่วงกับเครื่องดื่มกำไรสูง
           </p>
@@ -231,11 +231,11 @@ export const MenuEngineeringView: React.FC<MenuEngineeringViewProps> = ({
                       <span
                         className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
                           isStar
-                            ? 'bg-amber-400/10 text-amber-300 border border-amber-400/20'
+                            ? 'bg-amber-400/10 text-amber-950 border border-amber-400/30'
                             : isPlowhorse
-                            ? 'bg-blue-400/10 text-blue-300 border border-blue-400/20'
+                            ? 'bg-blue-400/10 text-blue-950 border border-blue-400/30'
                             : isPuzzle
-                            ? 'bg-purple-400/10 text-purple-300 border border-purple-400/20'
+                            ? 'bg-purple-400/10 text-purple-950 border border-purple-400/30'
                             : 'bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20'
                         }`}
                       >

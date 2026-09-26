@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Boxes, Scale, AlertTriangle, CheckCircle2, TrendingUp, Info } from 'lucide-react';
 import { Ingredient, DailySalesRecord } from '../../types/domain';
 import { calculateInventoryCOGS, calculateVariance } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface InventoryCOGSViewProps {
   ingredients: Ingredient[];
@@ -59,7 +60,7 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
             <div className="text-xs text-white/60 font-semibold mb-1">1. สต็อกต้นงวด (Beginning)</div>
             <div className="flex items-center justify-center gap-1">
               <span className="text-sm font-bold text-white/30">฿</span>
-              <input
+              <NumericInput
                 type="number"
                 value={beginningInventory}
                 onChange={(e) => setBeginningInventory(parseFloat(e.target.value) || 0)}
@@ -72,7 +73,7 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
             <div className="text-xs text-white/60 font-semibold mb-1">+ ยอดซื้อเพิ่มในงวด (Purchases)</div>
             <div className="flex items-center justify-center gap-1">
               <span className="text-sm font-bold text-white/30">฿</span>
-              <input
+              <NumericInput
                 type="number"
                 value={purchases}
                 onChange={(e) => setPurchases(parseFloat(e.target.value) || 0)}
@@ -85,7 +86,7 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
             <div className="text-xs text-white/60 font-semibold mb-1">- สต็อกปลายงวด (Ending)</div>
             <div className="flex items-center justify-center gap-1">
               <span className="text-sm font-bold text-white/30">฿</span>
-              <input
+              <NumericInput
                 type="number"
                 value={endingInventory}
                 onChange={(e) => setEndingInventory(parseFloat(e.target.value) || 0)}
@@ -121,7 +122,7 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
             <label className="block text-xs font-semibold text-white/70 mb-1">
               ต้นทุนตามสูตรมาตรฐาน (Theoretical COGS ฿)
             </label>
-            <input
+            <NumericInput
               type="number"
               value={theoreticalCOGS}
               onChange={(e) => setTheoreticalCOGS(parseFloat(e.target.value) || 0)}

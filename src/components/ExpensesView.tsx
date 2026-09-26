@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { ExpenseRecord, ExpenseCategory } from '../types';
+import { NumericInput } from './common/NumericInput';
 
 interface ExpensesViewProps {
   expenses: ExpenseRecord[];
@@ -571,7 +572,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onSaveExpe
               <div>
                 <label className="block text-white/70 mb-1 font-semibold">จำนวนเงิน (บาท)</label>
                 <div className="relative">
-                  <input
+                  <NumericInput
                     type="number"
                     step="0.01"
                     min="1"

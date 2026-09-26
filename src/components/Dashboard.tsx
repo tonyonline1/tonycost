@@ -239,7 +239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <p className="text-emerald-400 text-[10px] uppercase font-bold">GrabFood GP</p>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-900 font-mono font-bold">
               GP {grabGpPercent}%
             </span>
           </div>
@@ -272,7 +272,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span className="w-2 h-2 rounded-full bg-green-400" />
               <p className="text-green-400 text-[10px] uppercase font-bold">LINE MAN GP</p>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-green-500/20 text-green-300 font-mono font-bold">
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-green-500/20 text-green-950 font-mono font-bold">
               GP {linemanGpPercent}%
             </span>
           </div>
@@ -304,7 +304,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <p className="text-black font-bold uppercase text-[10px] tracking-wider">
               กำไรสุทธิ (Net Profit)
             </p>
-            <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded font-bold font-mono">
+            <span className="bg-black !text-white text-white text-[10px] px-2 py-0.5 rounded font-bold font-mono shadow-xs">
               {profitPercent.toFixed(1)}% Margin
             </span>
           </div>
@@ -455,8 +455,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {warnings.length === 0 ? (
-            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-2 text-xs text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-2 text-xs text-emerald-900 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span>ไม่พบความผิดปกติ: อัตรากำไรและต้นทุนอยู่ในเกณฑ์มาตรฐานที่ปลอดภัย</span>
             </div>
           ) : (
@@ -466,10 +466,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   key={idx}
                   className={`p-3.5 rounded-2xl border text-xs ${
                     w.severity === 'high'
-                      ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-900'
                       : w.severity === 'medium'
-                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                      : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-950'
+                      : 'bg-blue-500/10 border-blue-500/30 text-blue-950'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 font-bold mb-1">
@@ -523,15 +523,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       ? 'bg-emerald-500/10 border-emerald-500/30'
                       : 'bg-red-500/10 border-red-500/30'
                   }`}>
-                    <div className={`flex items-center gap-2 text-xs font-bold ${allPassed ? 'text-emerald-300' : 'text-red-300'}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold ${allPassed ? 'text-emerald-800' : 'text-red-800'}`}>
                       {allPassed ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       ) : (
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
                       )}
                       <span>ผลการทดสอบ: {passedCount}/{testResults.length} ผ่าน{failedCount > 0 ? ` • ${failedCount} รายการต้องแก้ไข` : ' • ผ่านทั้งหมด'}</span>
                     </div>
-                    <span className={`text-[11px] font-semibold font-mono ${allPassed ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-[11px] font-semibold font-mono ${allPassed ? 'text-emerald-700' : 'text-red-700'}`}>
                       {allPassed ? 'ALL TESTS PASSED' : 'TEST FAILURE DETECTED'}
                     </span>
                   </div>
@@ -548,18 +548,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <span className="font-bold text-white/90">{t.name}</span>
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             t.passed
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                              ? 'bg-emerald-500/20 text-emerald-900 border border-emerald-500/30'
+                              : 'bg-red-500/20 text-red-900 border border-red-500/30'
                           }`}>
                             {t.passed ? 'PASSED' : 'FAILED'}
                           </span>
                         </div>
-                        <div className="text-[11px] text-[#FFC107] font-mono">
+                        <div className="text-[11px] text-[#B45309] font-mono">
                           <span className="text-white/40">ผลจริง:</span> {t.actual}
                         </div>
                         {!t.passed && (
-                          <div className="text-[11px] text-red-300 font-mono">
-                            <span className="text-red-400/70">Expected:</span> {t.expected}
+                          <div className="text-[11px] text-red-800 font-mono">
+                            <span className="text-red-600">Expected:</span> {t.expected}
                           </div>
                         )}
                         <div className="text-[10px] text-white/50 italic">{t.details}</div>

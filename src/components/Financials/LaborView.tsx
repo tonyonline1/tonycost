@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Users, Edit2, Trash2, DollarSign, Clock } from 'lucide-react';
 import { Employee } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface LaborViewProps {
   employees: Employee[];
@@ -263,7 +264,7 @@ export const LaborView: React.FC<LaborViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">เงินเดือน/ค่าจ้าง (฿)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required

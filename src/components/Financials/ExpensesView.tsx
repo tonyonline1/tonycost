@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Receipt, Trash2, Calendar, DollarSign, Filter } from 'lucide-react';
 import { ExpenseRecord, ExpenseCategory } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface ExpensesViewProps {
   expenses: ExpenseRecord[];
@@ -254,7 +255,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">จำนวนเงิน (฿) *</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required

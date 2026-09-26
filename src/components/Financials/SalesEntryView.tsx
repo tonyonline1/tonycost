@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Calendar, DollarSign, Receipt, Trash2, ArrowUpRight } from 'lucide-react';
 import { DailySalesRecord, SalesChannel } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface SalesEntryViewProps {
   sales: DailySalesRecord[];
@@ -224,7 +225,7 @@ export const SalesEntryView: React.FC<SalesEntryViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">ยอดขายรวม (Gross ฿)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
@@ -236,7 +237,7 @@ export const SalesEntryView: React.FC<SalesEntryViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">ส่วนลดโปรโมชั่น (฿)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -250,7 +251,7 @@ export const SalesEntryView: React.FC<SalesEntryViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">จำนวนออเดอร์</label>
-                  <input
+                  <NumericInput
                     type="number"
                     min="0"
                     value={formData.orderCount}
@@ -260,7 +261,7 @@ export const SalesEntryView: React.FC<SalesEntryViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">คืนเงิน (Refund ฿)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"

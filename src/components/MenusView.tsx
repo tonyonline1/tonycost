@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { MenuItem, MenuVariant, RestaurantSettings } from '../types';
+import { NumericInput } from './common/NumericInput';
 
 interface MenusViewProps {
   menus: MenuItem[];
@@ -519,7 +520,7 @@ export const MenusView: React.FC<MenusViewProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-white/60 mb-1 font-medium">หน้าร้าน</label>
-                    <input
+                    <NumericInput
                       type="number"
                       required
                       value={editingVariant.sellingPrice || ''}
@@ -534,7 +535,7 @@ export const MenusView: React.FC<MenusViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-white/60 mb-1 font-medium">กลับบ้าน</label>
-                    <input
+                    <NumericInput
                       type="number"
                       required
                       value={editingVariant.takeawayPrice || ''}
@@ -549,7 +550,7 @@ export const MenusView: React.FC<MenusViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-[#F27D26] mb-1 font-bold">เดลิเวอรี</label>
-                    <input
+                    <NumericInput
                       type="number"
                       required
                       value={editingVariant.deliveryPrice || ''}
@@ -569,7 +570,7 @@ export const MenusView: React.FC<MenusViewProps> = ({
                 <label className="block font-bold text-white/80 mb-1">
                   ค่าโสหุ้ยต่อจาน (Overhead / แก๊ส / น้ำมัน) (บาท)
                 </label>
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   value={editingVariant.overheadCost || ''}

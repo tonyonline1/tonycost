@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Scale, TrendingUp, DollarSign, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { ExpenseRecord, Employee, DailySalesRecord, BusinessSettings } from '../../types/domain';
 import { calculateBreakEven } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface BreakEvenViewProps {
   expenses: ExpenseRecord[];
@@ -115,7 +116,7 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               1. ต้นทุนคงที่รายเดือน (Fixed Costs ฿)
             </label>
-            <input
+            <NumericInput
               type="number"
               min="0"
               step="1000"
@@ -130,7 +131,7 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               2. % Contribution Margin (%)
             </label>
-            <input
+            <NumericInput
               type="number"
               min="1"
               max="99"
@@ -145,7 +146,7 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               3. ราคาบิลเฉลี่ยต่อจาน/โต๊ะ (฿)
             </label>
-            <input
+            <NumericInput
               type="number"
               min="1"
               value={averageTicket}
@@ -159,7 +160,7 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               4. วันเปิดทำการต่อเดือน (วัน)
             </label>
-            <input
+            <NumericInput
               type="number"
               min="1"
               max="31"

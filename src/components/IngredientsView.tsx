@@ -26,6 +26,7 @@ import {
   calculateIngredientCost,
   analyzePriceChangeImpact,
 } from '../services/calculationEngine';
+import { NumericInput } from './common/NumericInput';
 
 interface IngredientsViewProps {
   ingredients: Ingredient[];
@@ -356,7 +357,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   1. น้ำหนักวัตถุดิบก่อนเตรียม (Raw Weight)
                 </label>
                 <div className="flex items-center gap-2 mt-2">
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="1"
@@ -374,7 +375,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   2. น้ำหนักหลังตัดแต่ง/ปรุงเสร็จ (Usable Weight)
                 </label>
                 <div className="flex items-center gap-2 mt-2">
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="1"
@@ -392,7 +393,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   3. ราคาซื้อล็อตนี้ (Raw Cost ฿)
                 </label>
                 <div className="flex items-center gap-2 mt-2">
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -724,7 +725,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-white/60 mb-1">ปริมาณที่ซื้อ</label>
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       required
@@ -763,7 +764,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
 
                   <div>
                     <label className="block text-white/60 mb-1">ราคาซื้อ (บาท)</label>
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       required
@@ -788,7 +789,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-white/60 mb-1">Yield (%) หลังตัดแต่ง</label>
-                    <input
+                    <NumericInput
                       type="number"
                       step="1"
                       min="1"
@@ -833,7 +834,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     (เช่น 60 ตัว = 510 บาท ต้นทุน 8.50 บาท/ตัว)
                     <div className="mt-1 flex items-center gap-2">
                       <span>จำนวนตัวที่ใช้ได้:</span>
-                      <input
+                      <NumericInput
                         type="number"
                         value={editingIngredient.piecesPerPurchaseUnit || ''}
                         onChange={(e) =>
@@ -945,7 +946,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   <span className="text-[#F27D26] font-bold">ราคาซื้อใหม่ที่จำลอง:</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="font-bold text-white/70">฿</span>
-                    <input
+                    <NumericInput
                       type="number"
                       step="0.5"
                       value={simulatedNewPrice}

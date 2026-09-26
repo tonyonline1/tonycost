@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Sparkles, DollarSign, Percent, ArrowRight, Save, Scale } from 'lucide-react';
 import { Ingredient, SubRecipe, MenuItem, PortionSize, UnitType } from '../../types/domain';
 import { calculatePortionCost, calculateTargetPriceFromCost } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface RecipeBuilderViewProps {
   ingredients: Ingredient[];
@@ -195,7 +196,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     ))}
                   </select>
 
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0.1"
@@ -280,7 +281,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     ))}
                   </select>
 
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0.1"
@@ -352,7 +353,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                 <span>ค่ากล่อง/บรรจุภัณฑ์:</span>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-white/40">฿</span>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -374,7 +375,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                 <label className="block text-xs font-semibold text-white/70 mb-1">
                   กำหนดราคาขายทดสอบ (Selling Price ฿)
                 </label>
-                <input
+                <NumericInput
                   type="number"
                   step="any"
                   min="1"

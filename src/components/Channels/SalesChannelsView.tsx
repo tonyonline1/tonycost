@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Smartphone, DollarSign, Percent, Check, X } from 'lucide-react';
 import { SalesChannel } from '../../types/domain';
 import { calculateChannelNetRevenue } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface SalesChannelsViewProps {
   channels: SalesChannel[];
@@ -128,7 +129,7 @@ export const SalesChannelsView: React.FC<SalesChannelsViewProps> = ({
             <span className="text-xs font-semibold text-white/60">ยอดขายทดสอบต่อออเดอร์:</span>
             <div className="flex items-center gap-1">
               <span className="text-xs text-white/40">฿</span>
-              <input
+              <NumericInput
                 type="number"
                 min="10"
                 value={testOrderAmount}
@@ -234,7 +235,7 @@ export const SalesChannelsView: React.FC<SalesChannelsViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-white/60 mb-1">ค่าคอมมิชชั่น GP (%)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -246,7 +247,7 @@ export const SalesChannelsView: React.FC<SalesChannelsViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs text-white/60 mb-1">VAT บน GP (%)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -261,7 +262,7 @@ export const SalesChannelsView: React.FC<SalesChannelsViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-white/60 mb-1">ค่าชำระเงิน (%)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"
@@ -272,7 +273,7 @@ export const SalesChannelsView: React.FC<SalesChannelsViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs text-white/60 mb-1">ค่าธรรมเนียมคงที่ (฿/order)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min="0"

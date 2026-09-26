@@ -299,7 +299,7 @@ export const MenuCostingView: React.FC<MenuCostingViewProps> = ({
                           ({variant.name})
                         </span>
                         {isLowMargin && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-900 border border-red-500/30">
                             กำไรต่ำ
                           </span>
                         )}
@@ -320,10 +320,10 @@ export const MenuCostingView: React.FC<MenuCostingViewProps> = ({
                       <span
                         className={`inline-block px-2 py-0.5 rounded-full font-mono font-bold text-[11px] ${
                           breakdown.foodCostPercent > 45
-                            ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                            ? 'bg-red-500/20 text-red-900 border border-red-500/30'
                             : breakdown.foodCostPercent > 35
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            : 'bg-green-500/20 text-green-300 border border-green-500/30'
+                            ? 'bg-amber-500/20 text-amber-950 border border-amber-500/30'
+                            : 'bg-green-500/20 text-green-950 border border-green-500/30'
                         }`}
                       >
                         {breakdown.foodCostPercent.toFixed(1)}%

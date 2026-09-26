@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Calendar, AlertTriangle, Scale, DollarSign } from 'lucide-react';
 import { WasteRecord, Ingredient, WasteReason } from '../../types/domain';
+import { NumericInput } from '../common/NumericInput';
 
 interface WasteTrackingViewProps {
   wasteRecords: WasteRecord[];
@@ -241,7 +242,7 @@ export const WasteTrackingView: React.FC<WasteTrackingViewProps> = ({
 
               <div>
                 <label className="block text-xs text-white/60 mb-1">ปริมาณที่ทิ้ง</label>
-                <input
+                <NumericInput
                   type="number"
                   step="any"
                   required

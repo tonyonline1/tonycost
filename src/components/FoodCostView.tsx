@@ -30,6 +30,7 @@ import {
   calculateVariantCostBreakdown,
   calculateSuggestedPrices,
 } from '../services/calculationEngine';
+import { NumericInput } from './common/NumericInput';
 
 interface FoodCostViewProps {
   menus: MenuItem[];
@@ -716,11 +717,11 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
                       <td className="py-3.5 px-3 text-center">
                         {isHighCost ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-900 border border-rose-500/30">
                             ต้นทุนสูง
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-900 border border-emerald-500/30">
                             ปกติ
                           </span>
                         )}
@@ -918,7 +919,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
                         {/* Price */}
                         <div className="w-28 relative">
-                          <input
+                          <NumericInput
                             type="number"
                             step="0.25"
                             min="0"
@@ -1221,7 +1222,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="text-[10px] text-white/50 block">หน้าร้าน (฿)</label>
-                          <input
+                          <NumericInput
                             type="number"
                             min="0"
                             value={v.sellingPrice}
@@ -1238,7 +1239,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                         </div>
                         <div>
                           <label className="text-[10px] text-white/50 block">กลับบ้าน (฿)</label>
-                          <input
+                          <NumericInput
                             type="number"
                             min="0"
                             value={v.takeawayPrice}
@@ -1255,7 +1256,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                         </div>
                         <div>
                           <label className="text-[10px] text-white/50 block">Delivery (฿)</label>
-                          <input
+                          <NumericInput
                             type="number"
                             min="0"
                             value={v.deliveryPrice}

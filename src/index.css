@@ -1,37 +1,52 @@
 @import "tailwindcss";
 
+:root {
+  --color-bg-app: #f8fafc;
+  --color-surface-card: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-border-card: #e2e8f0;
+  --color-text-main: #0f172a;
+  --color-text-muted: #475569;
+  --color-primary-orange: #F27D26;
+  --color-accent-gold: #b45309;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Light Theme Utilities */
 @layer utilities {
-  /* Frosted Glass Theme Utilities */
   .glass-panel {
-    background-color: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
   }
 
   .glass-panel-subtle {
-    background-color: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
   }
 
   .glass-card-interactive {
-    background-color: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .glass-card-interactive:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
+    background-color: #ffffff;
+    border-color: #F27D26;
+    box-shadow: 0 4px 12px 0 rgba(242, 125, 38, 0.12);
   }
 
   .glass-input {
-    background-color: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #ffffff;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
     transition: all 0.15s ease-in-out;
   }
   .glass-input:focus {
@@ -41,20 +56,266 @@
   }
 }
 
-/* Custom scrollbar for frosted dark UI */
+/* ========================================================
+   LIGHT THEME COLOR MAPPINGS & CONTRAST HARDENING
+   ======================================================== */
+
+/* Surface backgrounds: convert dark glass containers to clean light cards */
+.bg-\[\#141414\],
+.bg-\[\#0f0f0f\],
+.bg-\[\#111111\],
+.bg-\[\#121212\] {
+  background-color: #f8fafc !important;
+}
+
+.bg-\[\#1a1a1a\],
+.bg-\[\#1e1e1e\],
+.bg-\[\#222\],
+.bg-black\/30,
+.bg-black\/40,
+.bg-black\/50,
+.bg-black\/60 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+}
+
+.bg-black\/20,
+.bg-white\/5 {
+  background-color: #f8fafc !important;
+}
+
+.bg-white\/10 {
+  background-color: #f1f5f9 !important;
+}
+
+.bg-white\/15,
+.bg-white\/20 {
+  background-color: #e2e8f0 !important;
+}
+
+/* Modal overlays: keep translucent dark backdrop so the modal dialog pops out cleanly */
+.fixed.inset-0.bg-black\/70,
+.fixed.inset-0.bg-black\/75,
+.fixed.inset-0.bg-black\/80,
+div.fixed.inset-0[class*="bg-black/"] {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* Borders: convert dark theme white borders to crisp slate borders */
+.border-white\/5,
+.border-white\/10,
+.border-white\/15 {
+  border-color: #e2e8f0 !important;
+}
+
+.border-white\/20,
+.border-white\/30 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text Hierarchy: crisp charcoal/black for primary and slate for secondary */
+.text-white {
+  color: #0f172a !important;
+}
+
+.text-white\/90,
+.text-white\/80 {
+  color: #1e293b !important;
+}
+
+.text-white\/70,
+.text-white\/60 {
+  color: #334155 !important;
+}
+
+.text-white\/50,
+.text-white\/45,
+.text-white\/40 {
+  color: #64748b !important;
+}
+
+.text-white\/35,
+.text-white\/30,
+.text-white\/25,
+.text-white\/20 {
+  color: #94a3b8 !important;
+}
+
+/* Gold / Yellow Accent: replace bright #FFC107 with rich legible amber gold #B45309 */
+.text-\[\#FFC107\] {
+  color: #b45309 !important;
+  font-weight: 700 !important;
+}
+
+/* Cyan Accent: replace light #00B1FF with deep readable ocean blue #0284c7 */
+.text-\[\#00B1FF\] {
+  color: #0284c7 !important;
+}
+
+/* Orange Accent: rich warm orange #ea580c / #f27d26 */
+.text-\[\#F27D26\] {
+  color: #ea580c !important;
+}
+
+/* Status Indicators in Light Theme: rich high-contrast green and red */
+.text-emerald-400,
+.text-green-400 {
+  color: #059669 !important;
+}
+
+.text-rose-400,
+.text-red-400 {
+  color: #e11d48 !important;
+}
+
+/* Ensure strong legible contrast for -200 and -300 level badge text colors on light backgrounds */
+.text-emerald-300,
+.text-emerald-200 {
+  color: #064e3b !important;
+}
+.text-green-300,
+.text-green-200 {
+  color: #052e16 !important;
+}
+.text-teal-300,
+.text-teal-200 {
+  color: #134e4a !important;
+}
+.text-red-300,
+.text-red-200,
+.text-rose-300,
+.text-rose-200 {
+  color: #881337 !important;
+}
+.text-amber-300,
+.text-amber-200,
+.text-yellow-300,
+.text-yellow-200 {
+  color: #78350f !important;
+}
+.text-blue-300,
+.text-blue-200 {
+  color: #1e3a8a !important;
+}
+.text-purple-200,
+.text-purple-300 {
+  color: #581c87 !important;
+}
+
+/* Preserve black text inside solid orange buttons & badges (except dark child badges like .bg-black) */
+.bg-\[\#F27D26\],
+.bg-\[\#F27D26\] *:not(.bg-black):not(.bg-black *),
+.bg-\[\#F27D26\] .text-black {
+  color: #000000 !important;
+}
+
+/* Ensure pure white text inside pure black badges and containers (even inside orange cards) */
+.bg-black,
+.bg-black *,
+.bg-black span,
+.bg-black p,
+.bg-black .text-white,
+span.bg-black,
+div.bg-black,
+.bg-\[\#F27D26\] .bg-black,
+.bg-\[\#F27D26\] .bg-black *,
+.bg-\[\#F27D26\] .bg-black span {
+  color: #ffffff !important;
+}
+
+/* Preserve crisp white text inside solid colored badges (rose, red, emerald, green, blue) */
+.bg-rose-500, .bg-rose-600,
+.bg-red-500, .bg-red-600,
+.bg-emerald-500, .bg-emerald-600,
+.bg-green-500, .bg-green-600,
+.bg-blue-500, .bg-blue-600,
+.bg-rose-500 *, .bg-rose-600 *,
+.bg-red-500 *, .bg-red-600 *,
+.bg-emerald-500 *, .bg-emerald-600 *,
+.bg-green-500 *, .bg-green-600 *,
+.bg-blue-500 *, .bg-blue-600 * {
+  color: #ffffff !important;
+}
+
+/* Form inputs & select dropdowns */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #F27D26 !important;
+  box-shadow: 0 0 0 2px rgba(242, 125, 38, 0.2) !important;
+}
+
+option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* ========================================================
+   SLIGHTLY INCREASED FONT SIZES & COMFORTABLE READABILITY
+   ======================================================== */
+.text-\[8px\], .text-\[9px\] {
+  font-size: 11.5px !important;
+}
+
+.text-\[10px\] {
+  font-size: 12px !important;
+}
+
+.text-\[11px\] {
+  font-size: 12.5px !important;
+}
+
+.text-xs {
+  font-size: 13.5px !important;
+}
+
+.text-sm {
+  font-size: 14.5px !important;
+}
+
+/* Tables: Food Cost compact table & all financial tables */
+table th {
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+  font-size: 12.5px !important;
+  color: #475569 !important;
+  background-color: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+table td {
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+  font-size: 13.5px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+/* Row hover highlight */
+table tr:hover {
+  background-color: #fff7ed !important;
+}
+
+/* Custom scrollbar for light UI */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #94a3b8;
 }
 
 /* Full-width desktop navigation layout: the legacy Sidebar is mobile-only. */

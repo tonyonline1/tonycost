@@ -98,17 +98,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (id === 'food_cost' && (currentTab === 'menus' || currentTab === 'menu_costing'));
 
   const content = (
-    <div className="flex flex-col h-full bg-black/20 backdrop-blur-xl text-white select-none p-4">
+    <div className="flex flex-col h-full bg-white backdrop-blur-xl text-slate-900 select-none p-4 border-r border-slate-200 shadow-xl">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between pb-3 border-b border-white/10 mb-3">
+      <div className="md:hidden flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
         <div>
-          <span className="font-bold text-white text-base">ระบบบริหารร้าน</span>
-          <p className="text-[9px] text-white/40 mt-0.5">1 System · 3 Modules</p>
+          <span className="font-bold text-slate-900 text-base">ระบบบริหารร้าน</span>
+          <p className="text-[10px] text-slate-500 mt-0.5">1 System · 3 Modules</p>
         </div>
         <button
           type="button"
           onClick={onCloseMobile}
-          className="p-1 rounded-xl text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+          className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
           aria-label="ปิดเมนู"
         >
           <X className="w-5 h-5" />
@@ -124,11 +124,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }}
         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer mb-4 ${
           currentTab === 'dashboard'
-            ? 'bg-[#F27D26] text-black font-bold shadow-lg shadow-[#F27D26]/20'
-            : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5'
+            ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
+            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
         }`}
       >
-        <LayoutDashboard className={`w-4 h-4 shrink-0 ${currentTab === 'dashboard' ? 'text-black' : 'text-white/60'}`} />
+        <LayoutDashboard className={`w-4 h-4 shrink-0 ${currentTab === 'dashboard' ? 'text-black' : 'text-slate-500'}`} />
         <span>Dashboard</span>
       </button>
 
@@ -142,12 +142,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <section key={group.id}>
               <div className="px-2 mb-2">
                 <div className="flex items-center gap-1.5">
-                  <GroupIcon className={`w-3 h-3 ${groupActive ? 'text-[#F27D26]' : 'text-white/35'}`} />
-                  <span className={`text-[9px] font-extrabold tracking-wider ${groupActive ? 'text-[#F27D26]' : 'text-white/40'}`}>
+                  <GroupIcon className={`w-3.5 h-3.5 ${groupActive ? 'text-[#F27D26]' : 'text-slate-400'}`} />
+                  <span className={`text-[10px] font-extrabold tracking-wider ${groupActive ? 'text-[#F27D26]' : 'text-slate-500'}`}>
                     {group.label}
                   </span>
                 </div>
-                <p className="text-[9px] text-white/30 mt-0.5 ml-[18px]">{group.subtitle}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 ml-5">{group.subtitle}</p>
               </div>
 
               <div className="space-y-1.5">
@@ -165,19 +165,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
                         isActive
-                          ? 'bg-[#F27D26] text-black font-bold shadow-lg shadow-[#F27D26]/20'
-                          : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5'
+                          ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-3 truncate">
-                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-black' : 'text-white/60'}`} />
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-black' : 'text-slate-500'}`} />
                         <span className="truncate">{item.name}</span>
                       </div>
 
                       {item.badge !== undefined && (
                         <span
                           className={`ml-2 px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
-                            item.badgeColor || 'bg-white/20 text-white'
+                            item.badgeColor || 'bg-slate-200 text-slate-800'
                           }`}
                         >
                           {item.badge}
@@ -194,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* System Settings - kept outside business modules */}
         <section>
           <div className="px-2 mb-2">
-            <span className="text-[9px] font-extrabold tracking-wider text-white/40">SYSTEM</span>
+            <span className="text-[10px] font-extrabold tracking-wider text-slate-400">SYSTEM</span>
           </div>
           <button
             type="button"
@@ -204,27 +204,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
               currentTab === 'settings'
-                ? 'bg-[#F27D26] text-black font-bold shadow-lg shadow-[#F27D26]/20'
-                : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5'
+                ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
             }`}
           >
-            <Settings className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? 'text-black' : 'text-white/60'}`} />
+            <Settings className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? 'text-black' : 'text-slate-500'}`} />
             <span>ตั้งค่า</span>
           </button>
         </section>
       </div>
 
       {/* System Architecture Footer */}
-      <div className="mt-4 p-3.5 bg-white/5 border border-white/10 rounded-2xl">
+      <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] text-[#F27D26] uppercase font-bold tracking-wider flex items-center gap-1">
             <Sparkles className="w-3 h-3" />
             <span>Tony's Kitchen</span>
           </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         </div>
-        <p className="text-xs font-semibold text-white/90">Restaurant Management System</p>
-        <p className="text-[10px] text-white/50 mt-0.5">1 System · 3 Modules · Shared Data</p>
+        <p className="text-xs font-semibold text-slate-800">Restaurant Management System</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">1 System · 3 Modules · Shared Data</p>
       </div>
     </div>
   );

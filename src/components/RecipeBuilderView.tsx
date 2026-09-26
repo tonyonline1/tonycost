@@ -29,6 +29,7 @@ import {
   calculateVariantCostBreakdown,
   calculateSauceCost,
 } from '../services/calculationEngine';
+import { NumericInput } from './common/NumericInput';
 
 interface RecipeBuilderViewProps {
   menus: MenuItem[];
@@ -555,7 +556,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                             </td>
 
                             <td className="py-2.5 px-3 text-right">
-                              <input
+                              <NumericInput
                                 type="number"
                                 step="any"
                                 min="0"
@@ -940,7 +941,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                   <label className="block text-white/70 mb-1 font-semibold">
                     ปริมาณผลิตต่อสูตร (g)
                   </label>
-                  <input
+                  <NumericInput
                     type="number"
                     min="1"
                     required
@@ -958,7 +959,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
 
                 <div>
                   <label className="block text-white/70 mb-1 font-semibold">Yield % ของซอส</label>
-                  <input
+                  <NumericInput
                     type="number"
                     min="1"
                     max="100"
@@ -1036,7 +1037,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                         ))}
                       </select>
 
-                      <input
+                      <NumericInput
                         type="number"
                         min="0"
                         step="any"

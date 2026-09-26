@@ -15,6 +15,7 @@ import {
   RestaurantSettings,
 } from '../types';
 import { calculateIngredientCost } from '../services/calculationEngine';
+import { NumericInput } from './common/NumericInput';
 
 interface PurchasesViewProps {
   ingredients: Ingredient[];
@@ -376,7 +377,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-white/80 mb-1">จำนวนที่ซื้อ</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
@@ -387,7 +388,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                 </div>
                 <div>
                   <label className="block font-bold text-white/80 mb-1">ยอดเงินรวม (บาท)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="0.01"
                     required

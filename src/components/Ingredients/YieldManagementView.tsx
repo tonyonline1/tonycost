@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Percent, ArrowRight, CheckCircle2, AlertTriangle, Sparkles, Scale } from 'lucide-react';
 import { Ingredient } from '../../types/domain';
 import { calculateYieldPercent, calculateEffectiveCost, calculateUsableQuantity } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface YieldManagementViewProps {
   ingredients: Ingredient[];
@@ -97,7 +98,7 @@ export const YieldManagementView: React.FC<YieldManagementViewProps> = ({
               1. น้ำหนักวัตถุดิบก่อนเตรียม (Raw Weight)
             </label>
             <div className="flex items-center gap-2 mt-2">
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 min="1"
@@ -115,7 +116,7 @@ export const YieldManagementView: React.FC<YieldManagementViewProps> = ({
               2. น้ำหนักหลังตัดแต่ง/ปรุงเสร็จ (Usable Weight)
             </label>
             <div className="flex items-center gap-2 mt-2">
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 min="1"
@@ -133,7 +134,7 @@ export const YieldManagementView: React.FC<YieldManagementViewProps> = ({
               3. ราคาซื้อล็อตนี้ (Raw Cost ฿)
             </label>
             <div className="flex items-center gap-2 mt-2">
-              <input
+              <NumericInput
                 type="number"
                 step="any"
                 min="0"

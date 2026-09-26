@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Ingredient, UnitType, YieldType, IngredientCategory } from '../../types/domain';
 import { calculateUsableQuantity, calculateEffectiveCost } from '../../engine/calculations';
+import { NumericInput } from '../common/NumericInput';
 
 interface IngredientMasterViewProps {
   ingredients: Ingredient[];
@@ -446,7 +447,7 @@ export const IngredientMasterView: React.FC<IngredientMasterViewProps> = ({
 
                 <div>
                   <label className="block text-xs text-white/60 mb-1">ปริมาณที่ซื้อ</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
@@ -459,7 +460,7 @@ export const IngredientMasterView: React.FC<IngredientMasterViewProps> = ({
 
                 <div>
                   <label className="block text-xs text-white/60 mb-1">ราคาซื้อรวม (฿)</label>
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
@@ -484,7 +485,7 @@ export const IngredientMasterView: React.FC<IngredientMasterViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     required
