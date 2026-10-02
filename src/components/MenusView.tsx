@@ -399,66 +399,66 @@ export const MenusView: React.FC<MenusViewProps> = ({
 
       {/* EDIT MENU MODAL */}
       {isMenuModalOpen && editingMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/20 text-white">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-white text-base">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917]">
+            <div className="flex items-center justify-between border-b border-[#EAE4D9] pb-3">
+              <h3 className="font-bold text-[#1C1917] text-base">
                 {editingMenu.id ? 'แก้ไขเมนู' : 'เพิ่มเมนูใหม่'}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsMenuModalOpen(false)}
-                className="p-1 text-white/40 hover:text-white"
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleSaveMenuModal} className="space-y-3.5 mt-4 text-xs">
               <div>
-                <label className="block font-bold text-white/80 mb-1">ชื่อเมนู</label>
+                <label className="block font-bold text-stone-700 mb-1">ชื่อเมนู</label>
                 <input
                   type="text"
                   required
                   value={editingMenu.name || ''}
                   onChange={(e) => setEditingMenu({ ...editingMenu, name: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:border-[#F27D26] focus:outline-none"
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl font-medium text-stone-900 focus:border-[#F27D26] focus:outline-none"
                   placeholder="เช่น ผัดกะเพราโบราณ, ข้าวผัดรถไฟ"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-white/80 mb-1">หมวดหมู่</label>
+                <label className="block font-bold text-stone-700 mb-1">หมวดหมู่</label>
                 <input
                   type="text"
                   required
                   value={editingMenu.category || ''}
                   onChange={(e) => setEditingMenu({ ...editingMenu, category: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:border-[#F27D26] focus:outline-none"
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl font-medium text-stone-900 focus:border-[#F27D26] focus:outline-none"
                   placeholder="เช่น ผัดและกะเพรา, ทอดและกระเทียม, ต้มยำ"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-white/80 mb-1">คำอธิบาย</label>
+                <label className="block font-bold text-stone-700 mb-1">คำอธิบาย</label>
                 <textarea
                   rows={2}
                   value={editingMenu.description || ''}
                   onChange={(e) => setEditingMenu({ ...editingMenu, description: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:border-[#F27D26] focus:outline-none"
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl font-medium text-stone-900 focus:border-[#F27D26] focus:outline-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EAE4D9]">
                 <button
                   type="button"
                   onClick={() => setIsMenuModalOpen(false)}
-                  className="px-4 py-2 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors"
+                  className="px-4 py-2 bg-stone-100 text-stone-700 rounded-xl font-bold hover:bg-stone-200 transition-colors cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black rounded-xl font-bold shadow-md shadow-[#F27D26]/20 transition-colors"
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-white rounded-xl font-bold shadow-md shadow-[#F27D26]/20 transition-colors cursor-pointer"
                 >
                   บันทึก
                 </button>
@@ -470,16 +470,16 @@ export const MenusView: React.FC<MenusViewProps> = ({
 
       {/* EDIT VARIANT MODAL */}
       {isVariantModalOpen && editingVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/20 text-white">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-white text-base">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917]">
+            <div className="flex items-center justify-between border-b border-[#EAE4D9] pb-3">
+              <h3 className="font-bold text-[#1C1917] text-base">
                 ตัวเลือกโปรตีนและราคาขาย (Variant Pricing)
               </h3>
               <button
                 type="button"
                 onClick={() => setIsVariantModalOpen(false)}
-                className="p-1 text-white/40 hover:text-white"
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -487,18 +487,18 @@ export const MenusView: React.FC<MenusViewProps> = ({
             <form onSubmit={handleSaveVariantModal} className="space-y-3.5 mt-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-white/80 mb-1">ชื่อชุด/ขนาด</label>
+                  <label className="block font-bold text-stone-700 mb-1">ชื่อชุด/ขนาด</label>
                   <input
                     type="text"
                     required
                     value={editingVariant.name || ''}
                     onChange={(e) => setEditingVariant({ ...editingVariant, name: e.target.value })}
-                    className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:border-[#F27D26] focus:outline-none"
+                    className="w-full p-2 bg-white border border-[#D6CEBE] rounded-xl font-medium text-stone-900 focus:border-[#F27D26] focus:outline-none"
                     placeholder="เช่น ธรรมดา, พิเศษ"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-white/80 mb-1">ประเภทโปรตีน</label>
+                  <label className="block font-bold text-stone-700 mb-1">ประเภทโปรตีน</label>
                   <input
                     type="text"
                     required
@@ -506,20 +506,20 @@ export const MenusView: React.FC<MenusViewProps> = ({
                     onChange={(e) =>
                       setEditingVariant({ ...editingVariant, proteinType: e.target.value })
                     }
-                    className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:border-[#F27D26] focus:outline-none"
+                    className="w-full p-2 bg-white border border-[#D6CEBE] rounded-xl font-medium text-stone-900 focus:border-[#F27D26] focus:outline-none"
                     placeholder="เช่น หมูหมัก, ทะเล, เนื้อ"
                   />
                 </div>
               </div>
 
               {/* Prices across 3 channels */}
-              <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
+              <div className="p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#EAE4D9] space-y-2.5">
                 <div className="font-bold text-[#F27D26] text-[11px] uppercase tracking-wider">
                   ราคาขาย 3 ช่องทาง (บาท)
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-white/60 mb-1 font-medium">หน้าร้าน</label>
+                    <label className="block text-stone-600 mb-1 font-medium">หน้าร้าน</label>
                     <NumericInput
                       type="number"
                       required
@@ -530,11 +530,11 @@ export const MenusView: React.FC<MenusViewProps> = ({
                           sellingPrice: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white"
+                      className="w-full p-2 bg-white border border-[#D6CEBE] rounded-xl font-mono font-bold text-stone-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-white/60 mb-1 font-medium">กลับบ้าน</label>
+                    <label className="block text-stone-600 mb-1 font-medium">กลับบ้าน</label>
                     <NumericInput
                       type="number"
                       required
@@ -545,7 +545,7 @@ export const MenusView: React.FC<MenusViewProps> = ({
                           takeawayPrice: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white/80"
+                      className="w-full p-2 bg-white border border-[#D6CEBE] rounded-xl font-mono font-bold text-stone-900"
                     />
                   </div>
                   <div>
@@ -560,14 +560,14 @@ export const MenusView: React.FC<MenusViewProps> = ({
                           deliveryPrice: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="w-full p-2 bg-black/40 border-2 border-[#F27D26] rounded-xl font-mono font-bold text-[#F27D26]"
+                      className="w-full p-2 bg-white border-2 border-[#F27D26] rounded-xl font-mono font-bold text-[#F27D26]"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-white/80 mb-1">
+                <label className="block font-bold text-stone-700 mb-1">
                   ค่าโสหุ้ยต่อจาน (Overhead / แก๊ส / น้ำมัน) (บาท)
                 </label>
                 <NumericInput
@@ -580,21 +580,21 @@ export const MenusView: React.FC<MenusViewProps> = ({
                       overheadCost: parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white"
+                  className="w-full p-2 bg-white border border-[#D6CEBE] rounded-xl font-mono font-bold text-stone-900"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EAE4D9]">
                 <button
                   type="button"
                   onClick={() => setIsVariantModalOpen(false)}
-                  className="px-4 py-2 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors"
+                  className="px-4 py-2 bg-stone-100 text-stone-700 rounded-xl font-bold hover:bg-stone-200 transition-colors cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black rounded-xl font-bold shadow-md shadow-[#F27D26]/20 transition-colors"
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-white rounded-xl font-bold shadow-md shadow-[#F27D26]/20 transition-colors cursor-pointer"
                 >
                   บันทึกตัวเลือก
                 </button>

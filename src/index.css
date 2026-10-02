@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg-app: #f8fafc;
-  --color-surface-card: #ffffff;
-  --color-surface-subtle: #f1f5f9;
-  --color-border-card: #e2e8f0;
-  --color-text-main: #0f172a;
-  --color-text-muted: #475569;
+  --color-bg-app: #FAF8F5;
+  --color-surface-card: #FFFFFF;
+  --color-surface-cream: #FFFDF9;
+  --color-surface-subtle: #F7F3EB;
+  --color-border-card: #EAE4D9;
+  --color-text-main: #1C1917;
+  --color-text-muted: #57534E;
   --color-primary-orange: #F27D26;
-  --color-accent-gold: #b45309;
+  --color-accent-gold: #B45309;
+  --color-accent-yellow: #D97706;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #FAF8F5;
+  color: #1C1917;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -21,32 +23,32 @@ body {
 /* Light Theme Utilities */
 @layer utilities {
   .glass-panel {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+    background-color: #FFFFFF;
+    border: 1px solid #EAE4D9;
+    box-shadow: 0 1px 3px 0 rgba(180, 83, 9, 0.04);
   }
 
   .glass-panel-subtle {
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background-color: #FFFDF9;
+    border: 1px solid #EAE4D9;
   }
 
   .glass-card-interactive {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+    background-color: #FFFFFF;
+    border: 1px solid #EAE4D9;
+    box-shadow: 0 1px 3px 0 rgba(180, 83, 9, 0.04);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .glass-card-interactive:hover {
-    background-color: #ffffff;
+    background-color: #FFFDF9;
     border-color: #F27D26;
     box-shadow: 0 4px 12px 0 rgba(242, 125, 38, 0.12);
   }
 
   .glass-input {
-    background-color: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #0f172a;
+    background-color: #FFFFFF;
+    border: 1px solid #D6CEBE;
+    color: #1C1917;
     transition: all 0.15s ease-in-out;
   }
   .glass-input:focus {
@@ -57,89 +59,132 @@ body {
 }
 
 /* ========================================================
-   LIGHT THEME COLOR MAPPINGS & CONTRAST HARDENING
+   LIGHT THEME: CREAM-WHITE, ORANGE, GOLD & YELLOW PALETTE
+   EVERY CARD BACKGROUND IS NEVER BLACK
    ======================================================== */
 
-/* Surface backgrounds: convert dark glass containers to clean light cards */
+/* Surface backgrounds: convert ALL dark cards and containers to clean light cream & white cards */
+.bg-\[\#151518\],
+.bg-\[\#0F0F11\],
+.bg-\[\#0f0f11\],
+.bg-\[\#0D0D0F\],
+.bg-\[\#0d0d0f\],
+.bg-\[\#0a0a0c\],
 .bg-\[\#141414\],
 .bg-\[\#0f0f0f\],
 .bg-\[\#111111\],
-.bg-\[\#121212\] {
-  background-color: #f8fafc !important;
+.bg-\[\#121212\],
+.bg-\[\#1a1a1a\],
+.bg-\[\#1a1a1a\]\/95,
+.bg-\[\#1a1a1a\]\/90,
+.bg-\[\#1a1a1a\]\/80,
+.bg-\[\#1a1a1a\]\/75,
+.bg-\[\#151518\]\/95,
+.bg-\[\#151518\]\/90,
+.bg-\[\#0F0F11\]\/95,
+.bg-\[\#0F0F11\]\/90,
+.bg-\[\#1e1e1e\],
+.bg-\[\#1c1c1e\],
+.bg-\[\#222\],
+.bg-zinc-900,
+.bg-neutral-900,
+.bg-slate-900:not(.fixed),
+.bg-gray-900,
+.bg-stone-900 {
+  background-color: #FFFFFF !important;
+  border-color: #EAE4D9 !important;
+  box-shadow: 0 1px 3px 0 rgba(180, 83, 9, 0.04);
 }
 
-.bg-\[\#1a1a1a\],
-.bg-\[\#1e1e1e\],
-.bg-\[\#222\],
 .bg-black\/30,
 .bg-black\/40,
 .bg-black\/50,
 .bg-black\/60 {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+  background-color: #FFFFFF !important;
+  border-color: #EAE4D9 !important;
+  box-shadow: 0 1px 3px 0 rgba(180, 83, 9, 0.03);
 }
 
 .bg-black\/20,
+.bg-black\/10,
 .bg-white\/5 {
-  background-color: #f8fafc !important;
+  background-color: #FFFDF9 !important;
+  border-color: #EAE4D9 !important;
 }
 
 .bg-white\/10 {
-  background-color: #f1f5f9 !important;
+  background-color: #F7F3EB !important;
+  border-color: #EAE4D9 !important;
 }
 
 .bg-white\/15,
 .bg-white\/20 {
-  background-color: #e2e8f0 !important;
+  background-color: #EFE9DF !important;
+  border-color: #E2DBD0 !important;
+}
+
+/* Ensure no card, panel, section, or container has a black background */
+div.bg-black:not(.fixed),
+section.bg-black,
+article.bg-black {
+  background-color: #FFFDF9 !important;
+  border-color: #EAE4D9 !important;
 }
 
 /* Modal overlays: keep translucent dark backdrop so the modal dialog pops out cleanly */
 .fixed.inset-0.bg-black\/70,
 .fixed.inset-0.bg-black\/75,
 .fixed.inset-0.bg-black\/80,
-div.fixed.inset-0[class*="bg-black/"] {
-  background-color: rgba(15, 23, 42, 0.6) !important;
+div.fixed.inset-0[class*="bg-black/"],
+div.fixed.inset-0[class*="bg-slate-900/"] {
+  background-color: rgba(28, 25, 23, 0.55) !important;
 }
 
-/* Borders: convert dark theme white borders to crisp slate borders */
+/* Modal dialogs: ensure modal containers inside fixed overlays always have warm cream-white background */
+div.fixed.inset-0 > div:not(.fixed) {
+  background-color: #FFFDF9 !important;
+  border-color: #EAE4D9 !important;
+  color: #1C1917 !important;
+}
+
+/* Borders: convert dark theme borders to warm cream/stone borders */
 .border-white\/5,
 .border-white\/10,
 .border-white\/15 {
-  border-color: #e2e8f0 !important;
+  border-color: #EAE4D9 !important;
 }
 
 .border-white\/20,
 .border-white\/30 {
-  border-color: #cbd5e1 !important;
+  border-color: #DDD6C8 !important;
 }
 
-/* Text Hierarchy: crisp charcoal/black for primary and slate for secondary */
+/* Text Hierarchy: warm stone/black for primary and muted stone for secondary */
 .text-white {
-  color: #0f172a !important;
+  color: #1C1917 !important;
 }
 
 .text-white\/90,
 .text-white\/80 {
-  color: #1e293b !important;
+  color: #292524 !important;
 }
 
 .text-white\/70,
 .text-white\/60 {
-  color: #334155 !important;
+  color: #57534E !important;
 }
 
 .text-white\/50,
 .text-white\/45,
 .text-white\/40 {
-  color: #64748b !important;
+  color: #78716C !important;
 }
 
 .text-white\/35,
 .text-white\/30,
 .text-white\/25,
 .text-white\/20 {
-  color: #94a3b8 !important;
+  color: #A8A29E !important;
 }
 
 /* Gold / Yellow Accent: replace bright #FFC107 with rich legible amber gold #B45309 */
@@ -203,28 +248,19 @@ div.fixed.inset-0[class*="bg-black/"] {
   color: #581c87 !important;
 }
 
-/* Preserve black text inside solid orange buttons & badges (except dark child badges like .bg-black) */
+/* Preserve black text inside solid orange buttons & badges (except white child badges) */
 .bg-\[\#F27D26\],
-.bg-\[\#F27D26\] *:not(.bg-black):not(.bg-black *),
+.bg-\[\#F27D26\] *:not(.bg-white):not(.bg-white *),
 .bg-\[\#F27D26\] .text-black {
   color: #000000 !important;
 }
 
-/* Ensure pure white text inside pure black badges and containers (even inside orange cards) */
-.bg-black,
-.bg-black *,
-.bg-black span,
-.bg-black p,
-.bg-black .text-white,
-span.bg-black,
-div.bg-black,
-.bg-\[\#F27D26\] .bg-black,
-.bg-\[\#F27D26\] .bg-black *,
-.bg-\[\#F27D26\] .bg-black span {
-  color: #ffffff !important;
+.bg-\[\#F27D26\] .bg-white,
+.bg-\[\#F27D26\] .bg-white * {
+  color: #1C1917 !important;
 }
 
-/* Preserve crisp white text inside solid colored badges (rose, red, emerald, green, blue) */
+/* Ensure crisp white text inside solid colored badges (rose, red, emerald, green, blue) */
 .bg-rose-500, .bg-rose-600,
 .bg-red-500, .bg-red-600,
 .bg-emerald-500, .bg-emerald-600,
@@ -242,9 +278,9 @@ div.bg-black,
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  background-color: #FFFFFF !important;
+  color: #1C1917 !important;
+  border-color: #D6CEBE !important;
 }
 
 input:focus, select:focus, textarea:focus {
@@ -253,8 +289,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
+  background-color: #FFFFFF !important;
+  color: #1C1917 !important;
 }
 
 /* ========================================================
@@ -280,42 +316,42 @@ option {
   font-size: 14.5px !important;
 }
 
-/* Tables: Food Cost compact table & all financial tables */
+/* Tables: Food Cost compact table & all financial tables in warm cream */
 table th {
   padding-top: 9px !important;
   padding-bottom: 9px !important;
   font-size: 12.5px !important;
-  color: #475569 !important;
-  background-color: #f1f5f9 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  color: #57534E !important;
+  background-color: #F7F3EB !important;
+  border-bottom: 1px solid #EAE4D9 !important;
 }
 
 table td {
   padding-top: 9px !important;
   padding-bottom: 9px !important;
   font-size: 13.5px !important;
-  border-bottom: 1px solid #f1f5f9 !important;
+  border-bottom: 1px solid #F7F3EB !important;
 }
 
-/* Row hover highlight */
+/* Row hover highlight: warm cream-orange tint */
 table tr:hover {
-  background-color: #fff7ed !important;
+  background-color: #FFF7ED !important;
 }
 
-/* Custom scrollbar for light UI */
+/* Custom scrollbar for warm cream UI */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #F7F3EB;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #DDD6C8;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #C4B9A5;
 }
 
 /* Full-width desktop navigation layout: the legacy Sidebar is mobile-only. */

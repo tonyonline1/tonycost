@@ -757,8 +757,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
       {/* DETAIL COST BREAKDOWN MODAL (Includes Seafood Rule Breakdown) */}
       {selectedBreakdown && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-white/20 text-white max-h-[90vh] overflow-y-auto scrollbar-thin">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917] max-h-[90vh] overflow-y-auto scrollbar-thin">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
@@ -1160,10 +1160,10 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
       {/* EDIT MENU MODAL */}
       {isMenuModalOpen && editingMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-white/20 text-white">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-white text-base">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917]">
+            <div className="flex items-center justify-between border-b border-[#EAE4D9] pb-3">
+              <h3 className="font-bold text-[#1C1917] text-base">
                 {editingMenu.id?.startsWith('menu_') && !menus.find((m) => m.id === editingMenu.id)
                   ? 'เพิ่มเมนูใหม่'
                   : 'แก้ไขข้อมูลเมนู'}
@@ -1171,7 +1171,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMenuModalOpen(false)}
-                className="p-1 rounded-xl text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+                className="p-1 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1179,49 +1179,49 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
             <form onSubmit={handleSaveMenuModal} className="space-y-4 mt-4 text-xs">
               <div>
-                <label className="block text-white/70 mb-1 font-semibold">ชื่อเมนูอาหาร</label>
+                <label className="block text-stone-700 mb-1 font-semibold">ชื่อเมนูอาหาร</label>
                 <input
                   type="text"
                   required
                   placeholder="เช่น ข้าวกะเพราโบราณ, ข้าวผัดพริกเผา"
                   value={editingMenu.name || ''}
                   onChange={(e) => setEditingMenu({ ...editingMenu, name: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#F27D26]"
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 focus:outline-none focus:border-[#F27D26]"
                 />
               </div>
 
               <div>
-                <label className="block text-white/70 mb-1 font-semibold">หมวดหมู่อาหาร</label>
+                <label className="block text-stone-700 mb-1 font-semibold">หมวดหมู่อาหาร</label>
                 <select
                   value={editingMenu.category || 'ผัดและกะเพรา'}
                   onChange={(e) => setEditingMenu({ ...editingMenu, category: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#F27D26]"
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 focus:outline-none focus:border-[#F27D26]"
                 >
-                  <option value="ผัดและกะเพรา" className="bg-[#1a1a1a]">ผัดและกะเพรา</option>
-                  <option value="ทอดและกระเทียม" className="bg-[#1a1a1a]">ทอดและกระเทียม</option>
-                  <option value="ต้มยำและแกง" className="bg-[#1a1a1a]">ต้มยำและแกง</option>
-                  <option value="ข้าวผัดและเส้น" className="bg-[#1a1a1a]">ข้าวผัดและเส้น</option>
-                  <option value="ทานเล่นและเครื่องดื่ม" className="bg-[#1a1a1a]">ทานเล่นและเครื่องดื่ม</option>
+                  <option value="ผัดและกะเพรา">ผัดและกะเพรา</option>
+                  <option value="ทอดและกระเทียม">ทอดและกระเทียม</option>
+                  <option value="ต้มยำและแกง">ต้มยำและแกง</option>
+                  <option value="ข้าวผัดและเส้น">ข้าวผัดและเส้น</option>
+                  <option value="ทานเล่นและเครื่องดื่ม">ทานเล่นและเครื่องดื่ม</option>
                 </select>
               </div>
 
               {/* Variants Price editor */}
               <div>
-                <label className="block text-white/70 mb-1 font-semibold">
+                <label className="block text-stone-700 mb-1 font-semibold">
                   ตัวเลือกเมนูและราคาขาย
                 </label>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {(editingMenu.variants || []).map((v, idx) => (
                     <div
                       key={v.id || idx}
-                      className="p-3 bg-black/30 border border-white/10 rounded-xl space-y-2"
+                      className="p-3 bg-[#FAF8F5] border border-[#EAE4D9] rounded-xl space-y-2"
                     >
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-white">{v.name} ({v.proteinType})</span>
+                        <span className="font-bold text-stone-900">{v.name} ({v.proteinType})</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[10px] text-white/50 block">หน้าร้าน (฿)</label>
+                          <label className="text-[10px] text-stone-500 block font-medium">หน้าร้าน (฿)</label>
                           <NumericInput
                             type="number"
                             min="0"
@@ -1234,11 +1234,11 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               };
                               setEditingMenu({ ...editingMenu, variants: updated });
                             }}
-                            className="w-full p-1.5 bg-black/40 border border-white/15 rounded-lg text-white font-mono font-bold"
+                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-white/50 block">กลับบ้าน (฿)</label>
+                          <label className="text-[10px] text-stone-500 block font-medium">กลับบ้าน (฿)</label>
                           <NumericInput
                             type="number"
                             min="0"
@@ -1251,11 +1251,11 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               };
                               setEditingMenu({ ...editingMenu, variants: updated });
                             }}
-                            className="w-full p-1.5 bg-black/40 border border-white/15 rounded-lg text-white font-mono font-bold"
+                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-white/50 block">Delivery (฿)</label>
+                          <label className="text-[10px] text-stone-500 block font-medium">Delivery (฿)</label>
                           <NumericInput
                             type="number"
                             min="0"
@@ -1268,7 +1268,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               };
                               setEditingMenu({ ...editingMenu, variants: updated });
                             }}
-                            className="w-full p-1.5 bg-black/40 border border-white/15 rounded-lg text-white font-mono font-bold"
+                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
                           />
                         </div>
                       </div>
@@ -1277,17 +1277,17 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#EAE4D9]">
                 <button
                   type="button"
                   onClick={() => setIsMenuModalOpen(false)}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-xl text-white font-semibold cursor-pointer"
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-stone-700 font-semibold cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl shadow-lg shadow-[#F27D26]/20 cursor-pointer"
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-white font-bold rounded-xl shadow-lg shadow-[#F27D26]/20 cursor-pointer"
                 >
                   บันทึกเมนู
                 </button>

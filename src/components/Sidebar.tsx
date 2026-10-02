@@ -50,45 +50,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   reviewCount,
 }) => {
-  // One system + 3 business modules.
-  // Existing route IDs are intentionally preserved for backward compatibility.
+  // Pure Food Cost System Modules
   const moduleGroups: NavGroup[] = [
     {
-      id: 'cost-control',
-      label: 'MODULE A · COST CONTROL',
-      subtitle: 'ควบคุมต้นทุนและกำหนดราคา',
+      id: 'cost-pricing',
+      label: 'วิเคราะห์ต้นทุน & ตั้งราคา',
+      subtitle: 'Food Cost Analysis & Pricing',
       icon: Calculator,
       items: [
-        { id: 'food_cost', name: 'ต้นทุนอาหาร', icon: UtensilsCrossed },
+        { id: 'food_cost', name: 'ต้นทุนอาหาร & ราคาขาย', icon: UtensilsCrossed },
+        { id: 'quick_calculator', name: 'เครื่องคิดเลขต้นทุนด่วน', icon: Sparkles },
+      ],
+    },
+    {
+      id: 'recipes-group',
+      label: 'สูตรอาหารมาตรฐาน',
+      subtitle: 'Standard Recipe Cost Cards',
+      icon: BookOpen,
+      items: [
+        { id: 'recipes', name: 'สูตรอาหาร (Recipe Cards)', icon: BookOpen },
+        { id: 'sauces', name: 'ซอส & สูตรเตรียม Batch', icon: FlaskConical },
+      ],
+    },
+    {
+      id: 'ingredients-group',
+      label: 'วัตถุดิบ & Yield Lab',
+      subtitle: 'AP Cost, EP Cost & Yield %',
+      icon: Beef,
+      items: [
         {
           id: 'ingredients',
-          name: 'วัตถุดิบ & แลบ Yield (ขั้นตอน 2)',
+          name: 'วัตถุดิบ & Yield Lab',
           icon: Beef,
           badge: reviewCount > 0 ? reviewCount : undefined,
           badgeColor: 'bg-rose-500/80 text-white',
         },
-        { id: 'sauces', name: 'ซอส & สต็อก (ขั้นตอน 3)', icon: FlaskConical },
-        { id: 'recipes', name: 'สูตรอาหาร (ขั้นตอน 4)', icon: BookOpen },
       ],
     },
     {
-      id: 'daily-operations',
-      label: 'MODULE B · DAILY OPERATIONS',
-      subtitle: 'บันทึกยอดขายและค่าใช้จ่าย',
-      icon: Activity,
+      id: 'settings-group',
+      label: 'เกณฑ์ต้นทุนสากล',
+      subtitle: 'Target FC% & Buffers',
+      icon: Settings,
       items: [
-        { id: 'sales', name: 'รายรับ', icon: TrendingUp },
-        { id: 'expenses', name: 'ค่าใช้จ่าย', icon: Receipt },
-      ],
-    },
-    {
-      id: 'management',
-      label: 'MODULE C · MANAGEMENT',
-      subtitle: 'วิเคราะห์กำไรและรายงานบริหาร',
-      icon: BarChart3,
-      items: [
-        { id: 'pnl', name: 'กำไร/ขาดทุน', icon: PieChart },
-        { id: 'reports', name: 'รายงาน', icon: FileSpreadsheet },
+        { id: 'settings', name: 'เกณฑ์ต้นทุน & ตั้งค่า', icon: Settings },
       ],
     },
   ];
@@ -98,38 +103,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (id === 'food_cost' && (currentTab === 'menus' || currentTab === 'menu_costing'));
 
   const content = (
-    <div className="flex flex-col h-full bg-white backdrop-blur-xl text-slate-900 select-none p-4 border-r border-slate-200 shadow-xl">
+    <div className="flex flex-col h-full bg-[#FAF8F5] backdrop-blur-xl text-stone-900 select-none p-4 border-r border-[#EAE4D9] shadow-xl">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+      <div className="lg:hidden flex items-center justify-between pb-3 border-b border-[#EAE4D9] mb-3">
         <div>
-          <span className="font-bold text-slate-900 text-base">ระบบบริหารร้าน</span>
-          <p className="text-[10px] text-slate-500 mt-0.5">1 System · 3 Modules</p>
+          <span className="font-bold text-stone-900 text-base">ระบบคำนวณต้นทุนอาหาร</span>
+          <p className="text-[10px] text-[#B45309] font-bold mt-0.5">International Food Cost System</p>
         </div>
         <button
           type="button"
           onClick={onCloseMobile}
-          className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+          className="p-1.5 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-100 cursor-pointer"
           aria-label="ปิดเมนู"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Dashboard / Home */}
+      {/* Quick Home */}
       <button
         type="button"
         onClick={() => {
-          onSelectTab('dashboard');
+          onSelectTab('food_cost');
           onCloseMobile();
         }}
         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer mb-4 ${
-          currentTab === 'dashboard'
-            ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
-            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
+          currentTab === 'food_cost' || currentTab === 'dashboard'
+            ? 'bg-[#F27D26] text-white font-bold shadow-md shadow-[#F27D26]/20'
+            : 'bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-[#EAE4D9]'
         }`}
       >
-        <LayoutDashboard className={`w-4 h-4 shrink-0 ${currentTab === 'dashboard' ? 'text-black' : 'text-slate-500'}`} />
-        <span>Dashboard</span>
+        <UtensilsCrossed className="w-4 h-4 shrink-0" />
+        <span>ต้นทุนอาหาร & ราคาขาย (หลัก)</span>
       </button>
 
       {/* Three Business Modules */}

@@ -304,7 +304,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <p className="text-black font-bold uppercase text-[10px] tracking-wider">
               กำไรสุทธิ (Net Profit)
             </p>
-            <span className="bg-black !text-white text-white text-[10px] px-2 py-0.5 rounded font-bold font-mono shadow-xs">
+            <span className="bg-white text-stone-900 border border-white/70 text-[10px] px-2 py-0.5 rounded font-bold font-mono shadow-xs">
               {profitPercent.toFixed(1)}% Margin
             </span>
           </div>

@@ -8,12 +8,7 @@ import { FoodCostView } from './components/FoodCostView';
 import { MenusView } from './components/MenusView';
 import { MenuCostingView } from './components/MenuCostingView';
 import { RecipeBuilderView } from './components/RecipeBuilderView';
-import { PurchasesView } from './components/PurchasesView';
-import { InventoryView } from './components/InventoryView';
-import { ExpensesView } from './components/ExpensesView';
-import { SalesView } from './components/SalesView';
-import { ProfitLossView } from './components/ProfitLossView';
-import { ReportsView } from './components/ReportsView';
+import { QuickCostCalculatorView } from './components/QuickCostCalculatorView';
 import { SettingsView } from './components/SettingsView';
 
 import {
@@ -69,8 +64,8 @@ export default function App() {
     StorageService.getWasteLog()
   );
 
-  // Navigation & UI state
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  // Navigation & UI state: focused purely on Food Cost System
+  const [currentTab, setCurrentTab] = useState<string>('food_cost');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [targetRecipeVariantId, setTargetRecipeVariantId] = useState<string>('');
 
@@ -329,12 +324,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col font-sans relative overflow-x-hidden selection:bg-[#F27D26] selection:text-white">
-      {/* Soft Ambient Background Orbs */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-20 overflow-hidden">
-        <div className="absolute top-[-15%] left-[-15%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-full bg-[#F27D26] blur-[140px]" />
-        <div className="absolute bottom-[-15%] right-[-15%] w-[60vw] h-[60vw] max-w-[750px] max-h-[750px] rounded-full bg-[#FFC107] blur-[160px]" />
-        <div className="absolute top-[40%] right-[10%] w-[35vw] h-[35vw] max-w-[400px] max-h-[400px] rounded-full bg-[#F27D26] blur-[150px] opacity-15" />
+    <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917] flex flex-col font-sans relative overflow-x-hidden selection:bg-[#F27D26] selection:text-white">
+      {/* Soft Ambient Background Orbs: Orange, Gold, and Yellow */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-25 overflow-hidden">
+        <div className="absolute top-[-15%] left-[-15%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-full bg-[#F27D26] blur-[150px] opacity-20" />
+        <div className="absolute bottom-[-15%] right-[-15%] w-[60vw] h-[60vw] max-w-[750px] max-h-[750px] rounded-full bg-[#FFC107] blur-[160px] opacity-25" />
+        <div className="absolute top-[35%] right-[5%] w-[40vw] h-[40vw] max-w-[450px] max-h-[450px] rounded-full bg-[#F59E0B] blur-[160px] opacity-15" />
       </div>
 
       {/* Top Navigation Bar */}
@@ -360,21 +355,8 @@ export default function App() {
         />
 
         <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 sm:py-6 lg:py-8 min-w-0 overflow-x-hidden">
-          {/* TAB 1: DASHBOARD */}
-          {currentTab === 'dashboard' && (
-            <Dashboard
-              ingredients={ingredients}
-              sauces={sauces}
-              menus={menus}
-              settings={settings}
-              salesOrders={salesOrders}
-              expenses={expenses}
-              onNavigate={(tabId) => setCurrentTab(tabId)}
-            />
-          )}
-
-          {/* MODULE A — COST CONTROL: consolidated Menu + Food Cost */}
-          {(currentTab === 'food_cost' || currentTab === 'menus' || currentTab === 'menu_costing') && (
+          {/* TAB 1: FOOD COST & PRICING ANALYSIS (Primary View) */}
+          {(currentTab === 'food_cost' || currentTab === 'dashboard' || currentTab === 'menus' || currentTab === 'menu_costing') && (
             <FoodCostView
               menus={menus}
               ingredients={ingredients}
@@ -386,21 +368,18 @@ export default function App() {
             />
           )}
 
-          {/* MODULE A — COST CONTROL: ingredients & price simulator */}
-          {currentTab === 'ingredients' && (
-            <IngredientsView
+          {/* TAB 2: QUICK FOOD COST CALCULATOR (Interactive Recipe & Pricing Simulator) */}
+          {currentTab === 'quick_calculator' && (
+            <QuickCostCalculatorView
               ingredients={ingredients}
               sauces={sauces}
-              variants={allVariants}
-              menuNamesMap={menuNamesMap}
               settings={settings}
-              priceHistory={priceHistory}
-              onSaveIngredient={handleSaveIngredient}
-              onRecordPriceChange={handleRecordPriceChange}
+              onSaveNewMenu={handleSaveMenu}
+              onNavigateToTab={(tabId) => setCurrentTab(tabId)}
             />
           )}
 
-          {/* MODULE A — COST CONTROL: recipe builder (3 recipe groups) */}
+          {/* TAB 3: STANDARDIZED RECIPE BUILDER & RECIPE CARDS */}
           {(currentTab === 'recipes' || currentTab === 'sauces') && (
             <RecipeBuilderView
               menus={menus}
@@ -414,75 +393,21 @@ export default function App() {
             />
           )}
 
-          {/* TAB 7: PURCHASES & PRICE HISTORY */}
-          {currentTab === 'purchases' && (
-            <PurchasesView
+          {/* TAB 4: RAW INGREDIENTS & YIELD LAB (AP, EP & Yield %) */}
+          {currentTab === 'ingredients' && (
+            <IngredientsView
               ingredients={ingredients}
-              suppliers={suppliers}
-              purchases={purchases}
-              priceHistory={priceHistory}
+              sauces={sauces}
+              variants={allVariants}
+              menuNamesMap={menuNamesMap}
               settings={settings}
-              onSavePurchase={handleSavePurchase}
-              onUpdateIngredientPrice={handleUpdateIngredientPriceOnly}
+              priceHistory={priceHistory}
+              onSaveIngredient={handleSaveIngredient}
               onRecordPriceChange={handleRecordPriceChange}
             />
           )}
 
-          {/* TAB 8: INVENTORY & STOCK */}
-          {currentTab === 'inventory' && (
-            <InventoryView
-              inventory={inventory}
-              ingredients={ingredients}
-              transactions={inventoryTransactions}
-              wasteLog={wasteLog}
-              onSaveAdjustment={handleSaveAdjustment}
-            />
-          )}
-
-          {/* MODULE B — DAILY OPERATIONS: expenses */}
-          {currentTab === 'expenses' && (
-            <ExpensesView expenses={expenses} onSaveExpense={handleSaveExpense} />
-          )}
-
-          {/* MODULE B — DAILY OPERATIONS: sales orders */}
-          {currentTab === 'sales' && (
-            <SalesView
-              salesOrders={salesOrders}
-              menus={menus}
-              ingredients={ingredients}
-              sauces={sauces}
-              settings={settings}
-              onSaveSaleOrder={handleSaveSaleOrder}
-            />
-          )}
-
-          {/* MODULE C — MANAGEMENT: P&L */}
-          {currentTab === 'pnl' && (
-            <ProfitLossView
-              salesOrders={salesOrders}
-              expenses={expenses}
-              wasteLog={wasteLog}
-            />
-          )}
-
-          {/* MODULE C — MANAGEMENT: reports & Excel import/export */}
-          {currentTab === 'reports' && (
-            <ReportsView
-              ingredients={ingredients}
-              sauces={sauces}
-              menus={menus}
-              expenses={expenses}
-              salesOrders={salesOrders}
-              settings={settings}
-              onIngredientsImported={handleIngredientsImported}
-              onEditIngredient={(ing) => {
-                setCurrentTab('ingredients');
-              }}
-              onResetDefaults={handleResetDefaults}
-            />
-          )}
-
-          {/* SYSTEM SETTINGS (shared across all 3 modules) */}
+          {/* TAB 5: FOOD COST BENCHMARKS & SETTINGS */}
           {currentTab === 'settings' && (
             <SettingsView
               settings={settings}
@@ -493,15 +418,15 @@ export default function App() {
       </div>
 
       {/* Light Theme Footer */}
-      <footer className="relative z-10 px-6 sm:px-8 py-3.5 bg-white/90 backdrop-blur-md border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2 shadow-xs">
+      <footer className="relative z-10 px-6 sm:px-8 py-3.5 bg-white/90 backdrop-blur-md border-t border-[#EAE4D9] text-xs text-stone-500 flex flex-col sm:flex-row justify-between items-center gap-2 shadow-xs">
         <div className="flex items-center gap-4">
-          <span>DATA SOURCE: Tony_Kitchen_Costing.xlsx · 1 SYSTEM / 3 MODULES</span>
-          <span className="hidden sm:inline text-slate-300">|</span>
-          <span>LAST SYNC: 2026-09-07 10:32:49</span>
+          <span className="font-medium text-stone-700">ระบบคำนวณต้นทุนอาหารมาตรฐานสากล (International Food Cost System)</span>
+          <span className="hidden sm:inline text-stone-300">|</span>
+          <span>AP Price · Usable Yield % · EP Cost · Q-Factor Buffer (2-5%)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-slate-600 font-mono font-medium">Deterministic Calculation Engine V1.0.4</span>
+          <span className="text-stone-600 font-mono font-medium">Deterministic Culinary Engine V1.0.4</span>
         </div>
       </footer>
     </div>

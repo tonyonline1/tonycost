@@ -109,32 +109,37 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
 
       {/* Top Net Profit Highlight Banner */}
       <div
-        className={`p-6 rounded-3xl border shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
           netProfit >= 0
-            ? 'bg-gradient-to-br from-emerald-950/80 to-teal-950/80 text-white border-emerald-500/30 backdrop-blur-xl'
-            : 'bg-gradient-to-br from-red-950/80 to-rose-950/80 text-white border-red-500/30 backdrop-blur-xl'
+            ? 'bg-[#FCFDF9] text-slate-900 border-emerald-200/80'
+            : 'bg-[#FFFDF7] text-slate-900 border-rose-200/80'
         }`}
       >
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-white/70">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 font-sans">
             กำไรสุทธิคงเหลือ (Net Profit) — {period}
           </span>
-          <div className="text-3xl sm:text-4xl font-bold font-mono mt-1 tracking-tight text-white">
+          <div className={`text-3xl sm:text-4xl font-bold font-mono mt-1 tracking-tight ${
+            netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+          }`}>
             ฿{netProfit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
           </div>
-          <div className="text-xs text-white/80 mt-1">
-            อัตรากำไรสุทธิ (Net Margin): <span className="font-bold text-green-400">{netMarginPercent.toFixed(1)}%</span>
+          <div className="text-xs text-slate-600 mt-1 font-medium font-sans">
+            อัตรากำไรสุทธิ (Net Margin):{' '}
+            <span className={`font-bold font-mono ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {netMarginPercent.toFixed(1)}%
+            </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 font-mono text-xs text-white/90">
-          <div className="bg-black/30 border border-white/10 p-3 rounded-2xl">
-            <span className="block text-[10px] text-white/50">ยอดขายรวม:</span>
-            <span className="font-bold text-sm text-white">฿{grossSales.toLocaleString()}</span>
+        <div className="grid grid-cols-2 gap-3 font-mono text-xs">
+          <div className="bg-white border border-stone-200/80 p-3 rounded-2xl shadow-xs">
+            <span className="block text-[10px] text-slate-500 font-sans font-semibold">ยอดขายรวม:</span>
+            <span className="font-bold text-sm text-slate-900 font-mono">฿{grossSales.toLocaleString()}</span>
           </div>
-          <div className="bg-black/30 border border-white/10 p-3 rounded-2xl">
-            <span className="block text-[10px] text-white/50">Food Cost %:</span>
-            <span className="font-bold text-sm text-[#FFC107]">{foodCostPercent.toFixed(1)}%</span>
+          <div className="bg-white border border-stone-200/80 p-3 rounded-2xl shadow-xs">
+            <span className="block text-[10px] text-slate-500 font-sans font-semibold">Food Cost %:</span>
+            <span className="font-bold text-sm text-[#b45309] font-mono">{foodCostPercent.toFixed(1)}%</span>
           </div>
         </div>
       </div>
@@ -200,9 +205,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
           </div>
 
           {/* GROSS PROFIT STRIP */}
-          <div className="p-3.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 flex justify-between font-bold text-white text-sm">
+          <div className="p-3.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 flex justify-between font-bold text-slate-900 text-sm">
             <span className="font-sans">กำไรขั้นต้น (GROSS PROFIT) ({grossMarginPercent.toFixed(1)}%)</span>
-            <span className="font-mono text-base font-bold text-green-400">
+            <span className="font-mono text-base font-bold text-emerald-700">
               ฿{grossProfit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -227,12 +232,12 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
           <div
             className={`p-4 rounded-2xl border flex justify-between font-bold text-base ${
               netProfit >= 0
-                ? 'bg-black/40 text-white border-white/20'
-                : 'bg-red-500/10 text-white border-red-500/30'
+                ? 'bg-[#FCFDF9] text-slate-900 border-emerald-200/80 shadow-xs'
+                : 'bg-[#FFFDF7] text-slate-900 border-rose-200/80 shadow-xs'
             }`}
           >
-            <span className="font-sans font-bold">กำไรสุทธิสิ้นงวด (NET PROFIT):</span>
-            <span className={`font-mono text-xl font-bold ${netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <span className="font-sans font-bold text-slate-900">กำไรสุทธิสิ้นงวด (NET PROFIT):</span>
+            <span className={`font-mono text-xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               ฿{netProfit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
             </span>
           </div>
