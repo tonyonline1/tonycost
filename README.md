@@ -24,6 +24,18 @@ The navigation is grouped by module, but the application remains one React/Vite 
 4. Build for production:
    `npm run build`
 
+## Deployment to GitHub Pages (วิธี Deploy บน GitHub)
+
+เพื่อให้หน้าแอปแสดงผลได้อย่างถูกต้องบน GitHub Pages:
+
+1. นำโค้ดขึ้น GitHub repository (สาขา `main` หรือ `master`)
+2. ไปที่หน้า GitHub Repository ของคุณ -> คลิกแถบ **Settings** ด้านบน
+3. ที่เมนูด้านซ้าย เลือกหัวข้อ **Pages**
+4. ในส่วน **Build and deployment**:
+   - **Source**: ให้เปลี่ยนจาก `Deploy from a branch` เป็น **`GitHub Actions`** (สำคัญมาก)
+5. ตัว GitHub Actions workflow (`.github/workflows/deploy.yml`) จะทำการ Build และ Deploy แอพขึ้น GitHub Pages โดยอัตโนมัติ
+6. เมื่อ Deploy เสร็จสิ้น ระบบจะแสดงลิงก์ URL (เช่น `https://<username>.github.io/<repo-name>/`) สามารถคลิกเปิดใช้งานแอปได้ทันทีโดยไม่มีปัญหาหน้าขาว (Blank page)
+
 ## Data and calculation principles
 
 - One shared data layer is used across all modules.
