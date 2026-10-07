@@ -57,13 +57,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Primary navigation bar */}
       <div className="border-b border-[#EAE4D9] bg-[#FAF8F5]/95 backdrop-blur-xl shadow-xs">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-4 justify-between">
-          {/* Brand */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Brand & Hamburger Menu */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               type="button"
               onClick={onOpenMobileNav}
-              className="lg:hidden p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors focus:outline-none cursor-pointer"
+              className="p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors focus:outline-none cursor-pointer"
               aria-label="Open menu"
+              title="เมนูระบบนำทาง (Navigation Menu)"
             >
               <MenuIcon className="w-5 h-5" />
             </button>

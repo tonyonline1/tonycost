@@ -50,6 +50,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   reviewCount,
 }) => {
+  // Close drawer on Escape key press
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpenMobile) {
+        onCloseMobile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpenMobile, onCloseMobile]);
   // Pure Food Cost System Modules
   const moduleGroups: NavGroup[] = [
     {
@@ -104,8 +114,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const content = (
     <div className="flex flex-col h-full bg-[#FAF8F5] backdrop-blur-xl text-stone-900 select-none p-4 border-r border-[#EAE4D9] shadow-xl">
-      {/* Mobile Header */}
-      <div className="lg:hidden flex items-center justify-between pb-3 border-b border-[#EAE4D9] mb-3">
+      {/* Drawer Header */}
+      <div className="flex items-center justify-between pb-3 border-b border-[#EAE4D9] mb-3">
         <div>
           <span className="font-bold text-stone-900 text-base">ระบบคำนวณต้นทุนอาหาร</span>
           <p className="text-[10px] text-[#B45309] font-bold mt-0.5">International Food Cost System</p>
@@ -241,14 +251,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {content}
       </aside>
 
-      {/* Mobile Drawer */}
+      {/* Navigation Drawer / Slide-over Menu */}
       {isOpenMobile && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
+        <div className="fixed inset-0 z-50 flex">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={onCloseMobile}
           />
-          <div className="relative z-50 w-72 max-w-[85vw] h-full shadow-2xl">
+          <div className="relative z-50 w-72 sm:w-80 max-w-[85vw] h-full shadow-2xl animate-in slide-in-from-left duration-200">
             {content}
           </div>
         </div>
