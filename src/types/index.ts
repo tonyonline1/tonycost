@@ -134,6 +134,9 @@ export interface MenuVariant {
   sellingPrice: number; // Dine-in price
   takeawayPrice: number; // Takeaway price
   deliveryPrice: number; // Delivery price
+  grabPrice?: number; // Grab Food specific price
+  linemanPrice?: number; // Line Man specific price
+  robinhoodPrice?: number; // Robinhood specific price
   recipeItems: RecipeItem[];
   overheadCost: number; // specific or inherited
   packagingCost?: number; // total packaging cost

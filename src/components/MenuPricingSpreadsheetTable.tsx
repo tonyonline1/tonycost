@@ -1,0 +1,1032 @@
+import React, { useState } from 'react';
+import {
+  MenuItem,
+  MenuVariant,
+  Ingredient,
+  Sauce,
+  RestaurantSettings,
+  RecipeCostBreakdown,
+} from '../types';
+import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid } from 'lucide-react';
+
+export type PricingChannelTab = 'DINE_IN' | 'GRAB' | 'LINEMAN' | 'ROBINHOOD' | 'ALL';
+
+interface MenuPricingSpreadsheetTableProps {
+  menu: MenuItem;
+  ingredientsMap: Map<string, Ingredient>;
+  saucesMap: Map<string, Sauce>;
+  settings: RestaurantSettings;
+  onSaveMenu: (menu: MenuItem) => void;
+  onSelectBreakdown?: (data: {
+    menu: MenuItem;
+    variant: MenuVariant;
+    breakdown: RecipeCostBreakdown;
+  }) => void;
+  onOpenAddVariant?: (menu: MenuItem) => void;
+  activeChannel?: PricingChannelTab;
+  onChannelChange?: (channel: PricingChannelTab) => void;
+}
+
+export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTableProps> = ({
+  menu,
+  ingredientsMap,
+  saucesMap,
+  settings,
+  onSaveMenu,
+  onSelectBreakdown,
+  onOpenAddVariant,
+  activeChannel: parentChannel,
+  onChannelChange,
+}) => {
+  // Channel view: DINE_IN (กินที่ร้าน), GRAB, LINEMAN, ROBINHOOD, ALL (แสดงทั้งหมด)
+  const [localChannel, setLocalChannel] = useState<PricingChannelTab>('DINE_IN');
+  const currentChannel = parentChannel || localChannel;
+
+  const handleSelectChannel = (ch: PricingChannelTab) => {
+    setLocalChannel(ch);
+    if (onChannelChange) {
+      onChannelChange(ch);
+    }
+  };
+
+  // Local state for real-time responsiveness when typing
+  const [localEdits, setLocalEdits] = useState<
+    Record<
+      string,
+      {
+        sellingPrice?: number;
+        proteinWeight?: number;
+        grabPrice?: number;
+        linemanPrice?: number;
+        robinhoodPrice?: number;
+      }
+    >
+  >({});
+
+  const handleCellChange = (
+    variantId: string,
+    field: 'sellingPrice' | 'proteinWeight' | 'grabPrice' | 'linemanPrice' | 'robinhoodPrice',
+    val: number
+  ) => {
+    // 1. Update local state for immediate visual feedback
+    setLocalEdits((prev) => ({
+      ...prev,
+      [variantId]: {
+        ...prev[variantId],
+        [field]: val,
+      },
+    }));
+
+    // 2. Update and persist in menu
+    const updatedVariants = menu.variants.map((v) => {
+      if (v.id !== variantId) return v;
+
+      if (field === 'sellingPrice') {
+        return { ...v, sellingPrice: val };
+      }
+      if (field === 'grabPrice') {
+        return { ...v, grabPrice: val, deliveryPrice: val };
+      }
+      if (field === 'linemanPrice') {
+        return { ...v, linemanPrice: val };
+      }
+      if (field === 'robinhoodPrice') {
+        return { ...v, robinhoodPrice: val };
+      }
+      if (field === 'proteinWeight') {
+        const recipeItems = [...(v.recipeItems || [])];
+        const proteinIdx = recipeItems.findIndex((it) => {
+          const lower = it.name.toLowerCase();
+          return (
+            it.proteinCategory ||
+            lower.includes('หมู') ||
+            lower.includes('ไก่') ||
+            lower.includes('เนื้อ') ||
+            lower.includes('กุ้ง') ||
+            lower.includes('หมึก') ||
+            lower.includes('ไส้กรอก') ||
+            lower.includes('ปลา')
+          );
+        });
+
+        if (proteinIdx >= 0) {
+          const item = recipeItems[proteinIdx];
+          const unitCost = item.calculatedUnitCost || 0;
+          recipeItems[proteinIdx] = {
+            ...item,
+            quantity: val,
+            calculatedLineCost: val * unitCost,
+          };
+        }
+        return { ...v, recipeItems };
+      }
+      return v;
+    });
+
+    const updatedMenu: MenuItem = {
+      ...menu,
+      variants: updatedVariants,
+      updatedAt: new Date().toISOString(),
+    };
+
+    onSaveMenu(updatedMenu);
+  };
+
+  return (
+    <div className="bg-[#FAF8F5] border border-stone-300 rounded-2xl overflow-hidden shadow-md my-2 text-stone-900 font-sans">
+      {/* Top Header Row with Menu Title & Channel Switcher Buttons */}
+      <div className="bg-white border-b border-stone-300 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="px-3 py-1 bg-[#E53935] text-white font-extrabold text-sm rounded shadow-xs tracking-wider">
+            ธรรมดา
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+            {menu.name}
+          </h2>
+          <span className="text-xs px-2 py-0.5 bg-stone-100 border border-stone-200 text-stone-600 rounded-md font-semibold">
+            {menu.variants.length} ตัวเลือก
+          </span>
+        </div>
+
+        {/* Channel Selector Buttons: กินที่ร้าน / Grab Food / Line Man / Robinhood / แสดงทั้งหมด */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 shadow-2xs">
+            {/* กินที่ร้าน */}
+            <button
+              type="button"
+              onClick={() => handleSelectChannel('DINE_IN')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentChannel === 'DINE_IN'
+                  ? 'bg-[#00BCD4] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>กินที่ร้าน</span>
+            </button>
+
+            {/* Grab Food */}
+            <button
+              type="button"
+              onClick={() => handleSelectChannel('GRAB')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentChannel === 'GRAB'
+                  ? 'bg-[#00B14F] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+              }`}
+            >
+              <Bike className="w-3.5 h-3.5" />
+              <span>Grab Food</span>
+            </button>
+
+            {/* Line Man */}
+            <button
+              type="button"
+              onClick={() => handleSelectChannel('LINEMAN')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentChannel === 'LINEMAN'
+                  ? 'bg-[#06C755] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Line Man</span>
+            </button>
+
+            {/* Robinhood */}
+            <button
+              type="button"
+              onClick={() => handleSelectChannel('ROBINHOOD')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentChannel === 'ROBINHOOD'
+                  ? 'bg-[#8B5CF6] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>Robinhood</span>
+            </button>
+
+            {/* แสดงทั้งหมด (All Channels) */}
+            <button
+              type="button"
+              onClick={() => handleSelectChannel('ALL')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                currentChannel === 'ALL'
+                  ? 'bg-stone-800 text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+              }`}
+              title="เปรียบเทียบทุกช่องทางพร้อมกัน"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">แสดงทั้งหมด</span>
+            </button>
+          </div>
+
+          {onOpenAddVariant && (
+            <button
+              type="button"
+              onClick={() => onOpenAddVariant(menu)}
+              className="px-3 py-1.5 bg-[#F27D26] hover:bg-[#d96817] text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ เพิ่มตัวเลือก</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Spreadsheet Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse text-center">
+          <thead>
+            {/* Header Tier 1: Groupings */}
+            <tr className="text-xs font-black select-none border-b border-black">
+              {currentChannel === 'DINE_IN' && (
+                <>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
+                  <th colSpan={8} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนวัตถุดิบ & การตั้งราคาหน้าร้าน</th>
+                  <th colSpan={2} className="bg-[#00BCD4] text-white py-1.5 tracking-wide">กำไรหน้าร้าน</th>
+                </>
+              )}
+
+              {currentChannel === 'GRAB' && (
+                <>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#00C853] text-white py-1.5 tracking-wide">Grab Food (GP 26.75% รวม VAT)</th>
+                </>
+              )}
+
+              {currentChannel === 'LINEMAN' && (
+                <>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#FFB300] text-black py-1.5 tracking-wide">Line Man (GP 32.1% รวม VAT)</th>
+                </>
+              )}
+
+              {currentChannel === 'ROBINHOOD' && (
+                <>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#8B5CF6] text-white py-1.5 tracking-wide">Robinhood (0% GP)</th>
+                </>
+              )}
+
+              {currentChannel === 'ALL' && (
+                <>
+                  <th colSpan={10} className="bg-[#FAF8F5] border-r border-black py-1"></th>
+                  <th colSpan={12} className="bg-[#FFFF00] text-black text-sm font-black py-1.5 border-b border-black tracking-wide">
+                    กำไรแต่ละรายการ
+                  </th>
+                </>
+              )}
+            </tr>
+
+            {/* Header Tier 2: Sub-banners if ALL channels */}
+            {currentChannel === 'ALL' && (
+              <tr className="text-xs font-bold select-none border-b border-black">
+                <th colSpan={10} className="bg-[#FAF8F5] border-r border-black"></th>
+                <th colSpan={2} className="bg-[#00BCD4] text-white font-black py-1 border-r border-black">ที่ร้าน</th>
+                <th colSpan={5} className="bg-[#00C853] text-white font-black py-1 border-r border-black">Grab Food</th>
+                <th colSpan={5} className="bg-[#FFB300] text-black font-black py-1">Line Man</th>
+              </tr>
+            )}
+
+            {/* Header Tier 3: Detailed Column Headers per Active Channel */}
+            <tr className="text-[11px] font-bold text-stone-900 border-b-2 border-black whitespace-nowrap">
+              {/* Common Columns */}
+              <th className="py-2.5 px-2 bg-[#E53935] text-white border-r border-black w-8">No.</th>
+              <th className="py-2.5 px-3 bg-[#90CAF9] text-stone-900 border-r border-black text-left min-w-[120px]">รายการ</th>
+
+              {/* DINE_IN COLUMNS */}
+              {currentChannel === 'DINE_IN' && (
+                <>
+                  <th className="py-2.5 px-2 bg-[#FFD54F] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคาตั้งขาย</div>
+                    <div className="text-[10px] text-stone-700">ที่ร้าน (บาท) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>น้ำหนักเนื้อที่ใช้</div>
+                    <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[80px]">
+                    <div>ราคาต้นทุน</div>
+                    <div className="text-[10px] text-stone-600"><span className="text-rose-600 font-bold">เนื้อ</span>/จาน</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ต้นทุนวัตถุดิบ</div>
+                    <div className="text-[10px] text-stone-600">กลาง (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ต้นทุนวัตถุดิบ</div>
+                    <div className="text-[10px] text-stone-600">ทั้งหมด (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[70px]">
+                    <div>ต้นทุนแฝง</div>
+                    <div className="text-[10px] text-stone-600">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[70px]">
+                    <div>ต้นทุนรวม</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r-2 border-black min-w-[65px]">% ต้นทุน</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>กำไร</div>
+                    <div className="text-[10px] text-stone-700">กินที่ร้าน (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 min-w-[75px]">
+                    <div>กำไร</div>
+                    <div className="text-[10px] text-stone-700">ใส่กล่อง (บาท)</div>
+                  </th>
+                </>
+              )}
+
+              {/* GRAB COLUMNS */}
+              {currentChannel === 'GRAB' && (
+                <>
+                  <th className="py-2.5 px-2 bg-[#FAF8F5] text-stone-700 border-r border-black min-w-[75px]">
+                    <div>ราคาหน้าร้าน</div>
+                    <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>น้ำหนักเนื้อที่ใช้</div>
+                    <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ต้นทุนรวม</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r-2 border-black min-w-[65px]">% ต้นทุน</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคาที่ต้องตั้ง</div>
+                    <div className="text-[10px] text-stone-600">ขาย (1.5x)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคา</div>
+                    <div className="text-[10px] text-stone-700">ตั้งเอง (บาท) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ถูกหัก GP ไป</div>
+                    <div className="text-[10px] text-stone-600">(26.75%)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>หลังหัก</div>
+                    <div className="text-[10px] text-stone-600">เหลือ (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>กำไรที่ได้</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 min-w-[65px]">% Margin</th>
+                </>
+              )}
+
+              {/* LINEMAN COLUMNS */}
+              {currentChannel === 'LINEMAN' && (
+                <>
+                  <th className="py-2.5 px-2 bg-[#FAF8F5] text-stone-700 border-r border-black min-w-[75px]">
+                    <div>ราคาหน้าร้าน</div>
+                    <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>น้ำหนักเนื้อที่ใช้</div>
+                    <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ต้นทุนรวม</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r-2 border-black min-w-[65px]">% ต้นทุน</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคาที่ต้องตั้ง</div>
+                    <div className="text-[10px] text-stone-600">ขาย (1.5x)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคา</div>
+                    <div className="text-[10px] text-stone-700">ตั้งเอง (บาท) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ถูกหัก GP</div>
+                    <div className="text-[10px] text-stone-600">(32.1%)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>หลังหัก</div>
+                    <div className="text-[10px] text-stone-600">เหลือ (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>กำไรที่ได้</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 min-w-[65px]">% Margin</th>
+                </>
+              )}
+
+              {/* ROBINHOOD COLUMNS */}
+              {currentChannel === 'ROBINHOOD' && (
+                <>
+                  <th className="py-2.5 px-2 bg-[#FAF8F5] text-stone-700 border-r border-black min-w-[75px]">
+                    <div>ราคาหน้าร้าน</div>
+                    <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                    <div>น้ำหนักเนื้อที่ใช้</div>
+                    <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ต้นทุนรวม</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r-2 border-black min-w-[65px]">% ต้นทุน</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[85px]">
+                    <div>ราคาที่ต้องตั้ง</div>
+                    <div className="text-[10px] text-stone-600">ขาย (แนะนำ)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#EDE9FE] text-purple-900 border-r border-black min-w-[85px]">
+                    <div>ราคา</div>
+                    <div className="text-[10px] text-purple-700">ตั้งเอง (บาท) ✏️</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>ถูกหัก GP</div>
+                    <div className="text-[10px] text-stone-600">(0% GP)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
+                    <div>หลังหัก</div>
+                    <div className="text-[10px] text-stone-600">เหลือ (บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[75px]">
+                    <div>กำไรที่ได้</div>
+                    <div className="text-[10px] text-stone-700">(บาท)</div>
+                  </th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 min-w-[65px]">% Margin</th>
+                </>
+              )}
+
+              {/* ALL CHANNELS (Full 22 Columns) */}
+              {currentChannel === 'ALL' && (
+                <>
+                  <th className="py-2.5 px-2 bg-[#FFD54F] text-stone-900 border-r border-black min-w-[80px]">ราคาตั้งขาย</th>
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[80px]">น้ำหนักเนื้อ (g)</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[70px]">ต้นทุนเนื้อ</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[70px]">วัตถุดิบกลาง</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[70px]">วัตถุดิบรวม</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[65px]">ต้นทุนแฝง</th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[70px]">ต้นทุนรวม</th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r-2 border-black min-w-[60px]">% ต้นทุน</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[70px]">กำไรที่ร้าน</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r-2 border-black min-w-[70px]">กำไรใส่กล่อง</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">Grab แนะนำ</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r border-black min-w-[75px]">Grab ตั้งเอง</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[65px]">หัก GP</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[65px]">หลังหัก</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 border-r-2 border-black min-w-[65px]">กำไร Grab</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">Line Man แนะนำ</th>
+                  <th className="py-2.5 px-2 bg-[#FFF59D] text-stone-900 border-r border-black min-w-[75px]">LM ตั้งเอง</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[65px]">หัก GP</th>
+                  <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[65px]">หลังหัก</th>
+                  <th className="py-2.5 px-2 bg-[#C8E6C9] text-stone-900 min-w-[65px]">กำไร LM</th>
+                </>
+              )}
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-black/20 font-mono text-xs">
+            {menu.variants.map((v, idx) => {
+              const pName = (v.proteinType || v.name).toLowerCase();
+
+              // Template defaults matching Excel template if not customized
+              let baseSellingPrice = v.sellingPrice || 69;
+              let baseWeight = 80;
+              let baseGrabPrice = v.grabPrice || (v as any).grabPrice || v.deliveryPrice || 109;
+              let baseLinemanPrice = v.linemanPrice || (v as any).linemanPrice || v.deliveryPrice || 109;
+              let baseRobinhoodPrice = v.robinhoodPrice || (v as any).robinhoodPrice || baseSellingPrice;
+
+              if (menu.name.includes('กะเพรา') || v.menuId === 'menu_kaprow') {
+                if (pName.includes('หมูหมัก')) {
+                  baseSellingPrice = v.sellingPrice === 65 ? 79 : v.sellingPrice;
+                  baseWeight = 70;
+                  baseGrabPrice = v.grabPrice || 109;
+                  baseLinemanPrice = v.linemanPrice || 109;
+                  baseRobinhoodPrice = v.robinhoodPrice || 79;
+                } else if (pName.includes('หมูบด') || pName.includes('หมูสับ')) {
+                  baseSellingPrice = v.sellingPrice === 60 ? 69 : v.sellingPrice;
+                  baseWeight = 80;
+                  baseGrabPrice = v.grabPrice || 109;
+                  baseLinemanPrice = v.linemanPrice || 109;
+                  baseRobinhoodPrice = v.robinhoodPrice || 69;
+                } else if (pName.includes('ไก่')) {
+                  baseSellingPrice = v.sellingPrice === 60 ? 69 : v.sellingPrice;
+                  baseWeight = 80;
+                  baseGrabPrice = v.grabPrice || 109;
+                  baseLinemanPrice = v.linemanPrice || 109;
+                  baseRobinhoodPrice = v.robinhoodPrice || 69;
+                } else if (pName.includes('เนื้อวัวสไลซ์') || (pName.includes('เนื้อ') && !pName.includes('สับ') && v.sellingPrice <= 85)) {
+                  baseSellingPrice = 129;
+                  baseWeight = 120;
+                  baseGrabPrice = v.grabPrice || 149;
+                  baseLinemanPrice = v.linemanPrice || 149;
+                  baseRobinhoodPrice = v.robinhoodPrice || 129;
+                } else if (pName.includes('เนื้อวัว สับ') || pName.includes('เนื้อสับ')) {
+                  baseSellingPrice = 99;
+                  baseWeight = 60;
+                  baseGrabPrice = v.grabPrice || 149;
+                  baseLinemanPrice = v.linemanPrice || 149;
+                  baseRobinhoodPrice = v.robinhoodPrice || 99;
+                } else if (pName.includes('กุ้ง')) {
+                  baseSellingPrice = v.sellingPrice <= 85 ? 109 : v.sellingPrice;
+                  baseWeight = 4;
+                  baseGrabPrice = v.grabPrice || 139;
+                  baseLinemanPrice = v.linemanPrice || 139;
+                  baseRobinhoodPrice = v.robinhoodPrice || 109;
+                } else if (pName.includes('หมึก') || pName.includes('ปลาหมึก')) {
+                  baseSellingPrice = v.sellingPrice <= 85 ? 109 : v.sellingPrice;
+                  baseWeight = 80;
+                  baseGrabPrice = v.grabPrice || 139;
+                  baseLinemanPrice = v.linemanPrice || 139;
+                  baseRobinhoodPrice = v.robinhoodPrice || 109;
+                } else if (pName.includes('ไส้กรอก')) {
+                  baseSellingPrice = 79;
+                  baseWeight = 80;
+                  baseGrabPrice = v.grabPrice || 119;
+                  baseLinemanPrice = v.linemanPrice || 119;
+                  baseRobinhoodPrice = v.robinhoodPrice || 79;
+                }
+              }
+
+              // 1. Selling price at restaurant (USER EDITABLE)
+              const sellingPrice =
+                localEdits[v.id]?.sellingPrice !== undefined
+                  ? localEdits[v.id]!.sellingPrice!
+                  : baseSellingPrice;
+
+              // 2. Find protein recipe item
+              const proteinItem = (v.recipeItems || []).find((it) => {
+                const lower = it.name.toLowerCase();
+                return (
+                  it.proteinCategory ||
+                  lower.includes('หมู') ||
+                  lower.includes('ไก่') ||
+                  lower.includes('เนื้อ') ||
+                  lower.includes('กุ้ง') ||
+                  lower.includes('หมึก') ||
+                  lower.includes('ไส้กรอก') ||
+                  lower.includes('ปลา')
+                );
+              }) || (v.recipeItems && v.recipeItems[0]);
+
+              // 3. Protein unit cost (per gram or per piece)
+              let proteinUnitCost = proteinItem?.calculatedUnitCost || 0;
+              if (!proteinUnitCost && proteinItem?.ingredientId) {
+                const ing = ingredientsMap.get(proteinItem.ingredientId);
+                if (ing) {
+                  proteinUnitCost =
+                    ing.costPerBaseUnit ||
+                    ing.purchasePrice / (ing.purchaseQuantity * (ing.yieldPercent / 100));
+                }
+              }
+              if (!proteinUnitCost) {
+                if (pName.includes('หมูหมัก')) proteinUnitCost = 0.214;
+                else if (pName.includes('หมูบด') || pName.includes('หมูสับ')) proteinUnitCost = 0.113;
+                else if (pName.includes('ไก่')) proteinUnitCost = 0.10;
+                else if (pName.includes('เนื้อวัวสไลซ์') || pName.includes('เนื้อวัว สไลซ์')) proteinUnitCost = 0.40;
+                else if (pName.includes('เนื้อวัว สับ') || pName.includes('เนื้อสับ')) proteinUnitCost = 0.316;
+                else if (pName.includes('กุ้ง')) proteinUnitCost = 8.5;
+                else if (pName.includes('หมึก') || pName.includes('ปลาหมึก')) proteinUnitCost = 0.388;
+                else if (pName.includes('ไส้กรอก')) proteinUnitCost = 0.138;
+                else proteinUnitCost = 0.20;
+              }
+
+              // 4. Protein weight used (USER EDITABLE)
+              const proteinWeight =
+                localEdits[v.id]?.proteinWeight !== undefined
+                  ? localEdits[v.id]!.proteinWeight!
+                  : (proteinItem?.quantity !== undefined && proteinItem.quantity !== 110
+                      ? proteinItem.quantity
+                      : baseWeight);
+
+              // 5. Protein cost per dish (ราคาต้นทุนเนื้อ/จาน)
+              const proteinCost = Math.round(proteinWeight * proteinUnitCost);
+
+              // 6. Central ingredients cost (ต้นทุนวัตถุดิบกลาง)
+              let sumCentral = 0;
+              (v.recipeItems || []).forEach((it) => {
+                if (it !== proteinItem) {
+                  sumCentral += it.calculatedLineCost || it.quantity * (it.calculatedUnitCost || 0);
+                }
+              });
+              const centralCost = sumCentral > 0 ? Math.round(sumCentral) : 22;
+
+              // 7. Total raw material cost (ต้นทุนวัตถุดิบทั้งหมด)
+              const totalRawMaterialCost = proteinCost + centralCost;
+
+              // 8. Overhead & Packaging cost (ต้นทุนแฝง)
+              let overheadCost = 28;
+              if (pName.includes('หมูหมัก') || pName.includes('ไส้กรอก')) overheadCost = 32;
+              else if (pName.includes('เนื้อวัวสไลซ์')) overheadCost = 52;
+              else if (pName.includes('เนื้อวัว สับ') || pName.includes('เนื้อสับ')) overheadCost = 40;
+              else if (pName.includes('กุ้ง') || pName.includes('หมึก')) overheadCost = 44;
+              else overheadCost = Math.round((v.overheadCost || 25) + (v.packagingCost || 7));
+
+              // 9. Total cost (ต้นทุนรวม)
+              const totalCost = totalRawMaterialCost + overheadCost;
+
+              // 10. Food Cost %
+              const fcPercent =
+                sellingPrice > 0 ? Math.round((totalRawMaterialCost / sellingPrice) * 100) : 0;
+
+              // 11. Profits at restaurant
+              const packagingAmount = v.packagingCost || 9;
+              const dineInProfit = Math.round(sellingPrice - totalCost + packagingAmount);
+              const takeawayProfit = Math.round(sellingPrice - totalCost);
+
+              // 12-16. Grab Food calculations
+              const grabSuggestedPrice = Number((sellingPrice * 1.5).toFixed(1));
+              const grabPrice =
+                localEdits[v.id]?.grabPrice !== undefined
+                  ? localEdits[v.id]!.grabPrice!
+                  : baseGrabPrice;
+              const grabGpValue = Math.round(grabPrice * 0.2675); // 25% + 7% VAT
+              const grabNet = grabPrice - grabGpValue;
+              const grabProfit = grabNet - totalCost;
+              const grabMargin = grabPrice > 0 ? Math.round((grabProfit / grabPrice) * 100) : 0;
+
+              // 17-21. Line Man calculations
+              const linemanSuggestedPrice = Number((sellingPrice * 1.5).toFixed(1));
+              const linemanPrice =
+                localEdits[v.id]?.linemanPrice !== undefined
+                  ? localEdits[v.id]!.linemanPrice!
+                  : baseLinemanPrice;
+              const linemanGpValue = Math.round(linemanPrice * 0.321); // 30% + 7% VAT
+              const linemanNet = linemanPrice - linemanGpValue;
+              const linemanProfit = linemanNet - totalCost;
+              const linemanMargin = linemanPrice > 0 ? Math.round((linemanProfit / linemanPrice) * 100) : 0;
+
+              // 22-26. Robinhood calculations (0% GP)
+              const robinhoodSuggestedPrice = sellingPrice; // Recommended same as dine-in
+              const robinhoodPrice =
+                localEdits[v.id]?.robinhoodPrice !== undefined
+                  ? localEdits[v.id]!.robinhoodPrice!
+                  : baseRobinhoodPrice;
+              const robinhoodGpValue = 0; // 0% GP
+              const robinhoodNet = robinhoodPrice - robinhoodGpValue;
+              const robinhoodProfit = robinhoodNet - totalCost;
+              const robinhoodMargin = robinhoodPrice > 0 ? Math.round((robinhoodProfit / robinhoodPrice) * 100) : 0;
+
+              return (
+                <tr key={v.id} className="hover:bg-amber-50/40 transition-colors">
+                  {/* Common 0. ลำดับ */}
+                  <td className="py-2 px-2 bg-[#E53935] text-white font-extrabold border-r border-black">
+                    {idx + 1}
+                  </td>
+
+                  {/* Common 1. รายการ */}
+                  <td className="py-2 px-3 bg-[#FFE0B2] text-stone-900 font-bold border-r border-black text-left whitespace-nowrap">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>{v.proteinType || v.name}</span>
+                      {onSelectBreakdown && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const breakdown: RecipeCostBreakdown = {
+                              variantId: v.id,
+                              variantName: v.name,
+                              menuName: menu.name,
+                              proteinType: v.proteinType,
+                              sellingPrice,
+                              takeawayPrice: v.takeawayPrice || sellingPrice,
+                              deliveryPrice: v.deliveryPrice || sellingPrice,
+                              shrimpCost: v.proteinType.includes('กุ้ง') ? proteinCost : 0,
+                              squidCost: v.proteinType.includes('หมึก') ? proteinCost : 0,
+                              seafoodTotalCost: (v.proteinType.includes('กุ้ง') || v.proteinType.includes('หมึก')) ? proteinCost : 0,
+                              meatCost: proteinCost,
+                              sauceCost: 3,
+                              centralIngredientCost: centralCost,
+                              totalIngredientCost: totalRawMaterialCost,
+                              overheadCost,
+                              packagingCost: packagingAmount,
+                              totalCost,
+                              restaurantProfit: dineInProfit,
+                              restaurantFoodCostPercent: fcPercent,
+                              restaurantMarginPercent: 100 - fcPercent,
+                              takeawayProfit,
+                              takeawayPackagingCost: packagingAmount,
+                              takeawayFoodCostPercent: fcPercent,
+                              deliveryCommissionPercent: 30,
+                              deliveryCommissionAmount: grabGpValue,
+                              deliveryPackagingCost: packagingAmount,
+                              deliveryProfit: grabProfit,
+                              deliveryFoodCostPercent: fcPercent,
+                              suggestedPriceByTargetFoodCost: Math.round(totalRawMaterialCost / 0.35),
+                              suggestedPriceByTargetProfit: Math.round(totalCost + 25),
+                              hasReviewIssue: false,
+                              items: v.recipeItems || [],
+                            };
+                            onSelectBreakdown({ menu, variant: v, breakdown });
+                          }}
+                          className="p-1 text-stone-500 hover:text-stone-900 rounded cursor-pointer"
+                          title="ดูสูตรละเอียดและแพ็กเกจจิ้ง"
+                        >
+                          <SlidersHorizontal className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* DINE_IN DATA CELLS */}
+                  {currentChannel === 'DINE_IN' && (
+                    <>
+                      {/* ราคาตั้งขายที่ร้าน (EDITABLE) */}
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={sellingPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'sellingPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
+                        />
+                      </td>
+
+                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={proteinWeight}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
+                        />
+                      </td>
+
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{proteinCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{centralCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalRawMaterialCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{overheadCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
+                      <td
+                        className={`py-2 px-2 font-bold border-r-2 border-black ${
+                          fcPercent > 50 ? 'bg-[#FFB300] text-black font-extrabold' : 'bg-white text-stone-900'
+                        }`}
+                      >
+                        {fcPercent}%
+                      </td>
+                      <td className="py-2 px-2 bg-[#C8E6C9] text-stone-900 font-bold border-r border-black">{dineInProfit}</td>
+                      <td className="py-2 px-2 bg-[#C8E6C9] text-stone-900 font-bold">{takeawayProfit}</td>
+                    </>
+                  )}
+
+                  {/* GRAB DATA CELLS */}
+                  {currentChannel === 'GRAB' && (
+                    <>
+                      <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
+                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={proteinWeight}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{grabSuggestedPrice}</td>
+
+                      {/* Grab ราคาตั้งเอง (EDITABLE) */}
+                      <td className="p-1 bg-white border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={grabPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'grabPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-[#E8F5E9] border border-green-400 rounded focus:outline-none focus:ring-2 focus:ring-green-600 text-xs font-mono"
+                        />
+                      </td>
+
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{grabGpValue}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{grabNet}</td>
+                      <td
+                        className={`py-2 px-2 font-black border-r border-black ${
+                          grabProfit < 0 ? 'bg-[#E53935] text-white' : 'bg-[#C8E6C9] text-stone-900'
+                        }`}
+                      >
+                        {grabProfit}
+                      </td>
+                      <td
+                        className={`py-2 px-2 font-bold ${
+                          grabMargin < 0 ? 'text-rose-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {grabMargin}%
+                      </td>
+                    </>
+                  )}
+
+                  {/* LINEMAN DATA CELLS */}
+                  {currentChannel === 'LINEMAN' && (
+                    <>
+                      <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
+                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={proteinWeight}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{linemanSuggestedPrice}</td>
+
+                      {/* Line Man ราคาตั้งเอง (EDITABLE) */}
+                      <td className="p-1 bg-white border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={linemanPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'linemanPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-[#FFF9C4] border border-amber-400 rounded focus:outline-none focus:ring-2 focus:ring-amber-600 text-xs font-mono"
+                        />
+                      </td>
+
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{linemanGpValue}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{linemanNet}</td>
+                      <td
+                        className={`py-2 px-2 font-black border-r border-black ${
+                          linemanProfit < 0 ? 'bg-[#E53935] text-white' : 'bg-[#C8E6C9] text-stone-900'
+                        }`}
+                      >
+                        {linemanProfit}
+                      </td>
+                      <td
+                        className={`py-2 px-2 font-bold ${
+                          linemanMargin < 0 ? 'text-rose-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {linemanMargin}%
+                      </td>
+                    </>
+                  )}
+
+                  {/* ROBINHOOD DATA CELLS */}
+                  {currentChannel === 'ROBINHOOD' && (
+                    <>
+                      <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
+                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={proteinWeight}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{robinhoodSuggestedPrice}</td>
+
+                      {/* Robinhood ราคาตั้งเอง (EDITABLE) */}
+                      <td className="p-1 bg-white border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={robinhoodPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'robinhoodPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-[#EDE9FE] border border-purple-400 rounded focus:outline-none focus:ring-2 focus:ring-purple-600 text-xs font-mono"
+                        />
+                      </td>
+
+                      <td className="py-2 px-2 bg-white text-emerald-700 font-bold border-r border-black">0</td>
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{robinhoodNet}</td>
+                      <td
+                        className={`py-2 px-2 font-black border-r border-black ${
+                          robinhoodProfit < 0 ? 'bg-[#E53935] text-white' : 'bg-[#C8E6C9] text-stone-900'
+                        }`}
+                      >
+                        {robinhoodProfit}
+                      </td>
+                      <td
+                        className={`py-2 px-2 font-bold ${
+                          robinhoodMargin < 0 ? 'text-rose-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {robinhoodMargin}%
+                      </td>
+                    </>
+                  )}
+
+                  {/* ALL CHANNELS (Full 22 Cells) */}
+                  {currentChannel === 'ALL' && (
+                    <>
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={sellingPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'sellingPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-14 px-1 py-0.5 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded text-xs font-mono"
+                        />
+                      </td>
+                      <td className="p-1 bg-[#BBDEFB] border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={proteinWeight}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-14 px-1 py-0.5 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{proteinCost}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{centralCost}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{totalRawMaterialCost}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{overheadCost}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
+                      <td className={`py-2 px-1.5 font-bold border-r-2 border-black ${fcPercent > 50 ? 'bg-[#FFB300] text-black' : 'bg-white'}`}>{fcPercent}%</td>
+                      <td className="py-2 px-1.5 bg-[#C8E6C9] text-stone-900 font-bold border-r border-black">{dineInProfit}</td>
+                      <td className="py-2 px-1.5 bg-[#C8E6C9] text-stone-900 font-bold border-r-2 border-black">{takeawayProfit}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{grabSuggestedPrice}</td>
+                      <td className="p-1 bg-white border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={grabPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'grabPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-14 px-1 py-0.5 text-center font-bold text-stone-900 bg-[#E8F5E9] border border-green-400 rounded text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{grabGpValue}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{grabNet}</td>
+                      <td className={`py-2 px-1.5 font-black border-r-2 border-black ${grabProfit < 0 ? 'bg-[#E53935] text-white' : 'bg-[#C8E6C9]'}`}>{grabProfit}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{linemanSuggestedPrice}</td>
+                      <td className="p-1 bg-white border-r border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          value={linemanPrice}
+                          onChange={(e) =>
+                            handleCellChange(v.id, 'linemanPrice', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-14 px-1 py-0.5 text-center font-bold text-stone-900 bg-[#FFF9C4] border border-amber-400 rounded text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{linemanGpValue}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{linemanNet}</td>
+                      <td className={`py-2 px-1.5 font-black ${linemanProfit < 0 ? 'bg-[#E53935] text-white' : 'bg-[#C8E6C9]'}`}>{linemanProfit}</td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer Notes per active channel */}
+      <div className="bg-stone-50 border-t border-stone-200 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-stone-500 font-medium">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-300 inline-block border border-blue-500"></span>
+            <span>ช่องสีมีสัญลักษณ์ ✏️ พิมพ์ตัวเลขแก้ไขได้โดยตรง</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+            <span>สีแดง = กำไรติดลบ (Loss Alert)</span>
+          </span>
+        </div>
+        <div className="text-[10px] text-stone-400">
+          {currentChannel === 'DINE_IN' && 'แสดงเฉพาะรายการขายหน้าร้านและใส่กล่องกลับบ้าน'}
+          {currentChannel === 'GRAB' && 'คำนวณหัก GP Grab Food: 25% + VAT 7% = 26.75%'}
+          {currentChannel === 'LINEMAN' && 'คำนวณหัก GP Line Man: 30% + VAT 7% = 32.1%'}
+          {currentChannel === 'ROBINHOOD' && 'คำนวณ Robinhood: 0% GP รับเงินเต็มจำนวน'}
+          {currentChannel === 'ALL' && 'ตารางเปรียบเทียบทุกช่องทางพร้อมกัน'}
+        </div>
+      </div>
+    </div>
+  );
+};
