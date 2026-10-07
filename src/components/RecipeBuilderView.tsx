@@ -226,12 +226,17 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
       }
 
       const firstVariant = currentMenu.variants[0];
+      const seenItemIds = new Set<string>();
       const items: RecipeItem[] = [];
 
       if (firstVariant && firstVariant.recipeItems && firstVariant.recipeItems.length > 0) {
         firstVariant.recipeItems.forEach((it) => {
           if (!isProteinItem(it, firstVariant.proteinType)) {
-            items.push({ ...it });
+            const isDuplicate = seenItemIds.has(it.id);
+            if (!isDuplicate) {
+              seenItemIds.add(it.id);
+              items.push({ ...it });
+            }
           }
         });
       }
@@ -332,8 +337,105 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
       .reduce((sum, it) => sum + getItemCost(it).lineCost, 0);
   }, [localBaseItems, ingredientsMap, saucesMap]);
 
+  const nonPackagingItems = useMemo(() => {
+    return localBaseItems.filter(
+      (it) => it.type !== 'PACKAGING' && it.ingredientType !== 'PACKAGING'
+    );
+  }, [localBaseItems]);
+
+  const packagingItems = useMemo(() => {
+    return localBaseItems.filter(
+      (it) => it.type === 'PACKAGING' || it.ingredientType === 'PACKAGING'
+    );
+  }, [localBaseItems]);
+
   const totalBaseRecipeCost =
     totalBaseIngredientsCost + totalSauceCost + totalSideDishCost + totalPackagingCost;
+
+  const handleRemoveBaseItemById = (itemId: string) => {
+    const updated = localBaseItems.filter((it) => it.id !== itemId);
+    setLocalBaseItems(updated);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleUpdateBaseItemSourceById = (itemId: string, newSourceId: string) => {
+    const updated = localBaseItems.map((current) => {
+      if (current.id !== itemId) return current;
+      const clone = { ...current };
+      if (clone.type === 'SAUCE') {
+        const s = saucesMap.get(newSourceId);
+        if (s) {
+          const cost = calculateSauceCost(s, ingredientsMap);
+          clone.ingredientId = s.id;
+          clone.sauceId = s.id;
+          clone.name = s.name;
+          clone.unit = 'g';
+          clone.calculatedUnitCost = cost.costPerGram;
+          clone.calculatedLineCost = clone.quantity * cost.costPerGram;
+        }
+      } else if (clone.type === 'PACKAGING' || clone.ingredientType === 'PACKAGING') {
+        const preset = PACKAGING_PRESETS.find((p) => p.id === newSourceId);
+        if (preset) {
+          clone.ingredientId = preset.id;
+          clone.name = preset.name;
+          clone.unit = preset.unit;
+          clone.calculatedUnitCost = preset.unitCost;
+          clone.calculatedLineCost = clone.quantity * preset.unitCost;
+        } else {
+          const ing = ingredientsMap.get(newSourceId);
+          if (ing) {
+            clone.ingredientId = ing.id;
+            clone.name = ing.name;
+            clone.unit = ing.usageUnit;
+            clone.calculatedUnitCost = ing.costPerBaseUnit;
+            clone.calculatedLineCost = clone.quantity * ing.costPerBaseUnit;
+          }
+        }
+      } else if (clone.type === 'PREPARED_ITEM') {
+        const preset = SIDE_DISH_PRESETS.find((p) => p.id === newSourceId);
+        if (preset) {
+          clone.ingredientId = preset.id;
+          clone.name = preset.name;
+          clone.unit = preset.unit;
+          clone.calculatedUnitCost = preset.unitCost;
+          clone.calculatedLineCost = clone.quantity * preset.unitCost;
+        } else {
+          const ing = ingredientsMap.get(newSourceId);
+          if (ing) {
+            clone.ingredientId = ing.id;
+            clone.name = ing.name;
+            clone.unit = ing.usageUnit;
+            clone.calculatedUnitCost = ing.costPerBaseUnit;
+            clone.calculatedLineCost = clone.quantity * ing.costPerBaseUnit;
+          }
+        }
+      } else {
+        const ing = ingredientsMap.get(newSourceId);
+        if (ing) {
+          clone.ingredientId = ing.id;
+          clone.name = ing.name;
+          clone.unit = ing.usageUnit;
+          clone.calculatedUnitCost = ing.costPerBaseUnit;
+          clone.calculatedLineCost = clone.quantity * ing.costPerBaseUnit;
+        }
+      }
+      return clone;
+    });
+    setLocalBaseItems(updated);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleUpdateBaseItemQuantityById = (itemId: string, qty: number) => {
+    const updated = localBaseItems.map((it) => {
+      if (it.id !== itemId) return it;
+      const clone = { ...it, quantity: qty };
+      const cost = getItemCost(clone);
+      clone.calculatedLineCost = cost.lineCost;
+      return clone;
+    });
+    setLocalBaseItems(updated);
+    setHasUnsavedChanges(true);
+  };
 
   const handleAddBaseIngredient = () => {
     const candidate =
@@ -523,13 +625,33 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
         isProteinItem(it, v.proteinType)
       );
 
-      // If no protein items matched, fallback to keeping the first item if available
+      // If no protein items matched, fallback to keeping the first item only if not already in enrichedBaseItems
       let finalProteins = proteinItems;
       if (finalProteins.length === 0 && v.recipeItems && v.recipeItems.length > 0) {
-        finalProteins = [v.recipeItems[0]];
+        const candidate = v.recipeItems[0];
+        const alreadyInBase = enrichedBaseItems.some(
+          (b) => b.id === candidate.id || b.name === candidate.name
+        );
+        if (!alreadyInBase && isProteinItem(candidate, v.proteinType)) {
+          finalProteins = [candidate];
+        }
       }
 
-      const combinedRecipeItems = [...finalProteins, ...enrichedBaseItems];
+      // Ensure every item in combinedRecipeItems has a unique ID
+      const seenVariantItemIds = new Set<string>();
+      const combinedRecipeItems: RecipeItem[] = [];
+
+      for (const item of [...finalProteins, ...enrichedBaseItems]) {
+        let itemId = item.id;
+        if (!itemId || seenVariantItemIds.has(itemId)) {
+          itemId = `${itemId || 'item'}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        }
+        seenVariantItemIds.add(itemId);
+        combinedRecipeItems.push({
+          ...item,
+          id: itemId,
+        });
+      }
 
       return {
         ...v,
@@ -824,18 +946,19 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Left: Central Recipe Items Builder (2 cols) */}
             <div className="lg:col-span-2 space-y-4">
+              {/* Card 1: Central Recipe Ingredients, Sauces & Side Dishes */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/10 gap-2">
                   <div>
                     <h3 className="font-bold text-white text-base">
-                      รายการส่วนประกอบในสูตรกลาง ({localBaseItems.length} รายการ)
+                      รายการส่วนประกอบในสูตรกลาง ({nonPackagingItems.length} รายการ)
                     </h3>
                     <p className="text-[11px] text-white/50">
-                      รวมวัตถุดิบกลาง, ซอสปรุง, เครื่องเคียง และบรรจุภัณฑ์ (แพ็คเกจจิ้ง)
+                      รวมวัตถุดิบกลาง, ซอสปรุง และเครื่องเคียง (ไม่รวมบรรจุภัณฑ์)
                     </p>
                   </div>
 
-                  {/* 4 Add buttons: วัตถุดิบ, ซอสปรุง, เครื่องเคียง, แพ็คเกจจิ้ง */}
+                  {/* 3 Add buttons: วัตถุดิบ, ซอสปรุง, เครื่องเคียง */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
@@ -864,15 +987,6 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                       <Plus className="w-3.5 h-3.5" />
                       <span>+ เครื่องเคียง</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleAddPackaging}
-                      className="px-2.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1 cursor-pointer border border-purple-500/30 transition-colors"
-                      title="เพิ่มบรรจุภัณฑ์ เช่น กล่องกระดาษคราฟท์, ช้อนส้อม, ถ้วยน้ำจิ้ม, ถุงหูหิ้ว"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ แพ็คเกจจิ้ง</span>
-                    </button>
                   </div>
                 </div>
 
@@ -891,19 +1005,15 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 font-mono">
-                      {localBaseItems.map((item, index) => {
+                      {nonPackagingItems.map((item, index) => {
                         const costInfo = getItemCost(item);
 
                         return (
-                          <tr key={item.id || index} className="hover:bg-white/5 transition-colors">
+                          <tr key={`${item.id || 'item'}-${index}`} className="hover:bg-white/5 transition-colors">
                             <td className="py-2.5 px-3 font-sans">
                               {item.type === 'SAUCE' ? (
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#F27D26]/20 text-[#F27D26] border border-[#F27D26]/30">
                                   🧪 ซอสปรุง
-                                </span>
-                              ) : item.type === 'PACKAGING' ? (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                  📦 แพ็คเกจจิ้ง
                                 </span>
                               ) : item.type === 'PREPARED_ITEM' ? (
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -920,7 +1030,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                               {item.type === 'SAUCE' ? (
                                 <select
                                   value={item.ingredientId || item.sauceId}
-                                  onChange={(e) => handleUpdateBaseItemSource(index, e.target.value)}
+                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
                                   className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white cursor-pointer"
                                 >
                                   {sauces.map((s) => (
@@ -929,33 +1039,10 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                                     </option>
                                   ))}
                                 </select>
-                              ) : item.type === 'PACKAGING' ? (
-                                <select
-                                  value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSource(index, e.target.value)}
-                                  className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[220px] cursor-pointer"
-                                >
-                                  <optgroup label="รายการมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
-                                    {PACKAGING_PRESETS.map((pkg) => (
-                                      <option key={pkg.id} value={pkg.id}>
-                                        {pkg.name} (฿{pkg.unitCost})
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                  <optgroup label="วัตถุดิบบรรจุภัณฑ์ในคลัง" className="bg-[#1a1a1a]">
-                                    {ingredients
-                                      .filter((i) => i.category === 'บรรจุภัณฑ์')
-                                      .map((ing) => (
-                                        <option key={ing.id} value={ing.id}>
-                                          {ing.name} (฿{ing.costPerBaseUnit})
-                                        </option>
-                                      ))}
-                                  </optgroup>
-                                </select>
                               ) : item.type === 'PREPARED_ITEM' ? (
                                 <select
                                   value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSource(index, e.target.value)}
+                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
                                   className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[220px] cursor-pointer"
                                 >
                                   <optgroup label="เครื่องเคียงมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
@@ -976,7 +1063,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                               ) : (
                                 <select
                                   value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSource(index, e.target.value)}
+                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
                                   className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[200px] cursor-pointer"
                                 >
                                   {ingredients.map((ing) => (
@@ -995,7 +1082,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                                 min="0"
                                 value={item.quantity ?? 0}
                                 onChange={(e) =>
-                                  handleUpdateBaseItemQuantity(index, parseFloat(e.target.value) || 0)
+                                  handleUpdateBaseItemQuantityById(item.id, parseFloat(e.target.value) || 0)
                                 }
                                 className="w-20 p-1 bg-black/40 border border-white/20 rounded-lg text-right text-white font-mono font-bold focus:border-[#F27D26]"
                               />
@@ -1016,7 +1103,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                             <td className="py-2.5 px-2 text-center">
                               <button
                                 type="button"
-                                onClick={() => handleRemoveBaseItem(index)}
+                                onClick={() => handleRemoveBaseItemById(item.id)}
                                 className="p-1 text-white/40 hover:text-rose-400 cursor-pointer transition-colors"
                                 title="ลบรายการนี้"
                               >
@@ -1029,6 +1116,136 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* Card 2: Dedicated Packaging Items Card (ต้นทุนกล่อง & บรรจุภัณฑ์) */}
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/10 gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#00B1FF]/20 text-[#00B1FF] flex items-center justify-center border border-[#00B1FF]/30">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base">
+                        ต้นทุนกล่อง & บรรจุภัณฑ์ (Packaging Items) ({packagingItems.length} รายการ)
+                      </h3>
+                      <p className="text-[11px] text-white/50">
+                        กำหนดกล่องอาหารและบรรจุภัณฑ์สำหรับสูตรนี้ ใช้ร่วมกันทุกตัวเลือกเนื้อสัตว์
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddPackaging}
+                    className="px-3 py-1.5 rounded-xl bg-[#00B1FF]/20 hover:bg-[#00B1FF]/30 text-[#00B1FF] border border-[#00B1FF]/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                    title="เพิ่มบรรจุภัณฑ์ เช่น กล่องกระดาษคราฟท์, ช้อนส้อม, ถ้วยน้ำจิ้ม, ถุงหูหิ้ว"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ แพ็คเกจจิ้ง</span>
+                  </button>
+                </div>
+
+                {packagingItems.length === 0 ? (
+                  <div className="p-4 text-center text-white/40 text-xs border border-dashed border-white/10 rounded-2xl">
+                    ยังไม่มีรายการแพ็กเกจจิ้งสำหรับเมนูนี้ (กดปุ่ม "+ แพ็คเกจจิ้ง" ด้านบนเพื่อเพิ่มกล่อง, ถุง, ช้อนส้อม)
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
+                          <th className="py-2.5 px-3">รายการบรรจุภัณฑ์</th>
+                          <th className="py-2.5 px-3 text-right">จำนวน</th>
+                          <th className="py-2.5 px-3">หน่วย</th>
+                          <th className="py-2.5 px-3 text-right">ต้นทุน/หน่วย</th>
+                          <th className="py-2.5 px-3 text-right">รวมเงิน (฿)</th>
+                          <th className="py-2.5 px-2 text-center">ลบ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono">
+                        {packagingItems.map((item, index) => {
+                          const costInfo = getItemCost(item);
+
+                          return (
+                            <tr key={`${item.id || 'pkg'}-${index}`} className="hover:bg-white/5 transition-colors">
+                              <td className="py-2.5 px-3 font-sans font-medium text-white">
+                                <select
+                                  value={item.ingredientId}
+                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
+                                  className="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1 text-xs text-white max-w-[260px] cursor-pointer"
+                                >
+                                  <optgroup label="รายการมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
+                                    {PACKAGING_PRESETS.map((pkg) => (
+                                      <option key={pkg.id} value={pkg.id}>
+                                        {pkg.name} (฿{pkg.unitCost})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                  <optgroup label="วัตถุดิบบรรจุภัณฑ์ในคลัง" className="bg-[#1a1a1a]">
+                                    {ingredients
+                                      .filter((i) => i.category === 'บรรจุภัณฑ์')
+                                      .map((ing) => (
+                                        <option key={ing.id} value={ing.id}>
+                                          {ing.name} (฿{ing.costPerBaseUnit})
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                </select>
+                              </td>
+
+                              <td className="py-2.5 px-3 text-right">
+                                <NumericInput
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={item.quantity ?? 1}
+                                  onChange={(e) =>
+                                    handleUpdateBaseItemQuantityById(item.id, parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-16 p-1 bg-black/40 border border-white/20 rounded-lg text-right text-white font-mono font-bold focus:border-[#00B1FF]"
+                                />
+                              </td>
+
+                              <td className="py-2.5 px-3 font-sans text-white/50 text-[11px]">
+                                {item.unit || 'ชิ้น'}
+                              </td>
+
+                              <td className="py-2.5 px-3 text-right text-white/60">
+                                ฿{costInfo.unitCost.toFixed(2)}
+                              </td>
+
+                              <td className="py-2.5 px-3 text-right font-bold text-[#00B1FF]">
+                                ฿{costInfo.lineCost.toFixed(2)}
+                              </td>
+
+                              <td className="py-2.5 px-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBaseItemById(item.id)}
+                                  className="p-1 text-white/40 hover:text-rose-400 cursor-pointer transition-colors"
+                                  title="ลบรายการนี้"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    <div className="flex justify-between items-center px-4 py-2.5 bg-[#00B1FF]/10 border border-[#00B1FF]/20 rounded-xl text-xs font-mono mt-3">
+                      <span className="font-sans text-white/70 font-semibold flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5 text-[#00B1FF]" />
+                        <span>โสหุ้ยแพ็กเกจจิ้งรวม (Total Packaging Cost):</span>
+                      </span>
+                      <span className="font-bold text-[#00B1FF] text-sm">
+                        ฿{totalPackagingCost.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

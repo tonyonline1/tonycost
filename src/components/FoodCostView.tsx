@@ -1005,7 +1005,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 ) : (
                   <div className="space-y-2">
                     {selectedBreakdown.variant.packagingItems.map((pkg, pIdx) => (
-                      <div key={pkg.id || pIdx} className="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
+                      <div key={`${pkg.id || 'pkg'}-${pIdx}`} className="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
                         {/* Packaging Name with common datalist */}
                         <div className="flex-1 relative">
                           <input

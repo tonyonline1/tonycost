@@ -177,8 +177,8 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
             </div>
 
             <div className="space-y-2">
-              {rawCostDetails.map((it) => (
-                <div key={it.id} className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 text-xs">
+              {rawCostDetails.map((it, idx) => (
+                <div key={`${it.id}-${idx}`} className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 text-xs">
                   <select
                     value={it.ingredientId}
                     onChange={(e) => {
@@ -262,8 +262,8 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
             </div>
 
             <div className="space-y-2">
-              {subCostDetails.map((it) => (
-                <div key={it.id} className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 text-xs">
+              {subCostDetails.map((it, idx) => (
+                <div key={`${it.id}-${idx}`} className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 text-xs">
                   <select
                     value={it.subRecipeId}
                     onChange={(e) => {
