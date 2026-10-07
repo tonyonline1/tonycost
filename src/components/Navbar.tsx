@@ -3,6 +3,7 @@ import {
   Menu as MenuIcon,
   Calculator,
   UtensilsCrossed,
+  Soup,
   BookOpen,
   FlaskConical,
   Beef,
@@ -39,10 +40,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = (tabId: string) => onNavigateToTab(tabId);
 
   const FOOD_COST_NAV: MainNavItem[] = [
-    { id: 'food_cost', label: 'ต้นทุนอาหาร & ราคาขาย', icon: UtensilsCrossed },
-    { id: 'quick_calculator', label: 'เครื่องคิดเลขต้นทุนด่วน', icon: Sparkles },
-    { id: 'recipes', label: 'สูตรอาหาร (Recipe Cards)', icon: BookOpen },
-    { id: 'sauces', label: 'ซอส & สูตรเตรียม Batch', icon: FlaskConical },
+    { id: 'food_cost', label: '🍚 ต้นทุน ราดข้าว', icon: UtensilsCrossed },
+    { id: 'food_cost_alacarte', label: '🍲 ต้นทุน กับข้าว', icon: Soup },
+    { id: 'quick_calculator', label: 'เครื่องคิดเลขด่วน', icon: Sparkles },
+    { id: 'recipes', label: 'คลังสูตรอาหารกลาง', icon: BookOpen },
+    { id: 'sauces', label: 'ซอส & สต็อก Batch', icon: FlaskConical },
     {
       id: 'ingredients',
       label: 'วัตถุดิบ & Yield Lab',

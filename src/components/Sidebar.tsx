@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   UtensilsCrossed,
+  Soup,
   Beef,
   BookOpen,
   Receipt,
@@ -15,7 +16,14 @@ import {
   Activity,
   BarChart3,
   FlaskConical,
+  Download,
+  Upload,
+  Database,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
+import { StorageService } from '../services/storageService';
 
 export interface NavItem {
   id: string;
@@ -41,6 +49,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
   reviewCount: number;
   lowStockCount?: number;
+  onReloadData?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,7 +58,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
   reviewCount,
+  onReloadData,
 }) => {
+  // Backup & Restore states
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isExporting, setIsExporting] = React.useState(false);
+  const [isImporting, setIsImporting] = React.useState(false);
+  const [backupMessage, setBackupMessage] = React.useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
+
+  const handleBackupData = () => {
+    try {
+      setIsExporting(true);
+      StorageService.downloadBackupFile();
+      setBackupMessage({ text: 'สำรองข้อมูลสำเร็จ (ดาวน์โหลดไฟล์แล้ว)', type: 'success' });
+      setTimeout(() => setBackupMessage(null), 4000);
+    } catch (err: any) {
+      setBackupMessage({ text: `สำรองข้อมูลไม่สำเร็จ: ${err.message}`, type: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsImporting(true);
+      const result = await StorageService.importBackupFile(file);
+      if (result.success) {
+        if (onReloadData) {
+          onReloadData();
+        }
+        setBackupMessage({ text: 'กู้คืนข้อมูลสำเร็จเรียบร้อย', type: 'success' });
+        setTimeout(() => setBackupMessage(null), 4000);
+      } else {
+        setBackupMessage({ text: result.message || 'ไม่สามารถกู้ข้อมูลได้', type: 'error' });
+      }
+    } catch (err: any) {
+      setBackupMessage({ text: `เกิดข้อผิดพลาด: ${err.message}`, type: 'error' });
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Close drawer on Escape key press
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -68,7 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       subtitle: 'Food Cost Analysis & Pricing',
       icon: Calculator,
       items: [
-        { id: 'food_cost', name: 'ต้นทุนอาหาร & ราคาขาย', icon: UtensilsCrossed },
+        { id: 'food_cost', name: '🍚 ต้นทุนอาหาร ราดข้าว', icon: UtensilsCrossed },
+        { id: 'food_cost_alacarte', name: '🍲 ต้นทุนอาหาร กับข้าว', icon: Soup },
         { id: 'quick_calculator', name: 'เครื่องคิดเลขต้นทุนด่วน', icon: Sparkles },
       ],
     },
@@ -78,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       subtitle: 'Standard Recipe Cost Cards',
       icon: BookOpen,
       items: [
-        { id: 'recipes', name: 'สูตรอาหาร (Recipe Cards)', icon: BookOpen },
+        { id: 'recipes', name: 'คลังสูตรอาหารกลาง (Base Recipes)', icon: BookOpen },
         { id: 'sauces', name: 'ซอส & สูตรเตรียม Batch', icon: FlaskConical },
       ],
     },
@@ -206,26 +265,90 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
 
-        {/* System Settings - kept outside business modules */}
-        <section>
+        {/* Backup & Restore Data Management in Hamburger Menu */}
+        <section className="pt-2 border-t border-[#EAE4D9]">
           <div className="px-2 mb-2">
-            <span className="text-[10px] font-extrabold tracking-wider text-slate-400">SYSTEM</span>
+            <div className="flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-[#F27D26]" />
+              <span className="text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">
+                สำรอง & กู้คืนข้อมูล (DATA BACKUP)
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5 ml-5">Export & Restore System Database</p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              onSelectTab('settings');
-              onCloseMobile();
-            }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-              currentTab === 'settings'
-                ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
-            }`}
-          >
-            <Settings className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? 'text-black' : 'text-slate-500'}`} />
-            <span>ตั้งค่า</span>
-          </button>
+
+          <div className="space-y-2">
+            {/* Hidden File Input for Restore */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+
+            {/* Backup Button */}
+            <button
+              type="button"
+              onClick={handleBackupData}
+              disabled={isExporting}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-white hover:bg-stone-50 active:scale-[0.99] text-stone-700 hover:text-stone-900 border border-[#EAE4D9] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-xl bg-amber-50 text-[#F27D26] flex items-center justify-center shrink-0 border border-amber-200">
+                  {isExporting ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F27D26]" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-stone-800">สำรองข้อมูล (Backup)</div>
+                  <div className="text-[10px] text-stone-500 font-normal">ดาวน์โหลดไฟล์สำรองข้อมูล JSON</div>
+                </div>
+              </div>
+            </button>
+
+            {/* Restore Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-white hover:bg-stone-50 active:scale-[0.99] text-stone-700 hover:text-stone-900 border border-[#EAE4D9] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200">
+                  {isImporting ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-stone-800">กู้คืนข้อมูล (Restore)</div>
+                  <div className="text-[10px] text-stone-500 font-normal">นำเข้าและกู้คืนจากไฟล์ JSON</div>
+                </div>
+              </div>
+            </button>
+
+            {/* Feedback Message */}
+            {backupMessage && (
+              <div
+                className={`p-2.5 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200 ${
+                  backupMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
+              >
+                {backupMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span className="text-[11px] font-medium leading-tight">{backupMessage.text}</span>
+              </div>
+            )}
+          </div>
         </section>
       </div>
 

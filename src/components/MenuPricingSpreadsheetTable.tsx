@@ -7,9 +7,10 @@ import {
   RestaurantSettings,
   RecipeCostBreakdown,
 } from '../types';
-import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid } from 'lucide-react';
+import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid, UtensilsCrossed } from 'lucide-react';
 
 export type PricingChannelTab = 'DINE_IN' | 'GRAB' | 'LINEMAN' | 'ROBINHOOD' | 'ALL';
+export type ServingDishMode = 'ON_RICE' | 'A_LA_CARTE';
 
 interface MenuPricingSpreadsheetTableProps {
   menu: MenuItem;
@@ -25,6 +26,8 @@ interface MenuPricingSpreadsheetTableProps {
   onOpenAddVariant?: (menu: MenuItem) => void;
   activeChannel?: PricingChannelTab;
   onChannelChange?: (channel: PricingChannelTab) => void;
+  activeServingMode?: ServingDishMode;
+  onServingModeChange?: (mode: ServingDishMode) => void;
 }
 
 export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTableProps> = ({
@@ -37,10 +40,23 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
   onOpenAddVariant,
   activeChannel: parentChannel,
   onChannelChange,
+  activeServingMode: parentServingMode,
+  onServingModeChange,
 }) => {
   // Channel view: DINE_IN (กินที่ร้าน), GRAB, LINEMAN, ROBINHOOD, ALL (แสดงทั้งหมด)
   const [localChannel, setLocalChannel] = useState<PricingChannelTab>('DINE_IN');
   const currentChannel = parentChannel || localChannel;
+
+  // Serving Mode: ON_RICE (ราดข้าว / จานเดียว) vs A_LA_CARTE (กับข้าว / จานกลาง)
+  const [localServingMode, setLocalServingMode] = useState<ServingDishMode>('ON_RICE');
+  const currentServingMode = parentServingMode || localServingMode;
+
+  const handleSelectServingMode = (mode: ServingDishMode) => {
+    setLocalServingMode(mode);
+    if (onServingModeChange) {
+      onServingModeChange(mode);
+    }
+  };
 
   const handleSelectChannel = (ch: PricingChannelTab) => {
     setLocalChannel(ch);
@@ -59,6 +75,8 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
         grabPrice?: number;
         linemanPrice?: number;
         robinhoodPrice?: number;
+        seafoodShrimpQty?: number;
+        seafoodSquidQty?: number;
       }
     >
   >({});
@@ -68,77 +86,166 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
     field: 'sellingPrice' | 'proteinWeight' | 'grabPrice' | 'linemanPrice' | 'robinhoodPrice',
     val: number
   ) => {
+    const editKey = `${variantId}_${currentServingMode}`;
     // 1. Update local state for immediate visual feedback
     setLocalEdits((prev) => ({
       ...prev,
+      [editKey]: {
+        ...prev[editKey],
+        [field]: val,
+      },
+      // Keep base variantId synced for ON_RICE mode
       [variantId]: {
         ...prev[variantId],
         [field]: val,
       },
     }));
 
-    // 2. Update and persist in menu
+    // 2. Update and persist in menu if in standard ON_RICE mode
+    if (currentServingMode === 'ON_RICE') {
+      const updatedVariants = menu.variants.map((v) => {
+        if (v.id !== variantId) return v;
+
+        if (field === 'sellingPrice') {
+          return { ...v, sellingPrice: val };
+        }
+        if (field === 'grabPrice') {
+          return { ...v, grabPrice: val, deliveryPrice: val };
+        }
+        if (field === 'linemanPrice') {
+          return { ...v, linemanPrice: val };
+        }
+        if (field === 'robinhoodPrice') {
+          return { ...v, robinhoodPrice: val };
+        }
+        if (field === 'proteinWeight') {
+          const recipeItems = [...(v.recipeItems || [])];
+          const proteinIdx = recipeItems.findIndex((it) => {
+            const lower = it.name.toLowerCase();
+            return (
+              it.proteinCategory ||
+              lower.includes('หมู') ||
+              lower.includes('ไก่') ||
+              lower.includes('เนื้อ') ||
+              lower.includes('กุ้ง') ||
+              lower.includes('หมึก') ||
+              lower.includes('ไส้กรอก') ||
+              lower.includes('ปลา')
+            );
+          });
+
+          if (proteinIdx >= 0) {
+            const item = recipeItems[proteinIdx];
+            const unitCost = item.calculatedUnitCost || 0;
+            recipeItems[proteinIdx] = {
+              ...item,
+              quantity: val,
+              calculatedLineCost: val * unitCost,
+            };
+          }
+          return { ...v, recipeItems };
+        }
+        return v;
+      });
+
+      const updatedMenu: MenuItem = {
+        ...menu,
+        variants: updatedVariants,
+        updatedAt: new Date().toISOString(),
+      };
+
+      onSaveMenu(updatedMenu);
+    }
+  };
+
+  // Handler for Seafood dual inputs: Shrimp (ตัว) and Squid (g)
+  const handleSeafoodChange = (
+    variantId: string,
+    type: 'shrimp' | 'squid',
+    val: number
+  ) => {
+    const editKey = `${variantId}_${currentServingMode}`;
+    setLocalEdits((prev) => ({
+      ...prev,
+      [editKey]: {
+        ...prev[editKey],
+        [type === 'shrimp' ? 'seafoodShrimpQty' : 'seafoodSquidQty']: val,
+      },
+      [variantId]: {
+        ...prev[variantId],
+        [type === 'shrimp' ? 'seafoodShrimpQty' : 'seafoodSquidQty']: val,
+      },
+    }));
+
     const updatedVariants = menu.variants.map((v) => {
       if (v.id !== variantId) return v;
-
-      if (field === 'sellingPrice') {
-        return { ...v, sellingPrice: val };
-      }
-      if (field === 'grabPrice') {
-        return { ...v, grabPrice: val, deliveryPrice: val };
-      }
-      if (field === 'linemanPrice') {
-        return { ...v, linemanPrice: val };
-      }
-      if (field === 'robinhoodPrice') {
-        return { ...v, robinhoodPrice: val };
-      }
-      if (field === 'proteinWeight') {
-        const recipeItems = [...(v.recipeItems || [])];
-        const proteinIdx = recipeItems.findIndex((it) => {
-          const lower = it.name.toLowerCase();
-          return (
-            it.proteinCategory ||
-            lower.includes('หมู') ||
-            lower.includes('ไก่') ||
-            lower.includes('เนื้อ') ||
-            lower.includes('กุ้ง') ||
-            lower.includes('หมึก') ||
-            lower.includes('ไส้กรอก') ||
-            lower.includes('ปลา')
-          );
-        });
-
-        if (proteinIdx >= 0) {
-          const item = recipeItems[proteinIdx];
-          const unitCost = item.calculatedUnitCost || 0;
-          recipeItems[proteinIdx] = {
-            ...item,
+      const recipeItems = [...(v.recipeItems || [])];
+      let found = false;
+      recipeItems.forEach((it, idx) => {
+        const lower = it.name.toLowerCase();
+        if (type === 'shrimp' && (lower.includes('กุ้ง') || it.proteinCategory === 'SHRIMP')) {
+          found = true;
+          const unitCost = it.calculatedUnitCost || 8.5;
+          recipeItems[idx] = {
+            ...it,
+            quantity: val,
+            calculatedLineCost: val * unitCost,
+          };
+        } else if (type === 'squid' && (lower.includes('หมึก') || it.proteinCategory === 'SQUID')) {
+          found = true;
+          const unitCost = it.calculatedUnitCost || 0.388;
+          recipeItems[idx] = {
+            ...it,
             quantity: val,
             calculatedLineCost: val * unitCost,
           };
         }
-        return { ...v, recipeItems };
+      });
+      if (!found) {
+        if (type === 'shrimp') {
+          recipeItems.push({
+            id: `sea_shrimp_${Date.now()}`,
+            name: 'กุ้งสด (XL)',
+            quantity: val,
+            unit: 'ตัว',
+            proteinCategory: 'SHRIMP',
+            calculatedUnitCost: 8.5,
+            calculatedLineCost: val * 8.5,
+          });
+        } else {
+          recipeItems.push({
+            id: `sea_squid_${Date.now()}`,
+            name: 'ปลาหมึกกล้วยสด',
+            quantity: val,
+            unit: 'g',
+            proteinCategory: 'SQUID',
+            calculatedUnitCost: 0.388,
+            calculatedLineCost: val * 0.388,
+          });
+        }
       }
-      return v;
+      return { ...v, recipeItems };
     });
 
-    const updatedMenu: MenuItem = {
+    onSaveMenu({
       ...menu,
       variants: updatedVariants,
       updatedAt: new Date().toISOString(),
-    };
-
-    onSaveMenu(updatedMenu);
+    });
   };
 
   return (
     <div className="bg-[#FAF8F5] border border-stone-300 rounded-2xl overflow-hidden shadow-md my-2 text-stone-900 font-sans">
-      {/* Top Header Row with Menu Title & Channel Switcher Buttons */}
+      {/* Top Header Row with Menu Title, Serving Mode & Channel Switcher Buttons */}
       <div className="bg-white border-b border-stone-300 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="px-3 py-1 bg-[#E53935] text-white font-extrabold text-sm rounded shadow-xs tracking-wider">
-            ธรรมดา
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Serving Mode Badge */}
+          <span
+            className={`px-3 py-1 text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-xs tracking-wider flex items-center gap-1 ${
+              currentServingMode === 'ON_RICE' ? 'bg-[#E53935]' : 'bg-[#8E24AA]'
+            }`}
+          >
+            {currentServingMode === 'ON_RICE' ? '🍚 ราดข้าว' : '🍲 กับข้าว (จานกลาง)'}
           </span>
           <h2 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
             {menu.name}
@@ -146,6 +253,34 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
           <span className="text-xs px-2 py-0.5 bg-stone-100 border border-stone-200 text-stone-600 rounded-md font-semibold">
             {menu.variants.length} ตัวเลือก
           </span>
+
+          {/* Serving Mode Switcher Buttons */}
+          <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-stone-300 shadow-2xs ml-0 sm:ml-2">
+            <button
+              type="button"
+              onClick={() => handleSelectServingMode('ON_RICE')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                currentServingMode === 'ON_RICE'
+                  ? 'bg-white text-[#E53935] shadow-xs font-extrabold border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+              title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
+            >
+              <span>🍚 ราดข้าว</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectServingMode('A_LA_CARTE')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                currentServingMode === 'A_LA_CARTE'
+                  ? 'bg-white text-[#8E24AA] shadow-xs font-extrabold border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+              title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
+            >
+              <span>🍲 กับข้าว</span>
+            </button>
+          </div>
         </div>
 
         {/* Channel Selector Buttons: กินที่ร้าน / Grab Food / Line Man / Robinhood / แสดงทั้งหมด */}
@@ -307,7 +442,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                     <div>ราคาตั้งขาย</div>
                     <div className="text-[10px] text-stone-700">ที่ร้าน (บาท) ✏️</div>
                   </th>
-                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[105px]">
                     <div>น้ำหนักเนื้อที่ใช้</div>
                     <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
                   </th>
@@ -350,7 +485,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                     <div>ราคาหน้าร้าน</div>
                     <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
                   </th>
-                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[105px]">
                     <div>น้ำหนักเนื้อที่ใช้</div>
                     <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
                   </th>
@@ -390,7 +525,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                     <div>ราคาหน้าร้าน</div>
                     <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
                   </th>
-                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[105px]">
                     <div>น้ำหนักเนื้อที่ใช้</div>
                     <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
                   </th>
@@ -430,7 +565,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                     <div>ราคาหน้าร้าน</div>
                     <div className="text-[10px] text-stone-500">(อ้างอิง)</div>
                   </th>
-                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[85px]">
+                  <th className="py-2.5 px-2 bg-[#BBDEFB] text-stone-900 border-r border-black min-w-[105px]">
                     <div>น้ำหนักเนื้อที่ใช้</div>
                     <div className="text-[10px] text-stone-700">(กรัม / ตัว) ✏️</div>
                   </th>
@@ -494,6 +629,13 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
           <tbody className="divide-y divide-black/20 font-mono text-xs">
             {menu.variants.map((v, idx) => {
               const pName = (v.proteinType || v.name).toLowerCase();
+              const isSeafood =
+                v.proteinType?.includes('ทะเล') ||
+                pName.includes('ทะเล') ||
+                v.proteinType?.includes('ซีฟู้ด') ||
+                pName.includes('ซีฟู้ด') ||
+                (pName.includes('กุ้ง') && pName.includes('หมึก'));
+              const editKey = `${v.id}_${currentServingMode}`;
 
               // Template defaults matching Excel template if not customized
               let baseSellingPrice = v.sellingPrice || 69;
@@ -502,6 +644,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
               let baseLinemanPrice = v.linemanPrice || (v as any).linemanPrice || v.deliveryPrice || 109;
               let baseRobinhoodPrice = v.robinhoodPrice || (v as any).robinhoodPrice || baseSellingPrice;
 
+              // Standard baseline defaults (applicable for both ON_RICE and A_LA_CARTE; all values user-editable)
               if (menu.name.includes('กะเพรา') || v.menuId === 'menu_kaprow') {
                 if (pName.includes('หมูหมัก')) {
                   baseSellingPrice = v.sellingPrice === 65 ? 79 : v.sellingPrice;
@@ -545,6 +688,12 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   baseGrabPrice = v.grabPrice || 139;
                   baseLinemanPrice = v.linemanPrice || 139;
                   baseRobinhoodPrice = v.robinhoodPrice || 109;
+                } else if (isSeafood) {
+                  baseSellingPrice = 129;
+                  baseWeight = 80;
+                  baseGrabPrice = 159;
+                  baseLinemanPrice = 159;
+                  baseRobinhoodPrice = 129;
                 } else if (pName.includes('ไส้กรอก')) {
                   baseSellingPrice = 79;
                   baseWeight = 80;
@@ -556,9 +705,11 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
 
               // 1. Selling price at restaurant (USER EDITABLE)
               const sellingPrice =
-                localEdits[v.id]?.sellingPrice !== undefined
-                  ? localEdits[v.id]!.sellingPrice!
-                  : baseSellingPrice;
+                localEdits[editKey]?.sellingPrice !== undefined
+                  ? localEdits[editKey]!.sellingPrice!
+                  : (localEdits[v.id]?.sellingPrice !== undefined
+                      ? localEdits[v.id]!.sellingPrice!
+                      : baseSellingPrice);
 
               // 2. Find protein recipe item
               const proteinItem = (v.recipeItems || []).find((it) => {
@@ -597,81 +748,184 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                 else proteinUnitCost = 0.20;
               }
 
-              // 4. Protein weight used (USER EDITABLE)
+              // 4. Seafood dual quantities (กุ้ง และ หมึก) or single protein weight
+              const shrimpItemFromRecipe = (v.recipeItems || []).find(
+                (it) => it.proteinCategory === 'SHRIMP' || it.name.toLowerCase().includes('กุ้ง')
+              );
+              const squidItemFromRecipe = (v.recipeItems || []).find(
+                (it) => it.proteinCategory === 'SQUID' || it.name.toLowerCase().includes('หมึก') || it.name.toLowerCase().includes('ปลาหมึก')
+              );
+
+              const defaultShrimp = shrimpItemFromRecipe?.quantity || 4;
+              const defaultSquid = squidItemFromRecipe?.quantity || 40;
+
+              const shrimpQty =
+                localEdits[editKey]?.seafoodShrimpQty !== undefined
+                  ? localEdits[editKey]!.seafoodShrimpQty!
+                  : (localEdits[v.id]?.seafoodShrimpQty !== undefined
+                      ? localEdits[v.id]!.seafoodShrimpQty!
+                      : defaultShrimp);
+
+              const squidQty =
+                localEdits[editKey]?.seafoodSquidQty !== undefined
+                  ? localEdits[editKey]!.seafoodSquidQty!
+                  : (localEdits[v.id]?.seafoodSquidQty !== undefined
+                      ? localEdits[v.id]!.seafoodSquidQty!
+                      : defaultSquid);
+
+              const shrimpUnitCost = shrimpItemFromRecipe?.calculatedUnitCost || 8.5; // บาท/ตัว
+              const squidUnitCost = squidItemFromRecipe?.calculatedUnitCost || 0.388; // บาท/กรัม
+              const shrimpTotalCost = Math.round(shrimpQty * shrimpUnitCost);
+              const squidTotalCost = Math.round(squidQty * squidUnitCost);
+              const seafoodCombinedCost = shrimpTotalCost + squidTotalCost;
+
+              // 5. Protein weight used (USER EDITABLE)
               const proteinWeight =
-                localEdits[v.id]?.proteinWeight !== undefined
-                  ? localEdits[v.id]!.proteinWeight!
-                  : (proteinItem?.quantity !== undefined && proteinItem.quantity !== 110
-                      ? proteinItem.quantity
-                      : baseWeight);
+                localEdits[editKey]?.proteinWeight !== undefined
+                  ? localEdits[editKey]!.proteinWeight!
+                  : (localEdits[v.id]?.proteinWeight !== undefined
+                      ? localEdits[v.id]!.proteinWeight!
+                      : (proteinItem?.quantity !== undefined && proteinItem.quantity !== 110
+                          ? proteinItem.quantity
+                          : baseWeight));
 
-              // 5. Protein cost per dish (ราคาต้นทุนเนื้อ/จาน)
-              const proteinCost = Math.round(proteinWeight * proteinUnitCost);
+              // 6. Protein cost per dish (ราคาต้นทุนเนื้อ/จาน)
+              // For seafood: combined total of shrimp and squid!
+              const proteinCost = isSeafood ? seafoodCombinedCost : Math.round(proteinWeight * proteinUnitCost);
 
-              // 6. Central ingredients cost (ต้นทุนวัตถุดิบกลาง)
+              // 7. Central ingredients cost (ต้นทุนวัตถุดิบกลาง)
               let sumCentral = 0;
               (v.recipeItems || []).forEach((it) => {
-                if (it !== proteinItem) {
+                const lower = it.name.toLowerCase();
+                const isMeatOrSeafood =
+                  it === proteinItem ||
+                  (isSeafood && (lower.includes('กุ้ง') || lower.includes('หมึก') || it.proteinCategory === 'SHRIMP' || it.proteinCategory === 'SQUID'));
+                if (!isMeatOrSeafood) {
+                  // If in a la carte mode, skip rice
+                  if (currentServingMode === 'A_LA_CARTE' && (lower.includes('ข้าว') || it.ingredientId === 'ing_cooked_rice')) {
+                    return;
+                  }
                   sumCentral += it.calculatedLineCost || it.quantity * (it.calculatedUnitCost || 0);
                 }
               });
               const centralCost = sumCentral > 0 ? Math.round(sumCentral) : 22;
 
-              // 7. Total raw material cost (ต้นทุนวัตถุดิบทั้งหมด)
+              // 8. Total raw material cost (ต้นทุนวัตถุดิบทั้งหมด)
               const totalRawMaterialCost = proteinCost + centralCost;
 
-              // 8. Overhead & Packaging cost (ต้นทุนแฝง)
+              // 9. Overhead & Packaging cost (ต้นทุนแฝง)
               let overheadCost = 28;
               if (pName.includes('หมูหมัก') || pName.includes('ไส้กรอก')) overheadCost = 32;
               else if (pName.includes('เนื้อวัวสไลซ์')) overheadCost = 52;
               else if (pName.includes('เนื้อวัว สับ') || pName.includes('เนื้อสับ')) overheadCost = 40;
-              else if (pName.includes('กุ้ง') || pName.includes('หมึก')) overheadCost = 44;
+              else if (pName.includes('กุ้ง') || pName.includes('หมึก') || isSeafood) overheadCost = 44;
               else overheadCost = Math.round((v.overheadCost || 25) + (v.packagingCost || 7));
 
-              // 9. Total cost (ต้นทุนรวม)
+              // 10. Total cost (ต้นทุนรวม)
               const totalCost = totalRawMaterialCost + overheadCost;
 
-              // 10. Food Cost %
+              // 11. Food Cost %
               const fcPercent =
                 sellingPrice > 0 ? Math.round((totalRawMaterialCost / sellingPrice) * 100) : 0;
 
-              // 11. Profits at restaurant
+              // 12. Profits at restaurant
               const packagingAmount = v.packagingCost || 9;
               const dineInProfit = Math.round(sellingPrice - totalCost + packagingAmount);
               const takeawayProfit = Math.round(sellingPrice - totalCost);
 
-              // 12-16. Grab Food calculations
+              // 13-17. Grab Food calculations
               const grabSuggestedPrice = Number((sellingPrice * 1.5).toFixed(1));
               const grabPrice =
-                localEdits[v.id]?.grabPrice !== undefined
-                  ? localEdits[v.id]!.grabPrice!
-                  : baseGrabPrice;
+                localEdits[editKey]?.grabPrice !== undefined
+                  ? localEdits[editKey]!.grabPrice!
+                  : (localEdits[v.id]?.grabPrice !== undefined
+                      ? localEdits[v.id]!.grabPrice!
+                      : baseGrabPrice);
               const grabGpValue = Math.round(grabPrice * 0.2675); // 25% + 7% VAT
               const grabNet = grabPrice - grabGpValue;
               const grabProfit = grabNet - totalCost;
               const grabMargin = grabPrice > 0 ? Math.round((grabProfit / grabPrice) * 100) : 0;
 
-              // 17-21. Line Man calculations
+              // 18-22. Line Man calculations
               const linemanSuggestedPrice = Number((sellingPrice * 1.5).toFixed(1));
               const linemanPrice =
-                localEdits[v.id]?.linemanPrice !== undefined
-                  ? localEdits[v.id]!.linemanPrice!
-                  : baseLinemanPrice;
+                localEdits[editKey]?.linemanPrice !== undefined
+                  ? localEdits[editKey]!.linemanPrice!
+                  : (localEdits[v.id]?.linemanPrice !== undefined
+                      ? localEdits[v.id]!.linemanPrice!
+                      : baseLinemanPrice);
               const linemanGpValue = Math.round(linemanPrice * 0.321); // 30% + 7% VAT
               const linemanNet = linemanPrice - linemanGpValue;
               const linemanProfit = linemanNet - totalCost;
               const linemanMargin = linemanPrice > 0 ? Math.round((linemanProfit / linemanPrice) * 100) : 0;
 
-              // 22-26. Robinhood calculations (0% GP)
+              // 23-27. Robinhood calculations (0% GP)
               const robinhoodSuggestedPrice = sellingPrice; // Recommended same as dine-in
               const robinhoodPrice =
-                localEdits[v.id]?.robinhoodPrice !== undefined
-                  ? localEdits[v.id]!.robinhoodPrice!
-                  : baseRobinhoodPrice;
+                localEdits[editKey]?.robinhoodPrice !== undefined
+                  ? localEdits[editKey]!.robinhoodPrice!
+                  : (localEdits[v.id]?.robinhoodPrice !== undefined
+                      ? localEdits[v.id]!.robinhoodPrice!
+                      : baseRobinhoodPrice);
               const robinhoodGpValue = 0; // 0% GP
               const robinhoodNet = robinhoodPrice - robinhoodGpValue;
               const robinhoodProfit = robinhoodNet - totalCost;
               const robinhoodMargin = robinhoodPrice > 0 ? Math.round((robinhoodProfit / robinhoodPrice) * 100) : 0;
+
+              // Helper for rendering protein weight cell (single input or dual seafood input)
+              const renderProteinWeightInput = (compact: boolean = false) => {
+                if (isSeafood) {
+                  return (
+                    <div className="flex flex-col gap-1 items-center justify-center py-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] font-black text-amber-900 bg-amber-100 px-1 py-0.2 rounded border border-amber-300">
+                          กุ้ง
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={shrimpQty}
+                          onChange={(e) =>
+                            handleSeafoodChange(v.id, 'shrimp', parseFloat(e.target.value) || 0)
+                          }
+                          className={`${compact ? 'w-10' : 'w-12'} px-1 py-0.5 text-center font-bold text-stone-900 bg-white border border-amber-400 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-mono`}
+                          title="จำนวนกุ้ง (ตัว)"
+                        />
+                        <span className="text-[9px] text-stone-500">ตัว</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] font-black text-sky-900 bg-sky-100 px-1 py-0.2 rounded border border-sky-300">
+                          หมึก
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={squidQty}
+                          onChange={(e) =>
+                            handleSeafoodChange(v.id, 'squid', parseFloat(e.target.value) || 0)
+                          }
+                          className={`${compact ? 'w-10' : 'w-12'} px-1 py-0.5 text-center font-bold text-stone-900 bg-white border border-sky-400 rounded focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs font-mono`}
+                          title="น้ำหนักปลาหมึก (กรัม)"
+                        />
+                        <span className="text-[9px] text-stone-500">g</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <input
+                    type="number"
+                    min="0"
+                    value={proteinWeight}
+                    onChange={(e) =>
+                      handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
+                    }
+                    className={`${compact ? 'w-14 px-1 py-0.5' : 'w-16 px-1.5 py-1'} text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono`}
+                    title="น้ำหนักเนื้อที่ใช้ (กรัม / ตัว)"
+                  />
+                );
+              };
 
               return (
                 <tr key={v.id} className="hover:bg-amber-50/40 transition-colors">
@@ -696,9 +950,9 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                               sellingPrice,
                               takeawayPrice: v.takeawayPrice || sellingPrice,
                               deliveryPrice: v.deliveryPrice || sellingPrice,
-                              shrimpCost: v.proteinType.includes('กุ้ง') ? proteinCost : 0,
-                              squidCost: v.proteinType.includes('หมึก') ? proteinCost : 0,
-                              seafoodTotalCost: (v.proteinType.includes('กุ้ง') || v.proteinType.includes('หมึก')) ? proteinCost : 0,
+                              shrimpCost: isSeafood ? shrimpTotalCost : (v.proteinType.includes('กุ้ง') ? proteinCost : 0),
+                              squidCost: isSeafood ? squidTotalCost : (v.proteinType.includes('หมึก') ? proteinCost : 0),
+                              seafoodTotalCost: isSeafood ? seafoodCombinedCost : ((v.proteinType.includes('กุ้ง') || v.proteinType.includes('หมึก')) ? proteinCost : 0),
                               meatCost: proteinCost,
                               sauceCost: 3,
                               centralIngredientCost: centralCost,
@@ -749,20 +1003,20 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                         />
                       </td>
 
-                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
+                      {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) - แยก 2 ค่าสำหรับ 'ทะเล' */}
                       <td className="p-1 bg-[#BBDEFB] border-r border-black">
-                        <input
-                          type="number"
-                          min="0"
-                          value={proteinWeight}
-                          onChange={(e) =>
-                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
-                        />
+                        {renderProteinWeightInput(false)}
                       </td>
 
-                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{proteinCost}</td>
+                      {/* ราคาต้นทุนเนื้อ/จาน (รวมค่าเดียวสำหรับ 'ทะเล') */}
+                      <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">
+                        <div className="text-stone-900 font-bold">{proteinCost}</div>
+                        {isSeafood && (
+                          <div className="text-[9px] text-stone-500 font-normal leading-tight">
+                            กุ้ง {shrimpTotalCost} + หมึก {squidTotalCost}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{centralCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalRawMaterialCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{overheadCost}</td>
@@ -785,15 +1039,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                       <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
                       {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
                       <td className="p-1 bg-[#BBDEFB] border-r border-black">
-                        <input
-                          type="number"
-                          min="0"
-                          value={proteinWeight}
-                          onChange={(e) =>
-                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
-                        />
+                        {renderProteinWeightInput(false)}
                       </td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
@@ -837,15 +1083,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                       <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
                       {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
                       <td className="p-1 bg-[#BBDEFB] border-r border-black">
-                        <input
-                          type="number"
-                          min="0"
-                          value={proteinWeight}
-                          onChange={(e) =>
-                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
-                        />
+                        {renderProteinWeightInput(false)}
                       </td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
@@ -889,15 +1127,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                       <td className="py-2 px-2 bg-[#FAF8F5] text-stone-600 font-bold border-r border-black">฿{sellingPrice}</td>
                       {/* น้ำหนักเนื้อที่ใช้ (EDITABLE) */}
                       <td className="p-1 bg-[#BBDEFB] border-r border-black">
-                        <input
-                          type="number"
-                          min="0"
-                          value={proteinWeight}
-                          onChange={(e) =>
-                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-16 px-1.5 py-1 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs font-mono"
-                        />
+                        {renderProteinWeightInput(false)}
                       </td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r-2 border-black">{fcPercent}%</td>
@@ -950,17 +1180,16 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                         />
                       </td>
                       <td className="p-1 bg-[#BBDEFB] border-r border-black">
-                        <input
-                          type="number"
-                          min="0"
-                          value={proteinWeight}
-                          onChange={(e) =>
-                            handleCellChange(v.id, 'proteinWeight', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-14 px-1 py-0.5 text-center font-bold text-stone-900 bg-white border border-blue-400 rounded text-xs font-mono"
-                        />
+                        {renderProteinWeightInput(true)}
                       </td>
-                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{proteinCost}</td>
+                      <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">
+                        <div>{proteinCost}</div>
+                        {isSeafood && (
+                          <div className="text-[8px] text-stone-500 font-normal leading-tight">
+                            กุ้ง{shrimpTotalCost}+หมึก{squidTotalCost}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{centralCost}</td>
                       <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{totalRawMaterialCost}</td>
                       <td className="py-2 px-1.5 bg-white text-stone-900 font-bold border-r border-black">{overheadCost}</td>

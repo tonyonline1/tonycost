@@ -10,7 +10,8 @@ export type UnitType =
   | 'ขวด'
   | 'จาน'
   | 'ถ้วย'
-  | 'มัด';
+  | 'มัด'
+  | 'ชุด';
 
 export type IngredientCategory =
   | 'เนื้อสัตว์และอาหารทะเล'

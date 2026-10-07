@@ -318,6 +318,21 @@ export default function App() {
     setCurrentTab('dashboard');
   };
 
+  const handleReloadAllData = () => {
+    setSettings(StorageService.getSettings());
+    setIngredients(StorageService.getIngredients());
+    setSauces(StorageService.getSauces());
+    setMenus(StorageService.getMenus());
+    setSuppliers(StorageService.getSuppliers());
+    setInventory(StorageService.getInventory());
+    setInventoryTransactions(StorageService.getInventoryTransactions());
+    setPurchases(StorageService.getPurchases());
+    setPriceHistory(StorageService.getPriceHistory());
+    setExpenses(StorageService.getExpenses());
+    setSalesOrders(StorageService.getSalesOrders());
+    setWasteLog(StorageService.getWasteLog());
+  };
+
   const handleNavigateToRecipeBuilder = (variantId: string) => {
     setTargetRecipeVariantId(variantId);
     setCurrentTab('recipes');
@@ -352,16 +367,32 @@ export default function App() {
           onCloseMobile={() => setIsMobileNavOpen(false)}
           reviewCount={reviewRequiredCount}
           lowStockCount={0}
+          onReloadData={handleReloadAllData}
         />
 
         <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 sm:py-6 lg:py-8 min-w-0 overflow-x-hidden">
-          {/* TAB 1: FOOD COST & PRICING ANALYSIS (Primary View) */}
+          {/* TAB 1: FOOD COST & PRICING ANALYSIS - ON RICE (อาหารราดข้าว) */}
           {(currentTab === 'food_cost' || currentTab === 'dashboard' || currentTab === 'menus' || currentTab === 'menu_costing') && (
             <FoodCostView
               menus={menus}
               ingredients={ingredients}
               sauces={sauces}
               settings={settings}
+              initialServingMode="ON_RICE"
+              onSaveMenu={handleSaveMenu}
+              onUpdateVariantPrice={handleUpdateVariantPrice}
+              onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
+            />
+          )}
+
+          {/* TAB 1.5: FOOD COST - A LA CARTE (อาหารกับข้าว) */}
+          {currentTab === 'food_cost_alacarte' && (
+            <FoodCostView
+              menus={menus}
+              ingredients={ingredients}
+              sauces={sauces}
+              settings={settings}
+              initialServingMode="A_LA_CARTE"
               onSaveMenu={handleSaveMenu}
               onUpdateVariantPrice={handleUpdateVariantPrice}
               onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
@@ -390,6 +421,7 @@ export default function App() {
               initialTab={currentTab === 'sauces' ? 'SAUCE' : 'FOOD'}
               onSaveVariantRecipe={handleSaveVariantRecipe}
               onSaveSauce={handleSaveSauce}
+              onSaveMenu={handleSaveMenu}
             />
           )}
 

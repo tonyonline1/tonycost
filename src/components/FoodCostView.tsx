@@ -40,6 +40,7 @@ interface FoodCostViewProps {
   ingredients: Ingredient[];
   sauces: Sauce[];
   settings: RestaurantSettings;
+  initialServingMode?: 'ON_RICE' | 'A_LA_CARTE';
   onSaveMenu: (menu: MenuItem) => void;
   onUpdateVariantPrice: (
     menuId: string,
@@ -54,6 +55,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   ingredients,
   sauces,
   settings,
+  initialServingMode,
   onSaveMenu,
   onUpdateVariantPrice,
   onNavigateToRecipeBuilder,
@@ -62,6 +64,15 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [activeChannel, setActiveChannel] = useState<'DINE_IN' | 'GRAB' | 'LINEMAN' | 'ROBINHOOD' | 'ALL'>('DINE_IN');
+  const [activeServingMode, setActiveServingMode] = useState<'ON_RICE' | 'A_LA_CARTE'>(
+    initialServingMode || 'ON_RICE'
+  );
+
+  React.useEffect(() => {
+    if (initialServingMode) {
+      setActiveServingMode(initialServingMode);
+    }
+  }, [initialServingMode]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
 
   // Breakdown Modal state
@@ -496,12 +507,23 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <UtensilsCrossed className="w-5 h-5 text-[#F27D26]" />
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              ต้นทุนอาหาร (Food Cost & Menu Management)
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
+              <span>ต้นทุนอาหาร</span>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-xl font-bold ${
+                  activeServingMode === 'A_LA_CARTE'
+                    ? 'bg-[#8E24AA] text-white'
+                    : 'bg-[#E53935] text-white'
+                }`}
+              >
+                {activeServingMode === 'A_LA_CARTE' ? '🍲 ประเภทกับข้าว (จานกลาง)' : '🍚 ประเภทราดข้าว (จานเดียว)'}
+              </span>
             </h1>
           </div>
           <p className="text-xs text-white/60 mt-0.5">
-            รวมศูนย์จัดการเมนูอาหารและวิเคราะห์ต้นทุนวัตถุดิบ (Food Cost %), กำไรขั้นต้น (GP), และกฎคำนวณอาหารทะเล
+            {activeServingMode === 'A_LA_CARTE'
+              ? 'คำนวณต้นทุนอาหารประเภทกับข้าว (ไม่รวมข้าวสวย สามารถกำหนดราคาและน้ำหนักเนื้อสัตว์ได้เองตามต้องการ)'
+              : 'คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว รวมข้าวสวยหอมมะลิ 200g และพอร์ชั่นเนื้อสัตว์จานเดี่ยว'}
           </p>
         </div>
 
@@ -660,52 +682,83 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
           </div>
         </div>
 
-        {/* Channel selector (หน้าร้าน / Grab / LINE MAN) */}
-        <div className="flex items-center gap-1.5 bg-black/40 border border-white/15 p-1 rounded-2xl self-start md:self-auto">
-          <button
-            type="button"
-            onClick={() => setActiveChannel('DINE_IN')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeChannel === 'DINE_IN'
-                ? 'bg-[#F27D26] text-black font-bold'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            หน้าร้าน
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveChannel('GRAB')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeChannel === 'GRAB'
-                ? 'bg-[#00B14F] text-white font-bold'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            GrabFood ({grabCommissionPct}%)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveChannel('LINEMAN')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeChannel === 'LINEMAN'
-                ? 'bg-[#06C755] text-white font-bold'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            LINE MAN ({linemanCommissionPct}%)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveChannel('ROBINHOOD')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeChannel === 'ROBINHOOD'
-                ? 'bg-[#8B5CF6] text-white font-bold'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            Robinhood (0%)
-          </button>
+        {/* Mode selector (ราดข้าว vs กับข้าว) & Channel selector (หน้าร้าน / Grab / LINE MAN / Robinhood) */}
+        <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
+          {/* Serving Mode Switcher: ราดข้าว vs กับข้าว */}
+          <div className="flex items-center gap-1 bg-black/40 border border-white/15 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setActiveServingMode('ON_RICE')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeServingMode === 'ON_RICE'
+                  ? 'bg-[#E53935] text-white shadow-xs font-extrabold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+              title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
+            >
+              <span>🍚 ราดข้าว</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveServingMode('A_LA_CARTE')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeServingMode === 'A_LA_CARTE'
+                  ? 'bg-[#8E24AA] text-white shadow-xs font-extrabold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+              title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
+            >
+              <span>🍲 กับข้าว</span>
+            </button>
+          </div>
+
+          {/* Channel selector (หน้าร้าน / Grab / LINE MAN) */}
+          <div className="flex items-center gap-1.5 bg-black/40 border border-white/15 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setActiveChannel('DINE_IN')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeChannel === 'DINE_IN'
+                  ? 'bg-[#F27D26] text-black font-bold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              หน้าร้าน
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveChannel('GRAB')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeChannel === 'GRAB'
+                  ? 'bg-[#00B14F] text-white font-bold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              GrabFood ({grabCommissionPct}%)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveChannel('LINEMAN')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeChannel === 'LINEMAN'
+                  ? 'bg-[#06C755] text-white font-bold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              LINE MAN ({linemanCommissionPct}%)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveChannel('ROBINHOOD')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeChannel === 'ROBINHOOD'
+                  ? 'bg-[#8B5CF6] text-white font-bold'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Robinhood (0%)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -777,6 +830,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                           onOpenAddVariant={handleOpenAddVariant}
                           activeChannel={activeChannel}
                           onChannelChange={(ch) => setActiveChannel(ch as any)}
+                          activeServingMode={activeServingMode}
+                          onServingModeChange={setActiveServingMode}
                         />
                       </div>
                     )}
@@ -803,6 +858,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               onOpenAddVariant={handleOpenAddVariant}
               activeChannel={activeChannel}
               onChannelChange={(ch) => setActiveChannel(ch as any)}
+              activeServingMode={activeServingMode}
+              onServingModeChange={setActiveServingMode}
             />
           ))}
         </div>
