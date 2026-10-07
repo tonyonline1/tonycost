@@ -177,14 +177,18 @@ export default function App() {
   };
 
   const handleSaveMenu = (menu: MenuItem) => {
-    const existingIndex = menus.findIndex((m) => m.id === menu.id);
-    if (existingIndex >= 0) {
-      const updated = [...menus];
-      updated[existingIndex] = menu;
-      setMenus(updated);
-    } else {
-      setMenus([...menus, menu]);
-    }
+    setMenus((prevMenus) => {
+      const existingIndex = prevMenus.findIndex((m) => m.id === menu.id);
+      let updated: MenuItem[];
+      if (existingIndex >= 0) {
+        updated = [...prevMenus];
+        updated[existingIndex] = menu;
+      } else {
+        updated = [...prevMenus, menu];
+      }
+      StorageService.saveMenus(updated);
+      return updated;
+    });
   };
 
   const handleUpdateVariantPrice = (
@@ -192,20 +196,23 @@ export default function App() {
     variantId: string,
     prices: { sellingPrice: number; takeawayPrice: number; deliveryPrice: number }
   ) => {
-    const updatedMenus = menus.map((m) => {
-      if (m.id !== menuId) return m;
-      const updatedVariants = m.variants.map((v) => {
-        if (v.id !== variantId) return v;
-        return {
-          ...v,
-          sellingPrice: prices.sellingPrice,
-          takeawayPrice: prices.takeawayPrice,
-          deliveryPrice: prices.deliveryPrice,
-        };
+    setMenus((prevMenus) => {
+      const updated = prevMenus.map((m) => {
+        if (m.id !== menuId) return m;
+        const updatedVariants = m.variants.map((v) => {
+          if (v.id !== variantId) return v;
+          return {
+            ...v,
+            sellingPrice: prices.sellingPrice,
+            takeawayPrice: prices.takeawayPrice,
+            deliveryPrice: prices.deliveryPrice,
+          };
+        });
+        return { ...m, variants: updatedVariants };
       });
-      return { ...m, variants: updatedVariants };
+      StorageService.saveMenus(updated);
+      return updated;
     });
-    setMenus(updatedMenus);
   };
 
   const handleSaveVariantRecipe = (
@@ -213,15 +220,18 @@ export default function App() {
     variantId: string,
     recipeItems: RecipeItem[]
   ) => {
-    const updatedMenus = menus.map((m) => {
-      if (m.id !== menuId) return m;
-      const updatedVariants = m.variants.map((v) => {
-        if (v.id !== variantId) return v;
-        return { ...v, recipeItems };
+    setMenus((prevMenus) => {
+      const updated = prevMenus.map((m) => {
+        if (m.id !== menuId) return m;
+        const updatedVariants = m.variants.map((v) => {
+          if (v.id !== variantId) return v;
+          return { ...v, recipeItems };
+        });
+        return { ...m, variants: updatedVariants };
       });
-      return { ...m, variants: updatedVariants };
+      StorageService.saveMenus(updated);
+      return updated;
     });
-    setMenus(updatedMenus);
   };
 
   const handleSavePurchase = (purchase: PurchaseRecord) => {

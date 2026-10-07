@@ -158,7 +158,16 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   };
 
   const handleOpenEdit = (ing: Ingredient) => {
-    setEditingIngredient({ ...ing });
+    const pQty = Number(ing.purchaseQuantity) || 1000;
+    const yPct = Number(ing.yieldPercent) || 100;
+    const computedActual = ing.actualQuantity !== undefined && ing.actualQuantity !== null
+      ? ing.actualQuantity
+      : Number(((pQty * yPct) / 100).toFixed(1));
+    setEditingIngredient({
+      ...ing,
+      actualQuantity: computedActual,
+      actualUnit: ing.actualUnit || ing.purchaseUnit || 'g',
+    });
     setIsEditingModalOpen(true);
   };
 
@@ -730,13 +739,21 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                       step="any"
                       required
                       value={editingIngredient.purchaseQuantity ?? ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newPQty = parseFloat(e.target.value) || 0;
+                        const currentActual = editingIngredient.actualQuantity;
+                        const newYield =
+                          newPQty > 0 && currentActual !== undefined && currentActual > 0
+                            ? Number(((currentActual / newPQty) * 100).toFixed(1))
+                            : (editingIngredient.yieldPercent ?? 100);
                         setEditingIngredient({
                           ...editingIngredient,
-                          purchaseQuantity: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                          purchaseQuantity: newPQty,
+                          yieldPercent: newYield,
+                        });
+                      }}
                       className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono text-white"
+                      placeholder="เช่น 1000"
                     />
                   </div>
 
@@ -744,12 +761,15 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     <label className="block text-white/60 mb-1">หน่วยซื้อ</label>
                     <select
                       value={editingIngredient.purchaseUnit || 'g'}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newUnit = e.target.value as UnitType;
                         setEditingIngredient({
                           ...editingIngredient,
-                          purchaseUnit: e.target.value as UnitType,
-                        })
-                      }
+                          purchaseUnit: newUnit,
+                          actualUnit: newUnit,
+                          baseUnit: newUnit,
+                        });
+                      }}
                       className="w-full p-2 bg-black/40 border border-white/15 rounded-xl text-white cursor-pointer"
                     >
                       <option value="g" className="bg-[#1a1a1a]">g (กรัม)</option>
@@ -779,6 +799,57 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* Row 2: Actual Quantity after trimming & Yield Auto-calculation comparison */}
+                <div className="grid grid-cols-3 gap-3 pt-2.5 border-t border-white/10">
+                  <div>
+                    <label className="block text-emerald-400 font-bold mb-1">
+                      ปริมาณที่ได้จริง(หลังตัดแต่ง)
+                    </label>
+                    <NumericInput
+                      type="number"
+                      step="any"
+                      required
+                      value={editingIngredient.actualQuantity ?? ''}
+                      onChange={(e) => {
+                        const newActual = parseFloat(e.target.value) || 0;
+                        const pQty = Number(editingIngredient.purchaseQuantity) || 0;
+                        const newYield = pQty > 0 ? Number(((newActual / pQty) * 100).toFixed(1)) : 100;
+                        setEditingIngredient({
+                          ...editingIngredient,
+                          actualQuantity: newActual,
+                          yieldPercent: newYield,
+                        });
+                      }}
+                      className="w-full p-2 bg-black/40 border border-emerald-500/40 focus:border-emerald-400 rounded-xl font-mono font-bold text-emerald-300"
+                      placeholder="เช่น 950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-white/60 mb-1">หน่วยที่ได้จริง</label>
+                    <div className="w-full p-2 bg-black/20 border border-white/10 rounded-xl text-white/80 font-mono text-sm flex items-center justify-between">
+                      <span>{editingIngredient.actualUnit || editingIngredient.purchaseUnit || 'g'}</span>
+                      <span className="text-[10px] text-white/40">พร้อมปรุง</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-white/60 mb-1">Yield (%) คำนวณอัตโนมัติ</label>
+                    <div className="w-full p-2 bg-black/40 border border-emerald-500/30 rounded-xl font-mono flex items-center justify-between">
+                      <span className="font-bold text-emerald-400 text-sm">
+                        {editingIngredient.yieldPercent ?? 100}%
+                      </span>
+                      {editingIngredient.purchaseQuantity && editingIngredient.actualQuantity !== undefined && (
+                        <span className="text-[10px] text-rose-300">
+                          {Number(editingIngredient.purchaseQuantity) > Number(editingIngredient.actualQuantity)
+                            ? `สูญเสีย -${(Number(editingIngredient.purchaseQuantity) - Number(editingIngredient.actualQuantity)).toFixed(1)} ${editingIngredient.purchaseUnit || 'g'}`
+                            : 'Yield 100%'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Yield & Preparation Specs */}
@@ -791,16 +862,20 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     <label className="block text-white/60 mb-1">Yield (%) หลังตัดแต่ง</label>
                     <NumericInput
                       type="number"
-                      step="1"
+                      step="any"
                       min="1"
                       max="200"
                       value={editingIngredient.yieldPercent ?? 100}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newYield = parseFloat(e.target.value) || 100;
+                        const pQty = Number(editingIngredient.purchaseQuantity) || 0;
+                        const newActual = pQty > 0 ? Number(((pQty * newYield) / 100).toFixed(1)) : (editingIngredient.actualQuantity || 0);
                         setEditingIngredient({
                           ...editingIngredient,
-                          yieldPercent: parseFloat(e.target.value) || 100,
-                        })
-                      }
+                          yieldPercent: newYield,
+                          actualQuantity: newActual,
+                        });
+                      }}
                       className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono text-white"
                     />
                   </div>
@@ -870,20 +945,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   </div>
                 );
               })()}
-
-              {/* Notes */}
-              <div>
-                <label className="block font-bold text-white/80 mb-1">หมายเหตุ / วิธีเตรียม</label>
-                <textarea
-                  rows={2}
-                  value={editingIngredient.notes || ''}
-                  onChange={(e) =>
-                    setEditingIngredient({ ...editingIngredient, notes: e.target.value })
-                  }
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white font-medium"
-                  placeholder="เช่น ตัดแต่งเอ็น ลอกหนัง ควักไส้..."
-                />
-              </div>
 
               {/* Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   BookOpen,
   UtensilsCrossed,
@@ -34,6 +34,85 @@ import {
   calculateSauceCost,
 } from '../services/calculationEngine';
 import { NumericInput } from './common/NumericInput';
+
+// Helper to determine if a recipe line item is a variant's protein/meat
+const isProteinItem = (it: RecipeItem, proteinType?: string): boolean => {
+  if (
+    it.proteinCategory === 'SHRIMP' ||
+    it.proteinCategory === 'SQUID' ||
+    it.proteinCategory === 'PORK' ||
+    it.proteinCategory === 'CHICKEN' ||
+    it.proteinCategory === 'BEEF' ||
+    it.proteinCategory === 'OTHER'
+  ) {
+    return true;
+  }
+
+  if (
+    it.type === 'SAUCE' ||
+    it.ingredientType === 'SAUCE' ||
+    it.type === 'PACKAGING' ||
+    it.ingredientType === 'PACKAGING' ||
+    it.type === 'PREPARED_ITEM' ||
+    it.ingredientType === 'PREPARED_ITEM'
+  ) {
+    return false;
+  }
+
+  const name = (it.name || '').trim().toLowerCase();
+
+  // Exclude seasonings and base ingredients even if their name contains words like ปลา, ไก่, หมู
+  if (
+    name.includes('น้ำปลา') ||
+    name.includes('น้ำมัน') ||
+    name.includes('ซอส') ||
+    name.includes('ผง') ||
+    name.includes('ซีอิ๊ว') ||
+    name.includes('กะปิ') ||
+    name.includes('กุ้งแห้ง') ||
+    name.includes('ใบ') ||
+    name.includes('พริก') ||
+    name.includes('กระเทียม') ||
+    name.includes('หอม') ||
+    name.includes('ไข่') ||
+    name.includes('ผัก') ||
+    name.includes('น้ำตาล') ||
+    name.includes('เกลือ') ||
+    name.includes('ข้าว')
+  ) {
+    return false;
+  }
+
+  // Specific raw protein identifiers
+  if (
+    name.includes('หมูหมัก') ||
+    name.includes('หมูบด') ||
+    name.includes('หมูสับ') ||
+    name.includes('หมูกรอบ') ||
+    name.includes('เนื้อไก่') ||
+    name.includes('อกไก่') ||
+    name.includes('สะโพกไก่') ||
+    name.includes('ไก่ชิ้น') ||
+    name.includes('เนื้อวัว') ||
+    name.includes('เนื้อสับ') ||
+    name.includes('เนื้อสไลซ์') ||
+    name.includes('กุ้งสด') ||
+    name.includes('ปลาหมึก') ||
+    name.includes('ไส้กรอก') ||
+    name.includes('เนื้อปลา')
+  ) {
+    return true;
+  }
+
+  if (proteinType && proteinType.trim()) {
+    const pType = proteinType.trim().toLowerCase();
+    if (name === pType || name.startsWith(pType)) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 // Presets for Packaging & Side Dishes in Central Recipe Repository
 interface PresetItem {
@@ -121,6 +200,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
   const [localBaseItems, setLocalBaseItems] = useState<RecipeItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
+  const lastLoadedMenuIdRef = useRef<string>('');
 
   useEffect(() => {
     if (initialVariantId) {
@@ -135,27 +215,22 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
   // Load base items whenever selectedMenuId changes
   useEffect(() => {
     if (currentMenu) {
+      const isSwitchingMenu = lastLoadedMenuIdRef.current !== currentMenu.id;
+      // Do not overwrite user's unsaved edits if staying on the same menu
+      if (!isSwitchingMenu && hasUnsavedChanges) {
+        return;
+      }
+
+      if (isSwitchingMenu) {
+        lastLoadedMenuIdRef.current = currentMenu.id;
+      }
+
       const firstVariant = currentMenu.variants[0];
       const items: RecipeItem[] = [];
 
       if (firstVariant && firstVariant.recipeItems && firstVariant.recipeItems.length > 0) {
         firstVariant.recipeItems.forEach((it) => {
-          const lower = it.name.toLowerCase();
-          const isMeat =
-            it.proteinCategory === 'SHRIMP' ||
-            it.proteinCategory === 'SQUID' ||
-            it.proteinCategory === 'PORK' ||
-            it.proteinCategory === 'CHICKEN' ||
-            it.proteinCategory === 'BEEF' ||
-            lower.includes('หมู') ||
-            lower.includes('ไก่') ||
-            lower.includes('เนื้อ') ||
-            lower.includes('กุ้ง') ||
-            lower.includes('หมึก') ||
-            lower.includes('ไส้กรอก') ||
-            lower.includes('ปลา');
-
-          if (!isMeat) {
+          if (!isProteinItem(it, firstVariant.proteinType)) {
             items.push({ ...it });
           }
         });
@@ -178,7 +253,10 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
             });
           }
         });
-      } else if (!items.some((it) => it.type === 'PACKAGING')) {
+      } else if (
+        (!firstVariant?.recipeItems || firstVariant.recipeItems.length === 0) &&
+        !items.some((it) => it.type === 'PACKAGING' || it.ingredientType === 'PACKAGING')
+      ) {
         items.push({
           id: `pkg_default_box`,
           type: 'PACKAGING',
@@ -192,10 +270,13 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
         });
       }
 
-      setLocalBaseItems(items);
-      setHasUnsavedChanges(false);
+      // Only set localBaseItems if switching to a new menu or initially empty
+      if (isSwitchingMenu || localBaseItems.length === 0) {
+        setLocalBaseItems(items);
+        setHasUnsavedChanges(false);
+      }
     }
-  }, [selectedMenuId, menus]);
+  }, [selectedMenuId, currentMenu, hasUnsavedChanges, localBaseItems.length]);
 
   // Calculate unit cost and line cost for each item
   const getItemCost = (item: RecipeItem) => {
@@ -438,31 +519,23 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
 
     const updatedVariants = currentMenu.variants.map((v) => {
       // Keep protein item(s) from existing variant
-      const proteinItems = (v.recipeItems || []).filter((it) => {
-        const lower = it.name.toLowerCase();
-        return (
-          it.proteinCategory === 'SHRIMP' ||
-          it.proteinCategory === 'SQUID' ||
-          it.proteinCategory === 'PORK' ||
-          it.proteinCategory === 'CHICKEN' ||
-          it.proteinCategory === 'BEEF' ||
-          lower.includes('หมู') ||
-          lower.includes('ไก่') ||
-          lower.includes('เนื้อ') ||
-          lower.includes('กุ้ง') ||
-          lower.includes('หมึก') ||
-          lower.includes('ไส้กรอก') ||
-          lower.includes('ปลา')
-        );
-      });
+      const proteinItems = (v.recipeItems || []).filter((it) =>
+        isProteinItem(it, v.proteinType)
+      );
 
-      const combinedRecipeItems = [...proteinItems, ...enrichedBaseItems];
+      // If no protein items matched, fallback to keeping the first item if available
+      let finalProteins = proteinItems;
+      if (finalProteins.length === 0 && v.recipeItems && v.recipeItems.length > 0) {
+        finalProteins = [v.recipeItems[0]];
+      }
+
+      const combinedRecipeItems = [...finalProteins, ...enrichedBaseItems];
 
       return {
         ...v,
         recipeItems: combinedRecipeItems,
-        packagingCost: packagingCost > 0 ? packagingCost : v.packagingCost,
-        packagingItems: packagingItems.length > 0 ? packagingItems : v.packagingItems,
+        packagingCost: packagingCost,
+        packagingItems: packagingItems,
       };
     });
 
@@ -474,11 +547,11 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
 
     if (onSaveMenu) {
       onSaveMenu(updatedMenu);
+    } else if (onSaveVariantRecipe) {
+      updatedVariants.forEach((v) => {
+        onSaveVariantRecipe(currentMenu.id, v.id, v.recipeItems);
+      });
     }
-
-    updatedVariants.forEach((v) => {
-      onSaveVariantRecipe(currentMenu.id, v.id, v.recipeItems);
-    });
 
     setHasUnsavedChanges(false);
     setSaveSuccessNotice(true);
