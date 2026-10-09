@@ -122,6 +122,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
   // Filter high-cost / needs-review items toggle
   const [filterHighCostOnly, setFilterHighCostOnly] = useState(false);
+  // Warning review modal state for displaying alerted items immediately (Requirement 3)
+  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
 
   // Combine menu categories and custom categories
   const categories = useMemo(() => {
@@ -283,26 +285,51 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     return matchesCategory && matchesSearch;
   });
 
+  // Detailed list of variants with warnings for instant inspection (Requirement 3)
+  const warningRows = useMemo(() => {
+    const target = settings.targetFoodCostPercent || 35;
+    return allRows
+      .filter((r) => {
+        const isHighFc =
+          r.breakdown.restaurantFoodCostPercent > target ||
+          r.breakdown.restaurantFoodCostPercent > 40;
+        const hasIssue = r.breakdown.hasReviewIssue;
+        const isNegProfit =
+          r.breakdown.restaurantProfit < 0 || r.breakdown.deliveryProfit < 0;
+        return isHighFc || hasIssue || isNegProfit;
+      })
+      .map((r) => {
+        const reasons: string[] = [];
+        if (r.breakdown.restaurantFoodCostPercent > 40) {
+          reasons.push(`Food Cost สูงมาก (${r.breakdown.restaurantFoodCostPercent.toFixed(1)}% > 40%)`);
+        } else if (r.breakdown.restaurantFoodCostPercent > target) {
+          reasons.push(`Food Cost เกินเป้า (${r.breakdown.restaurantFoodCostPercent.toFixed(1)}% > ${target}%)`);
+        }
+        if (r.breakdown.restaurantProfit < 0) {
+          reasons.push(`กำไรหน้าร้านติดลบ (${r.breakdown.restaurantProfit.toFixed(1)} ฿)`);
+        }
+        if (r.breakdown.deliveryProfit < 0) {
+          reasons.push(`กำไรเดลิเวอรี่ติดลบ (${r.breakdown.deliveryProfit.toFixed(1)} ฿)`);
+        }
+        if (r.breakdown.hasReviewIssue) {
+          reasons.push(r.breakdown.reviewMessage || 'ต้องทบทวนสูตรหรือวัตถุดิบ');
+        }
+        return {
+          ...r,
+          reasons,
+        };
+      });
+  }, [allRows, settings.targetFoodCostPercent]);
+
   // Set of menu IDs that have high cost (> 40% or > target) or review issue or negative margin
   const warningMenuIds = useMemo(() => {
-    const target = settings.targetFoodCostPercent || 35;
-    return new Set(
-      allRows
-        .filter(
-          (r) =>
-            r.breakdown.restaurantFoodCostPercent > target ||
-            r.breakdown.restaurantFoodCostPercent > 40 ||
-            r.breakdown.hasReviewIssue ||
-            r.breakdown.restaurantProfit < 0 ||
-            r.breakdown.deliveryProfit < 0
-        )
-        .map((r) => r.menu.id)
-    );
-  }, [allRows, settings.targetFoodCostPercent]);
+    return new Set(warningRows.map((r) => r.menu.id));
+  }, [warningRows]);
 
   const filteredMenus = menus.filter((m) => {
     const matchesCategory = selectedCategory === 'ALL' || m.category === selectedCategory;
     const matchesSearch =
+      !searchTerm ||
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.variants.some((v) => v.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesWarning = !filterHighCostOnly || warningMenuIds.has(m.id);
@@ -316,28 +343,16 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       ? allRows.reduce((acc, r) => acc + r.breakdown.restaurantFoodCostPercent, 0) / totalVariantsCount
       : 0;
   const target = settings.targetFoodCostPercent || 35;
-  const warningCount = allRows.filter(
-    (r) =>
-      r.breakdown.restaurantFoodCostPercent > target ||
-      r.breakdown.restaurantFoodCostPercent > 40 ||
-      r.breakdown.hasReviewIssue ||
-      r.breakdown.restaurantProfit < 0 ||
-      r.breakdown.deliveryProfit < 0
-  ).length;
+  const warningCount = warningRows.length;
 
   const handleToggleHighCostFilter = () => {
-    setFilterHighCostOnly((prev) => {
-      const next = !prev;
-      if (next) {
-        setSelectedCategory('ALL');
-        setSearchTerm('');
-        const firstWarning = menus.find((m) => warningMenuIds.has(m.id));
-        if (firstWarning) {
-          setSelectedMenuId(firstWarning.id);
-        }
-      }
-      return next;
-    });
+    // Requirement 3: Clicking opens the alerted items modal immediately!
+    setIsWarningModalOpen(true);
+    setFilterHighCostOnly(true);
+    const firstWarning = menus.find((m) => warningMenuIds.has(m.id));
+    if (firstWarning) {
+      setSelectedMenuId(firstWarning.id);
+    }
   };
 
   const handleOpenAddMenu = () => {
@@ -706,6 +721,21 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               </button>
             </div>
 
+            {/* Requirement 1: Move "เพิ่มหมวดหมู่" next to "เพิ่มเมนูใหม่" */}
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryError(null);
+                setNewCategoryInput('');
+                setIsAddCategoryModalOpen(true);
+              }}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 !text-white font-black rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer shrink-0 border border-amber-600"
+              title="เพิ่มหมวดหมู่อาหารใหม่"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ เพิ่มหมวดหมู่</span>
+            </button>
+
             {/* Add menu button */}
             <button
               type="button"
@@ -717,100 +747,35 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Row 2: Search, Category, Add Category (Ultra-compact inline row) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-200">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="relative w-40 sm:w-52">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500" />
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อเมนู, วัตถุดิบ..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-2 py-1 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium text-stone-900 placeholder-stone-400 focus:outline-none focus:border-[#F27D26] focus:bg-white"
-              />
-            </div>
-
-            <div className="relative min-w-[140px] sm:min-w-[170px]">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full pl-2 pr-6 py-1 bg-stone-50 border border-stone-300 rounded-lg text-xs font-bold text-stone-900 focus:outline-none focus:border-[#F27D26] appearance-none cursor-pointer focus:bg-white"
-              >
-                {categories.map((c) => {
-                  const count =
-                    c === 'ALL'
-                      ? menus.length
-                      : menus.filter((m) => m.category === c).length;
-                  return (
-                    <option key={c} value={c}>
-                      {c === 'ALL' ? `ทุกหมวดหมู่ (${count})` : `${c} (${count})`}
-                    </option>
-                  );
-                })}
-              </select>
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500">
-                <ChevronDown className="w-3 h-3" />
-              </div>
-            </div>
-
-            {selectedCategory !== 'ALL' && (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleOpenEditCategory(selectedCategory)}
-                  className="px-2 py-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                  title={`แก้ไขชื่อหมวดหมู่ "${selectedCategory}"`}
-                >
-                  <Edit2 className="w-3 h-3 text-[#F27D26]" />
-                  <span>แก้ไข</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenDeleteCategory(selectedCategory)}
-                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                  title={`ลบหมวดหมู่ "${selectedCategory}"`}
-                >
-                  <Trash2 className="w-3 h-3 text-rose-600" />
-                  <span>ลบ</span>
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setCategoryError(null);
-                setNewCategoryInput('');
-                setIsAddCategoryModalOpen(true);
-              }}
-              className="px-2 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-dashed border-amber-400 text-amber-950 shadow-2xs shrink-0"
-              title="เพิ่มหมวดหมู่อาหารใหม่"
-            >
-              <Plus className="w-3.5 h-3.5 text-amber-700" />
-              <span>เพิ่มหมวดหมู่</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            {filterHighCostOnly && (
-              <button
-                type="button"
-                onClick={() => setFilterHighCostOnly(false)}
-                className="px-2 py-0.5 rounded-md bg-rose-100 hover:bg-rose-200 border border-rose-300 text-rose-900 font-black text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-                title="คลิกเพื่อยกเลิกการกรอง"
-              >
-                <AlertTriangle className="w-3 h-3 text-rose-600" />
-                <span>กำลังกรองเมนูเตือน ({filteredMenus.length} เมนู) ✕</span>
-              </button>
-            )}
-            <span className="font-mono font-bold text-stone-600 text-[11px]">
-              แสดง {filteredMenus.length} / {menus.length} เมนู
+      {/* Active High-Cost Filter Alert Banner (Displayed when filtering warning items) */}
+      {filterHighCostOnly && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-bold">
+              กำลังแสดงเฉพาะเมนูที่มีการแจ้งเตือน ({warningMenuIds.size} เมนู, {warningRows.length} รายการตัวเลือก)
             </span>
           </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsWarningModalOpen(true)}
+              className="px-2.5 py-1 bg-white hover:bg-rose-100 border border-rose-300 text-rose-900 font-black rounded-lg cursor-pointer"
+            >
+              ดูรายการแจ้งเตือนทั้งหมด ({warningRows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterHighCostOnly(false)}
+              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-lg cursor-pointer"
+            >
+              ✕ ยกเลิกกรอง (แสดงทุกเมนู)
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* VIEW 1: CLEAN MENU LIST + ON-DEMAND VARIANT DETAILS */}
       {viewMode === 'CARDS' && (
@@ -1718,6 +1683,149 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>ยืนยันการลบหมวดหมู่</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WARNING REVIEW MODAL (Requirement 3: Displays all alerted items immediately) */}
+      {isWarningModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-stone-300 text-stone-900 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-black text-stone-950 text-base sm:text-lg flex items-center gap-2">
+                    <span>รายการเมนูต้นทุนสูง / ควรทบทวน</span>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-mono font-black">
+                      {warningRows.length} รายการ
+                    </span>
+                  </h3>
+                  <p className="text-xs text-stone-600 font-medium mt-0.5">
+                    เมนูที่มี Food Cost สูงเกินเป้า ({settings.targetFoodCostPercent || 35}%), กำไรติดลบ หรือสูตรต้องตรวจสอบ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWarningModalOpen(false)}
+                className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="space-y-3 mt-4 overflow-y-auto flex-1 pr-1">
+              {warningRows.length === 0 ? (
+                <div className="text-center py-10 text-stone-500">
+                  <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
+                  <p className="font-bold text-stone-800">ยอดเยี่ยมมาก! ไม่มีเมนูที่ต้นทุนสูงเกินเกณฑ์ในขณะนี้</p>
+                </div>
+              ) : (
+                warningRows.map((item, idx) => (
+                  <div
+                    key={`${item.menu.id}-${item.variant.id}-${idx}`}
+                    className="p-3.5 rounded-2xl bg-white border border-stone-200 shadow-2xs hover:border-rose-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-stone-950 text-sm">
+                          {item.menu.name}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 bg-stone-100 border border-stone-200 text-stone-800 font-bold rounded-lg">
+                          {item.variant.name}
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-md">
+                          {item.menu.category}
+                        </span>
+                      </div>
+
+                      {/* Warning Badges */}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {item.reasons.map((reason, rIdx) => (
+                          <span
+                            key={rIdx}
+                            className="px-2 py-0.5 bg-rose-50 border border-rose-300 text-rose-900 text-[11px] font-black rounded-md flex items-center gap-1"
+                          >
+                            <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                            <span>{reason}</span>
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Metrics bar */}
+                      <div className="flex items-center gap-3 text-xs text-stone-600 mt-2 font-mono flex-wrap">
+                        <span>ราคาขาย: <strong className="text-stone-950 font-black">{item.breakdown.sellingPrice} ฿</strong></span>
+                        <span>ต้นทุนรวม: <strong className="text-stone-950 font-black">{item.breakdown.totalCost.toFixed(1)} ฿</strong></span>
+                        <span>
+                          กำไรหน้าร้าน:{' '}
+                          <strong className={item.breakdown.restaurantProfit < 0 ? 'text-rose-600 font-black' : 'text-emerald-700 font-black'}>
+                            {item.breakdown.restaurantProfit.toFixed(1)} ฿
+                          </strong>
+                        </span>
+                        <span>
+                          Food Cost:{' '}
+                          <strong className="text-rose-700 font-black bg-rose-50 px-1 py-0.5 rounded border border-rose-200">
+                            {item.breakdown.restaurantFoodCostPercent.toFixed(1)}%
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action button */}
+                    <div className="shrink-0 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsWarningModalOpen(false);
+                          setSelectedMenuId(item.menu.id);
+                          setFilterHighCostOnly(true);
+                          setSelectedBreakdown({
+                            menu: item.menu,
+                            variant: item.variant,
+                            breakdown: item.breakdown,
+                          });
+                        }}
+                        className="w-full sm:w-auto px-3 py-1.5 bg-[#F27D26] hover:bg-[#d96817] !text-white text-xs font-black rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <span>ดูสูตรและต้นทุน</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t border-stone-200 shrink-0 text-xs">
+              <span className="font-mono font-bold text-stone-600">
+                พบทั้งหมด {warningRows.length} รายการที่เข้าเกณฑ์
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterHighCostOnly(true);
+                    setIsWarningModalOpen(false);
+                  }}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-xs cursor-pointer"
+                >
+                  กรองเฉพาะเมนูเตือนในหน้านี้
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsWarningModalOpen(false)}
+                  className="px-3.5 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold rounded-xl cursor-pointer"
+                >
+                  ปิด
                 </button>
               </div>
             </div>
