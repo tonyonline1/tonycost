@@ -120,6 +120,9 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   const [isDeleteCategoryModalOpen, setIsDeleteCategoryModalOpen] = useState(false);
   const [deletingCategoryName, setDeletingCategoryName] = useState('');
 
+  // Filter high-cost / needs-review items toggle
+  const [filterHighCostOnly, setFilterHighCostOnly] = useState(false);
+
   // Combine menu categories and custom categories
   const categories = useMemo(() => {
     const fromMenus = menus.map((m) => m.category).filter(Boolean);
@@ -280,12 +283,30 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     return matchesCategory && matchesSearch;
   });
 
+  // Set of menu IDs that have high cost (> 40% or > target) or review issue or negative margin
+  const warningMenuIds = useMemo(() => {
+    const target = settings.targetFoodCostPercent || 35;
+    return new Set(
+      allRows
+        .filter(
+          (r) =>
+            r.breakdown.restaurantFoodCostPercent > target ||
+            r.breakdown.restaurantFoodCostPercent > 40 ||
+            r.breakdown.hasReviewIssue ||
+            r.breakdown.restaurantProfit < 0 ||
+            r.breakdown.deliveryProfit < 0
+        )
+        .map((r) => r.menu.id)
+    );
+  }, [allRows, settings.targetFoodCostPercent]);
+
   const filteredMenus = menus.filter((m) => {
     const matchesCategory = selectedCategory === 'ALL' || m.category === selectedCategory;
     const matchesSearch =
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.variants.some((v) => v.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesCategory && matchesSearch;
+    const matchesWarning = !filterHighCostOnly || warningMenuIds.has(m.id);
+    return matchesCategory && matchesSearch && matchesWarning;
   });
 
   // Calculate high-level stats
@@ -294,9 +315,30 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     totalVariantsCount > 0
       ? allRows.reduce((acc, r) => acc + r.breakdown.restaurantFoodCostPercent, 0) / totalVariantsCount
       : 0;
+  const target = settings.targetFoodCostPercent || 35;
   const warningCount = allRows.filter(
-    (r) => r.breakdown.restaurantFoodCostPercent > 40 || r.breakdown.hasReviewIssue
+    (r) =>
+      r.breakdown.restaurantFoodCostPercent > target ||
+      r.breakdown.restaurantFoodCostPercent > 40 ||
+      r.breakdown.hasReviewIssue ||
+      r.breakdown.restaurantProfit < 0 ||
+      r.breakdown.deliveryProfit < 0
   ).length;
+
+  const handleToggleHighCostFilter = () => {
+    setFilterHighCostOnly((prev) => {
+      const next = !prev;
+      if (next) {
+        setSelectedCategory('ALL');
+        setSearchTerm('');
+        const firstWarning = menus.find((m) => warningMenuIds.has(m.id));
+        if (firstWarning) {
+          setSelectedMenuId(firstWarning.id);
+        }
+      }
+      return next;
+    });
+  };
 
   const handleOpenAddMenu = () => {
     const newMenu: Partial<MenuItem> = {
@@ -501,128 +543,200 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   const linemanCommissionPct = settings.lineManCommissionPercent ?? 25;
 
   return (
-    <div className="space-y-5 pb-8">
-      {/* Header */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-3xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <UtensilsCrossed className="w-5 h-5 text-[#F27D26]" />
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
+    <div className="space-y-4 pb-8">
+      {/* Consolidated Ultra-Compact Control Header (Takes minimum screen height) */}
+      <div className="bg-white border border-stone-300 rounded-2xl shadow-xs p-2.5 sm:p-3 space-y-2">
+        {/* Row 1: Title, Serving Mode Switcher (High Contrast), Key Metrics (Avg FC + Clickable High-Cost Alert), Channels, View Mode & Add Menu */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left section: Title + Mode Switcher + Metrics */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 font-black text-stone-900 text-sm sm:text-base mr-1">
+              <UtensilsCrossed className="w-4 h-4 text-[#F27D26]" />
               <span>ต้นทุนอาหาร</span>
-              <span
-                className={`text-xs px-2.5 py-1 rounded-xl font-bold ${
+            </div>
+
+            {/* Serving Mode Switcher Buttons - Highest Contrast */}
+            <div className="flex items-center bg-stone-200 p-0.5 rounded-xl border border-stone-300 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setActiveServingMode('ON_RICE')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
+                  activeServingMode === 'ON_RICE'
+                    ? 'bg-rose-600 !text-white shadow-xs border border-rose-700'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
+                }`}
+                title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
+              >
+                <span>🍚 ราดข้าว</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveServingMode('A_LA_CARTE')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
                   activeServingMode === 'A_LA_CARTE'
-                    ? 'bg-[#8E24AA] text-white'
-                    : 'bg-[#E53935] text-white'
+                    ? 'bg-purple-700 !text-white shadow-xs border border-purple-800'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
+                }`}
+                title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
+              >
+                <span>🍲 กับข้าว</span>
+              </button>
+            </div>
+
+            {/* Metric 1: Avg Food Cost (Compact) */}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-300 rounded-xl text-xs text-stone-900">
+              <span className="text-stone-700 font-bold">Food Cost เฉลี่ย:</span>
+              <span className="font-mono font-black text-amber-800">
+                {avgFoodCostPercent.toFixed(1)}%
+              </span>
+              <span className="text-[10px] text-stone-500 hidden md:inline">
+                (เป้า {settings.targetFoodCostPercent || 35}%)
+              </span>
+            </div>
+
+            {/* Metric 2: Clickable High Cost / Needs Review Filter Card (Requirement 3) */}
+            <button
+              type="button"
+              onClick={handleToggleHighCostFilter}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                filterHighCostOnly
+                  ? 'bg-rose-600 !text-white border-rose-700 shadow-md ring-2 ring-rose-400'
+                  : warningCount > 0
+                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-950 border-2 border-rose-300 shadow-2xs hover:scale-[1.02]'
+                  : 'bg-stone-100 text-stone-600 border border-stone-300'
+              }`}
+              title={
+                filterHighCostOnly
+                  ? 'คลิกเพื่อยกเลิกการกรอง และแสดงเมนูทั้งหมด'
+                  : 'คลิกเพื่อแสดงเฉพาะเมนูต้นทุนสูง / ควรทบทวน ทันที'
+              }
+            >
+              <AlertTriangle className={`w-3.5 h-3.5 ${filterHighCostOnly ? 'text-white' : 'text-rose-600'}`} />
+              <span className="whitespace-nowrap">เมนูต้นทุนสูง / ควรทบทวน:</span>
+              <span className={`px-1.5 py-0.2 rounded-md font-mono font-black text-xs ${
+                filterHighCostOnly ? 'bg-white text-rose-700' : 'bg-rose-600 text-white'
+              }`}>
+                {warningCount} รายการ
+              </span>
+              {filterHighCostOnly ? (
+                <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-white text-rose-700 font-extrabold">
+                  ✕ ยกเลิกกรอง
+                </span>
+              ) : (
+                <span className="text-[10px] text-rose-700 font-bold hidden sm:inline underline underline-offset-2">
+                  (คลิกดูทันที)
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Right section: Channel selector, View Mode, Add Menu */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Channel buttons */}
+            <div className="flex items-center bg-stone-200 p-0.5 rounded-xl border border-stone-300 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveChannel('DINE_IN')}
+                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeChannel === 'DINE_IN'
+                    ? 'bg-cyan-700 !text-white font-black shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
                 }`}
               >
-                {activeServingMode === 'A_LA_CARTE' ? '🍲 ประเภทกับข้าว (จานกลาง)' : '🍚 ประเภทราดข้าว (จานเดียว)'}
-              </span>
-            </h1>
-          </div>
-          <p className="text-xs text-white/60 mt-0.5">
-            {activeServingMode === 'A_LA_CARTE'
-              ? 'คำนวณต้นทุนอาหารประเภทกับข้าว (ไม่รวมข้าวสวย สามารถกำหนดราคาและน้ำหนักเนื้อสัตว์ได้เองตามต้องการ)'
-              : 'คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว รวมข้าวสวยหอมมะลิ 200g และพอร์ชั่นเนื้อสัตว์จานเดี่ยว'}
-          </p>
-        </div>
+                หน้าร้าน
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveChannel('GRAB')}
+                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeChannel === 'GRAB'
+                    ? 'bg-[#00873e] !text-white font-black shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
+                }`}
+              >
+                Grab ({grabCommissionPct}%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveChannel('LINEMAN')}
+                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeChannel === 'LINEMAN'
+                    ? 'bg-[#05963c] !text-white font-black shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
+                }`}
+              >
+                LINE MAN ({linemanCommissionPct}%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveChannel('ROBINHOOD')}
+                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeChannel === 'ROBINHOOD'
+                    ? 'bg-[#6d28d9] !text-white font-black shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
+                }`}
+              >
+                Robinhood (0%)
+              </button>
+            </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* View Toggle */}
-          <div className="flex bg-black/40 border border-white/15 p-1 rounded-2xl">
+            {/* View Mode */}
+            <div className="flex bg-stone-200 border border-stone-300 p-0.5 rounded-xl text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('CARDS')}
+                className={`px-2 py-1 rounded-lg font-black transition-all cursor-pointer ${
+                  viewMode === 'CARDS'
+                    ? 'bg-[#F27D26] !text-white shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold'
+                }`}
+              >
+                การ์ดเมนู
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('TABLE')}
+                className={`px-2 py-1 rounded-lg font-black transition-all cursor-pointer ${
+                  viewMode === 'TABLE'
+                    ? 'bg-[#F27D26] !text-white shadow-xs'
+                    : 'text-stone-800 hover:text-stone-950 font-bold'
+                }`}
+              >
+                ตารางต้นทุน
+              </button>
+            </div>
+
+            {/* Add menu button */}
             <button
               type="button"
-              onClick={() => setViewMode('CARDS')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'CARDS'
-                  ? 'bg-[#F27D26] text-black shadow-md shadow-[#F27D26]/20'
-                  : 'text-white/60 hover:text-white'
-              }`}
+              onClick={handleOpenAddMenu}
+              className="px-3 py-1 bg-[#F27D26] hover:bg-[#d96817] !text-white font-black rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer shrink-0 border border-[#c2580e]"
             >
-              การ์ดเมนู (Menu Cards)
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('TABLE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'TABLE'
-                  ? 'bg-[#F27D26] text-black shadow-md shadow-[#F27D26]/20'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              ตารางวิเคราะห์ต้นทุน (Cost Table)
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ เพิ่มเมนูใหม่</span>
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={handleOpenAddMenu}
-            className="px-4 py-2.5 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl text-xs shadow-lg shadow-[#F27D26]/20 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ เพิ่มเมนูใหม่</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-3xl">
-          <span className="text-xs font-bold text-white/50 uppercase block">จำนวนเมนูหลัก</span>
-          <div className="text-2xl font-bold text-white mt-1 font-mono">{menus.length} เมนู</div>
-          <span className="text-xs text-white/40 mt-1 block">ครอบคลุม {totalVariantsCount} ตัวเลือก</span>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-3xl">
-          <span className="text-xs font-bold text-white/50 uppercase block">Food Cost เฉลี่ยหน้าร้าน</span>
-          <div className="text-2xl font-bold text-[#FFC107] mt-1 font-mono">
-            {avgFoodCostPercent.toFixed(1)}%
-          </div>
-          <span className="text-xs text-white/40 mt-1 block">
-            เป้าหมายร้าน: {settings.targetFoodCostPercent || 35}%
-          </span>
-        </div>
+        {/* Row 2: Search, Category, Add Category (Ultra-compact inline row) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-200">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="relative w-40 sm:w-52">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500" />
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อเมนู, วัตถุดิบ..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-2 py-1 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium text-stone-900 placeholder-stone-400 focus:outline-none focus:border-[#F27D26] focus:bg-white"
+              />
+            </div>
 
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-3xl">
-          <span className="text-xs font-bold text-white/50 uppercase block">เมนูต้นทุนสูง / ควรทบทวน</span>
-          <div className="text-2xl font-bold text-rose-400 mt-1 font-mono">
-            {warningCount} รายการ
-          </div>
-          <span className="text-xs text-white/40 mt-1 block">Food Cost &gt; 40% หรือสูตรไม่สมบูรณ์</span>
-        </div>
-
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-3xl">
-          <span className="text-xs font-bold text-white/50 uppercase block">กฎอาหารทะเล (Seafood Rule)</span>
-          <div className="text-sm font-bold text-emerald-400 mt-1.5 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>แยกกุ้ง (ตัว) & หมึก (g) อิสระ</span>
-          </div>
-          <span className="text-xs text-white/40 mt-1 block">ห้ามรวมเป็น 'ทะเล' รายการเดียว</span>
-        </div>
-      </div>
-
-      {/* Filter and Channel selector */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-4 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Search & Category */}
-        <div className="flex items-center gap-2 flex-1 flex-wrap">
-          <div className="relative min-w-[200px] flex-1 max-w-xs">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-            <input
-              type="text"
-              placeholder="ค้นหาชื่อเมนู, วัตถุดิบ..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#F27D26]"
-            />
-          </div>
-
-          {/* Category Dropdown List & Actions */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-            <div className="relative min-w-[170px] sm:min-w-[210px]">
+            <div className="relative min-w-[140px] sm:min-w-[170px]">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full pl-3 pr-8 py-2 bg-white border border-[#D6CEBE] rounded-xl text-xs font-bold text-stone-800 focus:outline-none focus:border-[#F27D26] shadow-2xs appearance-none cursor-pointer"
+                className="w-full pl-2 pr-6 py-1 bg-stone-50 border border-stone-300 rounded-lg text-xs font-bold text-stone-900 focus:outline-none focus:border-[#F27D26] appearance-none cursor-pointer focus:bg-white"
               >
                 {categories.map((c) => {
                   const count =
@@ -631,41 +745,39 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       : menus.filter((m) => m.category === c).length;
                   return (
                     <option key={c} value={c}>
-                      {c === 'ALL' ? `ทุกหมวดหมู่ (${count} เมนู)` : `${c} (${count} เมนู)`}
+                      {c === 'ALL' ? `ทุกหมวดหมู่ (${count})` : `${c} (${count})`}
                     </option>
                   );
                 })}
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400">
-                <ChevronDown className="w-4 h-4" />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500">
+                <ChevronDown className="w-3 h-3" />
               </div>
             </div>
 
-            {/* If selected and not ALL: show Edit & Delete action buttons */}
             {selectedCategory !== 'ALL' && (
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => handleOpenEditCategory(selectedCategory)}
-                  className="px-2.5 py-2 bg-white hover:bg-stone-50 border border-[#D6CEBE] text-stone-700 hover:text-stone-900 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                  className="px-2 py-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                   title={`แก้ไขชื่อหมวดหมู่ "${selectedCategory}"`}
                 >
-                  <Edit2 className="w-3.5 h-3.5 text-[#F27D26]" />
-                  <span className="hidden sm:inline">แก้ไข</span>
+                  <Edit2 className="w-3 h-3 text-[#F27D26]" />
+                  <span>แก้ไข</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenDeleteCategory(selectedCategory)}
-                  className="px-2.5 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                   title={`ลบหมวดหมู่ "${selectedCategory}"`}
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span className="hidden sm:inline">ลบ</span>
+                  <Trash2 className="w-3 h-3 text-rose-600" />
+                  <span>ลบ</span>
                 </button>
               </div>
             )}
 
-            {/* BUTTON TO ADD NEW CATEGORY */}
             <button
               type="button"
               onClick={() => {
@@ -673,91 +785,29 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 setNewCategoryInput('');
                 setIsAddCategoryModalOpen(true);
               }}
-              className="px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 bg-[#FAF8F5] hover:bg-[#F7F3EB] border border-dashed border-[#F27D26] text-[#B45309] hover:text-[#d96817] shadow-xs shrink-0"
+              className="px-2 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-dashed border-amber-400 text-amber-950 shadow-2xs shrink-0"
               title="เพิ่มหมวดหมู่อาหารใหม่"
             >
-              <Plus className="w-3.5 h-3.5 text-[#F27D26]" />
+              <Plus className="w-3.5 h-3.5 text-amber-700" />
               <span>เพิ่มหมวดหมู่</span>
             </button>
           </div>
-        </div>
 
-        {/* Mode selector (ราดข้าว vs กับข้าว) & Channel selector (หน้าร้าน / Grab / LINE MAN / Robinhood) */}
-        <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
-          {/* Serving Mode Switcher: ราดข้าว vs กับข้าว */}
-          <div className="flex items-center gap-1 bg-black/40 border border-white/15 p-1 rounded-2xl">
-            <button
-              type="button"
-              onClick={() => setActiveServingMode('ON_RICE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeServingMode === 'ON_RICE'
-                  ? 'bg-[#E53935] text-white shadow-xs font-extrabold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-              title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
-            >
-              <span>🍚 ราดข้าว</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveServingMode('A_LA_CARTE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeServingMode === 'A_LA_CARTE'
-                  ? 'bg-[#8E24AA] text-white shadow-xs font-extrabold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-              title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
-            >
-              <span>🍲 กับข้าว</span>
-            </button>
-          </div>
-
-          {/* Channel selector (หน้าร้าน / Grab / LINE MAN) */}
-          <div className="flex items-center gap-1.5 bg-black/40 border border-white/15 p-1 rounded-2xl">
-            <button
-              type="button"
-              onClick={() => setActiveChannel('DINE_IN')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeChannel === 'DINE_IN'
-                  ? 'bg-[#F27D26] text-black font-bold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              หน้าร้าน
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveChannel('GRAB')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeChannel === 'GRAB'
-                  ? 'bg-[#00B14F] text-white font-bold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              GrabFood ({grabCommissionPct}%)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveChannel('LINEMAN')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeChannel === 'LINEMAN'
-                  ? 'bg-[#06C755] text-white font-bold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              LINE MAN ({linemanCommissionPct}%)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveChannel('ROBINHOOD')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeChannel === 'ROBINHOOD'
-                  ? 'bg-[#8B5CF6] text-white font-bold'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              Robinhood (0%)
-            </button>
+          <div className="flex items-center gap-2 text-xs">
+            {filterHighCostOnly && (
+              <button
+                type="button"
+                onClick={() => setFilterHighCostOnly(false)}
+                className="px-2 py-0.5 rounded-md bg-rose-100 hover:bg-rose-200 border border-rose-300 text-rose-900 font-black text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                title="คลิกเพื่อยกเลิกการกรอง"
+              >
+                <AlertTriangle className="w-3 h-3 text-rose-600" />
+                <span>กำลังกรองเมนูเตือน ({filteredMenus.length} เมนู) ✕</span>
+              </button>
+            )}
+            <span className="font-mono font-bold text-stone-600 text-[11px]">
+              แสดง {filteredMenus.length} / {menus.length} เมนู
+            </span>
           </div>
         </div>
       </div>
@@ -766,25 +816,25 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       {viewMode === 'CARDS' && (
         <div className="space-y-4">
           {/* Menu names only — one per row */}
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+          <div className="bg-white border border-stone-200 rounded-2xl shadow-xs overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-bold text-white">รายการเมนูอาหาร</h2>
-                <p className="text-[10px] text-white/40 mt-0.5">เลือกเมนูเพื่อดูตัวเลือกเนื้อสัตว์และรายละเอียดต้นทุน</p>
+                <h2 className="text-sm font-black text-stone-900">รายการเมนูอาหาร</h2>
+                <p className="text-[11px] text-stone-500 mt-0.5">คลิกเมนูเพื่อดูรายละเอียดตัวเลือกเนื้อสัตว์และตารางต้นทุน</p>
               </div>
-              <span className="text-[10px] font-mono text-white/35">{filteredMenus.length} เมนู</span>
+              <span className="text-xs font-mono font-bold text-stone-600">{filteredMenus.length} เมนู</span>
             </div>
 
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-stone-200">
               {filteredMenus.map((menu) => {
                 const isSelected = selectedMenuId === menu.id;
-                const menuRows = isSelected ? allRows.filter((r) => r.menu.id === menu.id) : [];
+                const hasWarning = warningMenuIds.has(menu.id);
 
                 return (
                   <React.Fragment key={menu.id}>
                     <div
-                      className={`group flex items-center gap-3 px-5 py-4 transition-all ${
-                        isSelected ? 'bg-[#F27D26]/10' : 'hover:bg-white/5'
+                      className={`group flex items-center gap-3 px-4 py-3 transition-all ${
+                        isSelected ? 'bg-amber-50/70 border-l-4 border-[#F27D26]' : 'hover:bg-stone-50'
                       }`}
                     >
                       <button
@@ -794,23 +844,35 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       >
                         <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
                           isSelected
-                            ? 'bg-[#F27D26]/15 border-[#F27D26]/30 text-[#F27D26]'
-                            : 'bg-white/5 border-white/10 text-white/45'
+                            ? 'bg-[#F27D26]/15 border-[#F27D26]/40 text-[#F27D26]'
+                            : 'bg-stone-100 border-stone-200 text-stone-600'
                         }`}>
                           <UtensilsCrossed className="w-4 h-4" />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold text-white truncate">{menu.name}</span>
-                        </span>
+                        <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-stone-900 truncate">{menu.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-600 font-semibold">
+                            {menu.category}
+                          </span>
+                          <span className="text-[11px] text-stone-500 font-medium">
+                            ({menu.variants.length} ตัวเลือก)
+                          </span>
+                          {hasWarning && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-600 !text-white shadow-2xs flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-white" />
+                              <span>ต้นทุนสูง / ควรทบทวน</span>
+                            </span>
+                          )}
+                        </div>
                         <ChevronRight className={`w-4 h-4 ml-auto shrink-0 transition-transform ${
-                          isSelected ? 'rotate-90 text-[#F27D26]' : 'text-white/30'
+                          isSelected ? 'rotate-90 text-[#F27D26]' : 'text-stone-400'
                         }`} />
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOpenEditMenu(menu)}
-                        className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
+                        className="p-1.5 rounded-xl text-stone-400 hover:text-stone-800 hover:bg-stone-200 cursor-pointer shrink-0 transition-colors"
                         title="แก้ไขเมนู"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -870,65 +932,65 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
           <div className="bg-[#FFFDF9] rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917] max-h-[90vh] overflow-y-auto scrollbar-thin">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-white text-lg">
+                  <h3 className="font-black text-stone-900 text-lg">
                     {selectedBreakdown.menu.name} ({selectedBreakdown.variant.name})
                   </h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/70">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-stone-700 border border-stone-300">
                     {selectedBreakdown.menu.category}
                   </span>
                 </div>
-                <p className="text-xs text-white/50 mt-0.5">
+                <p className="text-xs text-stone-600 mt-0.5">
                   รายละเอียดการคำนวณต้นทุนต่อจานอย่างละเอียด (Deterministic Costing)
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedBreakdown(null)}
-                className="p-1 rounded-xl text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+                className="p-1 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-5 mt-4 text-xs">
+            <div className="space-y-4 mt-3 text-xs">
               {/* SEAFOOD RULE HIGHLIGHT CARD */}
               {isSeafoodVariant(selectedBreakdown.breakdown) && (
-                <div className="bg-[#F27D26]/10 border border-[#F27D26]/30 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-[#F27D26] mb-2">
-                    <Sparkles className="w-4 h-4" />
+                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3.5">
+                  <div className="flex items-center gap-2 text-sm font-black text-amber-900 mb-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
                     <span>Seafood Rule: คำนวณกุ้งและปลาหมึกแยกจากกันเด็ดขาด</span>
                   </div>
-                  <p className="text-[11px] text-white/70 mb-3">
+                  <p className="text-[11px] text-stone-700 mb-3">
                     ตามกฎความถูกต้องทางบัญชีของร้าน: กุ้งต้องคำนวณเป็น 'ตัว' และปลาหมึกต้องคำนวณเป็น 'กรัม'
                     (ห้ามรวมเป็น 'ทะเล' รายการเดียว หรือใช้การประมาณ)
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
-                    <div className="bg-black/40 p-3 rounded-xl border border-white/10">
-                      <span className="text-[11px] font-sans text-white/60 block">🦐 กุ้งสด</span>
-                      <span className="text-base font-bold text-white mt-1 block">
+                    <div className="bg-white p-3 rounded-xl border border-stone-300 shadow-2xs">
+                      <span className="text-[11px] font-sans text-stone-700 block font-bold">🦐 กุ้งสด</span>
+                      <span className="text-base font-black text-stone-950 mt-1 block">
                         ฿{selectedBreakdown.breakdown.shrimpCost.toFixed(2)}
                       </span>
-                      <span className="text-[10px] text-white/40">คิดเป็นตัว (ไม่แปลงเป็นกรัม)</span>
+                      <span className="text-[10px] text-stone-500">คิดเป็นตัว (ไม่แปลงเป็นกรัม)</span>
                     </div>
 
-                    <div className="bg-black/40 p-3 rounded-xl border border-white/10">
-                      <span className="text-[11px] font-sans text-white/60 block">🦑 ปลาหมึกสด</span>
-                      <span className="text-base font-bold text-white mt-1 block">
+                    <div className="bg-white p-3 rounded-xl border border-stone-300 shadow-2xs">
+                      <span className="text-[11px] font-sans text-stone-700 block font-bold">🦑 ปลาหมึกสด</span>
+                      <span className="text-base font-black text-stone-950 mt-1 block">
                         ฿{selectedBreakdown.breakdown.squidCost.toFixed(2)}
                       </span>
-                      <span className="text-[10px] text-white/40">
+                      <span className="text-[10px] text-stone-500">
                         คิดเป็นกรัม (คำนวณ Yield ลอกหนัง 65%)
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-2 pt-2 border-t border-white/10 flex justify-between font-mono text-xs">
-                    <span className="font-sans text-white/60">รวมต้นทุนอาหารทะเลทั้งจาน:</span>
-                    <span className="font-bold text-[#FFC107]">
+                  <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between font-mono text-xs">
+                    <span className="font-sans text-stone-800 font-bold">รวมต้นทุนอาหารทะเลทั้งจาน:</span>
+                    <span className="font-black text-stone-950 text-sm">
                       ฿{selectedBreakdown.breakdown.seafoodTotalCost.toFixed(2)}
                     </span>
                   </div>
@@ -937,36 +999,36 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
               {/* Recipe Items Breakdown Table */}
               <div>
-                <span className="font-bold text-white/80 block mb-2">
+                <span className="font-black text-stone-900 block mb-1.5">
                   ส่วนประกอบและวัตถุดิบในจาน (Recipe Items)
                 </span>
-                <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="bg-white border border-stone-300 rounded-2xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-white/5 border-b border-white/10 text-white/50 text-[10px] uppercase">
-                        <th className="py-2.5 px-3">วัตถุดิบ / ส่วนประกอบ</th>
-                        <th className="py-2.5 px-2">ประเภท</th>
-                        <th className="py-2.5 px-2 text-right">ปริมาณ</th>
-                        <th className="py-2.5 px-2 text-right">ต้นทุน/หน่วย</th>
-                        <th className="py-2.5 px-3 text-right">รวมเงิน (฿)</th>
+                      <tr className="bg-stone-100 border-b border-stone-300 text-stone-700 text-[10px] uppercase font-bold">
+                        <th className="py-2 px-3">วัตถุดิบ / ส่วนประกอบ</th>
+                        <th className="py-2 px-2">ประเภท</th>
+                        <th className="py-2 px-2 text-right">ปริมาณ</th>
+                        <th className="py-2 px-2 text-right">ต้นทุน/หน่วย</th>
+                        <th className="py-2 px-3 text-right">รวมเงิน (฿)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5 font-mono">
+                    <tbody className="divide-y divide-stone-200 font-mono">
                       {selectedBreakdown.breakdown.items.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-white/5">
-                          <td className="py-2 px-3 font-sans text-white font-medium">
+                        <tr key={idx} className="hover:bg-stone-50">
+                          <td className="py-2 px-3 font-sans text-stone-900 font-bold">
                             {item.name}
                           </td>
-                          <td className="py-2 px-2 font-sans text-white/50 text-[10px]">
+                          <td className="py-2 px-2 font-sans text-stone-600 text-[10px]">
                             {item.type === 'SAUCE' ? 'ซอส' : 'วัตถุดิบ'}
                           </td>
-                          <td className="py-2 px-2 text-right text-white/80">
+                          <td className="py-2 px-2 text-right text-stone-800 font-semibold">
                             {item.quantity} {item.unit}
                           </td>
-                          <td className="py-2 px-2 text-right text-white/60">
+                          <td className="py-2 px-2 text-right text-stone-700">
                             ฿{(item.calculatedUnitCost || 0).toFixed(4)}
                           </td>
-                          <td className="py-2 px-3 text-right font-bold text-white">
+                          <td className="py-2 px-3 text-right font-black text-stone-950">
                             ฿{(item.calculatedLineCost || 0).toFixed(2)}
                           </td>
                         </tr>
@@ -976,22 +1038,22 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 </div>
               </div>
 
-              {/* Packaging Line Items Card (Scoped per sub-item) */}
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3">
+              {/* Packaging Line Items Card */}
+              <div className="bg-white border border-stone-300 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Package className="w-4 h-4 text-[#00B1FF]" />
-                    <span className="font-bold text-white text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-cyan-700" />
+                    <span className="font-black text-stone-900 text-xs">
                       ต้นทุนกล่อง & บรรจุภัณฑ์ (Packaging Items)
                     </span>
-                    <span className="text-[10px] text-white/50">
+                    <span className="text-[10px] text-stone-500">
                       (กำหนดเฉพาะตัวเลือกนี้)
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleAddPackagingLine}
-                    className="px-2.5 py-1 bg-[#00B1FF]/20 hover:bg-[#00B1FF]/30 border border-[#00B1FF]/40 text-[#00B1FF] rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 bg-cyan-700 hover:bg-cyan-800 !text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ เพิ่มแพ็กเกจจิ้ง</span>
@@ -999,13 +1061,13 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 </div>
 
                 {(!selectedBreakdown.variant.packagingItems || selectedBreakdown.variant.packagingItems.length === 0) ? (
-                  <div className="p-3 text-center text-white/40 text-xs border border-dashed border-white/10 rounded-xl">
+                  <div className="p-3 text-center text-stone-500 text-xs border border-dashed border-stone-300 rounded-xl bg-stone-50">
                     ยังไม่มีรายการแพ็กเกจจิ้ง (กดปุ่ม "+ เพิ่มแพ็กเกจจิ้ง" ด้านบนเพื่อระบุ เช่น กล่องข้าว, ถุงพลาสติก, ช้อนส้อม)
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {selectedBreakdown.variant.packagingItems.map((pkg, pIdx) => (
-                      <div key={`${pkg.id || 'pkg'}-${pIdx}`} className="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
+                      <div key={`${pkg.id || 'pkg'}-${pIdx}`} className="flex items-center gap-2 bg-stone-50 p-2 rounded-xl border border-stone-200">
                         {/* Packaging Name with common datalist */}
                         <div className="flex-1 relative">
                           <input
@@ -1014,7 +1076,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                             value={pkg.name}
                             placeholder="ชื่อแพ็กเกจจิ้ง เช่น กล่องข้าว, ถุงหิ้ว"
                             onChange={(e) => handleUpdatePackagingLine(pIdx, 'name', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-black/50 border border-white/15 rounded-lg text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#00B1FF]"
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-[#F27D26]"
                           />
                           <datalist id={`pkg-common-${pIdx}`}>
                             <option value="กล่องข้าว" />
@@ -1036,9 +1098,9 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                             value={pkg.cost || ''}
                             placeholder="0.00"
                             onChange={(e) => handleUpdatePackagingLine(pIdx, 'cost', parseFloat(e.target.value) || 0)}
-                            className="w-full pl-2 pr-6 py-1.5 bg-black/50 border border-white/15 rounded-lg text-xs font-mono font-bold text-white text-right focus:outline-none focus:border-[#00B1FF]"
+                            className="w-full pl-2 pr-6 py-1.5 bg-white border border-stone-300 rounded-lg text-xs font-mono font-bold text-stone-900 text-right focus:outline-none focus:border-[#F27D26]"
                           />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40 font-bold">
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-500 font-bold">
                             บาท
                           </span>
                         </div>
@@ -1047,7 +1109,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeletePackagingLine(pIdx)}
-                          className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                          className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="ลบรายการนี้"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1055,9 +1117,9 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       </div>
                     ))}
 
-                    <div className="flex justify-between items-center px-3 py-2 bg-[#00B1FF]/10 border border-[#00B1FF]/20 rounded-xl text-xs font-mono">
-                      <span className="font-sans text-white/70 font-semibold">โสหุ้ยแพ็กเกจจิ้งรวม (Total packaging cost):</span>
-                      <span className="font-bold text-[#00B1FF] text-sm">
+                    <div className="flex justify-between items-center px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-xl text-xs font-mono">
+                      <span className="font-sans text-stone-800 font-bold">โสหุ้ยแพ็กเกจจิ้งรวม (Total packaging cost):</span>
+                      <span className="font-black text-cyan-900 text-sm">
                         ฿{(selectedBreakdown.breakdown.packagingCost || 0).toFixed(2)}
                       </span>
                     </div>
@@ -1067,41 +1129,41 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
               {/* Cost Summary Breakdown */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 font-mono">
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                  <span className="text-[10px] font-sans text-white/50 block">ต้นทุนวัตถุดิบรวม</span>
-                  <span className="text-base font-bold text-white block mt-1">
+                <div className="bg-stone-100 p-2.5 rounded-xl border border-stone-300">
+                  <span className="text-[10px] font-sans text-stone-600 block font-bold">ต้นทุนวัตถุดิบรวม</span>
+                  <span className="text-base font-black text-stone-950 block mt-0.5">
                     ฿{selectedBreakdown.breakdown.totalIngredientCost.toFixed(2)}
                   </span>
                 </div>
 
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                  <span className="text-[10px] font-sans text-white/50 block">ค่าโสหุ้ยต่อจาน</span>
-                  <span className="text-base font-bold text-white block mt-1">
+                <div className="bg-stone-100 p-2.5 rounded-xl border border-stone-300">
+                  <span className="text-[10px] font-sans text-stone-600 block font-bold">ค่าโสหุ้ยต่อจาน</span>
+                  <span className="text-base font-black text-stone-950 block mt-0.5">
                     ฿{selectedBreakdown.breakdown.overheadCost.toFixed(2)}
                   </span>
                 </div>
 
-                <div className="bg-white/5 p-3 rounded-2xl border border-[#00B1FF]/30">
-                  <span className="text-[10px] font-sans text-[#00B1FF] block">แพ็กเกจจิ้งรวม</span>
-                  <span className="text-base font-bold text-[#00B1FF] block mt-1">
+                <div className="bg-cyan-50 p-2.5 rounded-xl border border-cyan-300">
+                  <span className="text-[10px] font-sans text-cyan-900 block font-bold">แพ็กเกจจิ้งรวม</span>
+                  <span className="text-base font-black text-cyan-900 block mt-0.5">
                     ฿{(selectedBreakdown.breakdown.packagingCost || 0).toFixed(2)}
                   </span>
                 </div>
 
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                  <span className="text-[10px] font-sans text-white/50 block">ต้นทุนรวมสุทธิ</span>
-                  <span className="text-base font-bold text-[#FFC107] block mt-1">
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-300">
+                  <span className="text-[10px] font-sans text-amber-900 block font-bold">ต้นทุนรวมสุทธิ</span>
+                  <span className="text-base font-black text-amber-950 block mt-0.5">
                     ฿{selectedBreakdown.breakdown.totalCost.toFixed(2)}
                   </span>
                 </div>
 
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                  <span className="text-[10px] font-sans text-white/50 block">Food Cost หน้าร้าน</span>
+                <div className="bg-stone-100 p-2.5 rounded-xl border border-stone-300">
+                  <span className="text-[10px] font-sans text-stone-600 block font-bold">Food Cost หน้าร้าน</span>
                   <span
-                    className={`text-base font-bold block mt-1 ${
+                    className={`text-base font-black block mt-0.5 ${
                       selectedBreakdown.breakdown.restaurantFoodCostPercent > 40
-                        ? 'text-rose-400'
-                        : 'text-emerald-400'
+                        ? 'text-rose-600'
+                        : 'text-emerald-700'
                     }`}
                   >
                     {selectedBreakdown.breakdown.restaurantFoodCostPercent.toFixed(1)}%
@@ -1130,26 +1192,26 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   pkgCostToUse;
 
                 return (
-                  <div className="bg-black/30 border border-white/10 rounded-2xl p-4">
-                    <span className="font-bold text-white/80 block mb-2 font-sans">
+                  <div className="bg-stone-100 border border-stone-300 rounded-2xl p-3.5">
+                    <span className="font-black text-stone-900 block mb-2 font-sans">
                       เปรียบเทียบกำไรสุทธิแยกตามช่องทาง Delivery
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
                       {/* GrabFood Card */}
-                      <div className="p-3 rounded-xl bg-white/5 border border-[#00B14F]/30">
+                      <div className="p-3 rounded-xl bg-white border border-[#00B14F]/40 shadow-2xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-sans font-bold text-[#00B14F]">GrabFood</span>
-                          <span className="text-[10px] text-white/50">GP {grabCommissionPct}%</span>
+                          <span className="font-sans font-black text-[#00873e]">GrabFood</span>
+                          <span className="text-[10px] text-stone-500 font-bold">GP {grabCommissionPct}%</span>
                         </div>
                         <div className="space-y-1 text-xs">
                           <div className="flex justify-between">
-                            <span className="font-sans text-white/60">ราคาขาย:</span>
-                            <span className="text-white font-bold">
+                            <span className="font-sans text-stone-600">ราคาขาย:</span>
+                            <span className="text-stone-900 font-bold">
                               ฿{selectedBreakdown.variant.deliveryPrice}
                             </span>
                           </div>
-                          <div className="flex justify-between text-rose-400">
-                            <span className="font-sans text-white/60">หัก GP ({grabCommissionPct}%):</span>
+                          <div className="flex justify-between text-rose-600 font-semibold">
+                            <span className="font-sans text-stone-600">หัก GP ({grabCommissionPct}%):</span>
                             <span>
                               -฿
                               {(
@@ -1158,13 +1220,13 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               ).toFixed(2)}
                             </span>
                           </div>
-                          <div className="flex justify-between text-rose-400">
-                            <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
+                          <div className="flex justify-between text-rose-600 font-semibold">
+                            <span className="font-sans text-stone-600">ค่ากล่อง Delivery:</span>
                             <span>-฿{pkgCostToUse.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
-                            <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
-                            <span className="text-emerald-400">
+                          <div className="flex justify-between pt-1 border-t border-stone-200 font-bold">
+                            <span className="font-sans text-stone-800">กำไรสุทธิหลัง GP:</span>
+                            <span className={`font-black ${grabProfit < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                               ฿{grabProfit.toFixed(2)}
                             </span>
                           </div>
@@ -1172,20 +1234,20 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       </div>
 
                       {/* LINE MAN Card */}
-                      <div className="p-3 rounded-xl bg-white/5 border border-[#06C755]/30">
+                      <div className="p-3 rounded-xl bg-white border border-[#05963c]/40 shadow-2xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-sans font-bold text-[#06C755]">LINE MAN</span>
-                          <span className="text-[10px] text-white/50">GP {linemanCommissionPct}%</span>
+                          <span className="font-sans font-black text-[#05963c]">LINE MAN</span>
+                          <span className="text-[10px] text-stone-500 font-bold">GP {linemanCommissionPct}%</span>
                         </div>
                         <div className="space-y-1 text-xs">
                           <div className="flex justify-between">
-                            <span className="font-sans text-white/60">ราคาขาย:</span>
-                            <span className="text-white font-bold">
+                            <span className="font-sans text-stone-600">ราคาขาย:</span>
+                            <span className="text-stone-900 font-bold">
                               ฿{selectedBreakdown.variant.deliveryPrice}
                             </span>
                           </div>
-                          <div className="flex justify-between text-rose-400">
-                            <span className="font-sans text-white/60">หัก GP ({linemanCommissionPct}%):</span>
+                          <div className="flex justify-between text-rose-600 font-semibold">
+                            <span className="font-sans text-stone-600">หัก GP ({linemanCommissionPct}%):</span>
                             <span>
                               -฿
                               {(
@@ -1194,13 +1256,13 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               ).toFixed(2)}
                             </span>
                           </div>
-                          <div className="flex justify-between text-rose-400">
-                            <span className="font-sans text-white/60">ค่ากล่อง Delivery:</span>
+                          <div className="flex justify-between text-rose-600 font-semibold">
+                            <span className="font-sans text-stone-600">ค่ากล่อง Delivery:</span>
                             <span>-฿{pkgCostToUse.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between pt-1 border-t border-white/10 font-bold">
-                            <span className="font-sans text-white/80">กำไรสุทธิหลัง GP:</span>
-                            <span className="text-emerald-400">
+                          <div className="flex justify-between pt-1 border-t border-stone-200 font-bold">
+                            <span className="font-sans text-stone-800">กำไรสุทธิหลัง GP:</span>
+                            <span className={`font-black ${linemanProfit < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                               ฿{linemanProfit.toFixed(2)}
                             </span>
                           </div>
@@ -1212,12 +1274,12 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               })()}
 
               {/* Dynamic Suggested Price by Target Food Cost */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <div className="bg-stone-100 border border-stone-300 rounded-2xl p-3.5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-white/80 font-sans">
+                  <span className="font-black text-stone-900 font-sans">
                     💡 เครื่องคำนวณราคาขายแนะนำ (Suggested Price Calculator)
                   </span>
-                  <span className="font-mono text-[#FFC107] font-bold">
+                  <span className="font-mono text-amber-800 font-black">
                     เป้าหมาย FC: {customTargetFcPercent}%
                   </span>
                 </div>
@@ -1231,17 +1293,17 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   className="w-full accent-[#F27D26]"
                 />
                 <div className="mt-2 flex items-center justify-between text-xs font-mono">
-                  <span className="font-sans text-white/60">
+                  <span className="font-sans text-stone-700 font-bold">
                     ราคาขายหน้าร้านที่แนะนำ (เพื่อให้ได้ FC {customTargetFcPercent}%):
                   </span>
-                  <span className="text-base font-bold text-[#FFC107]">
+                  <span className="text-base font-black text-stone-950">
                     ฿{(selectedBreakdown.breakdown.totalCost / (customTargetFcPercent / 100)).toFixed(0)} บาท
                   </span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex justify-between items-center pt-3 border-t border-white/10">
+              <div className="flex justify-between items-center pt-3 border-t border-stone-200">
                 <button
                   type="button"
                   onClick={() => {
@@ -1249,16 +1311,16 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                     setSelectedBreakdown(null);
                     onNavigateToRecipeBuilder(variantId);
                   }}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 bg-stone-200 hover:bg-stone-300 text-stone-900 font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
                 >
-                  <SlidersHorizontal className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4 text-stone-700" />
                   <span>ไปที่หน้าปรับแต่งสูตรอาหาร</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setSelectedBreakdown(null)}
-                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl cursor-pointer"
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] !text-white font-black rounded-xl cursor-pointer shadow-xs"
                 >
                   ปิดหน้าต่าง
                 </button>

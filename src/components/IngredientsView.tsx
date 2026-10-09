@@ -4,6 +4,7 @@ import {
   Search,
   Filter,
   Edit2,
+  Trash2,
   X,
   Sparkles,
   Scale,
@@ -36,6 +37,7 @@ interface IngredientsViewProps {
   settings: RestaurantSettings;
   priceHistory: PriceHistoryRecord[];
   onSaveIngredient: (ingredient: Ingredient) => void;
+  onDeleteIngredient?: (id: string) => void;
   onRecordPriceChange: (record: PriceHistoryRecord) => void;
 }
 
@@ -47,9 +49,11 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   settings,
   priceHistory,
   onSaveIngredient,
+  onDeleteIngredient,
   onRecordPriceChange,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Partial<Ingredient> | null>(null);
@@ -60,63 +64,19 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   const [simulatedNewPrice, setSimulatedNewPrice] = useState<number>(0);
   const [priceChangeReason, setPriceChangeReason] = useState<string>('');
 
-  // Sub-view: LIST or YIELD_LAB (ขั้นตอนที่ 2: แลบทดสอบ Yield)
-  const [activeSubTab, setActiveSubTab] = useState<'LIST' | 'YIELD_LAB'>('LIST');
-
-  // Yield Lab State (ขั้นตอนที่ 2)
-  const [selectedYieldIngId, setSelectedYieldIngId] = useState<string>(ingredients[0]?.id || '');
-  const [rawWeight, setRawWeight] = useState<number>(1000);
-  const [usableWeight, setUsableWeight] = useState<number>(920);
-  const [rawPrice, setRawPrice] = useState<number>(ingredients[0]?.purchasePrice || 100);
-  const [yieldNotice, setYieldNotice] = useState<string | null>(null);
-
-  const selectedYieldIng = ingredients.find((i) => i.id === selectedYieldIngId) || ingredients[0];
-
-  // Calculated Yield
-  const testYieldPercent = rawWeight > 0 ? (usableWeight / rawWeight) * 100 : 100;
-  const isAbsorption = testYieldPercent > 100;
-  const testEffectiveCostPerKg = usableWeight > 0 ? (rawPrice / usableWeight) * 1000 : 0;
-
-  const handleSelectYieldIng = (id: string) => {
-    setSelectedYieldIngId(id);
-    const ing = ingredients.find((i) => i.id === id);
-    if (ing) {
-      setRawPrice(ing.purchasePrice);
-      const isKg = ing.purchaseUnit === 'kg';
-      setRawWeight(isKg ? ing.purchaseQuantity * 1000 : ing.purchaseQuantity);
-      setUsableWeight(isKg ? ing.actualQuantity * 1000 : ing.actualQuantity);
+  // Add Category Modal state
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('cost_custom_ingredient_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  };
+  });
 
-  const handleApplyYieldTest = () => {
-    if (!selectedYieldIng) return;
-    const finalYield = Number(testYieldPercent.toFixed(1));
-    const isKg = selectedYieldIng.purchaseUnit === 'kg';
-    const finalUsable = isKg ? usableWeight / 1000 : usableWeight;
-
-    // Recalculate cost with updated yield
-    const calc = calculateIngredientCost({
-      ...selectedYieldIng,
-      yieldPercent: finalYield,
-      actualQuantity: finalUsable,
-    });
-
-    const updatedIng: Ingredient = {
-      ...selectedYieldIng,
-      yieldPercent: finalYield,
-      actualQuantity: finalUsable,
-      actualCost: calc.actualCost,
-      costPerBaseUnit: calc.costPerBaseUnit,
-      updatedAt: new Date().toISOString(),
-    };
-
-    onSaveIngredient(updatedIng);
-    setYieldNotice(`อัปเดต Yield ${finalYield}% ลงใน "${selectedYieldIng.name}" สำเร็จ`);
-    setTimeout(() => setYieldNotice(null), 4000);
-  };
-
-  const categories: Array<IngredientCategory | 'ALL'> = [
-    'ALL',
+  const defaultCategories = [
     'เนื้อสัตว์และอาหารทะเล',
     'ผักและสมุนไพร',
     'เครื่องปรุงและซอส',
@@ -125,6 +85,34 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     'ของแห้งและเบ็ดเตล็ด',
     'บรรจุภัณฑ์',
   ];
+
+  const allCategories = Array.from(
+    new Set([
+      ...defaultCategories,
+      ...customCategories,
+      ...ingredients.map((i) => i.category).filter(Boolean),
+    ])
+  );
+
+  const categories: string[] = ['ALL', ...allCategories];
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    if (!allCategories.includes(trimmed)) {
+      const updated = [...customCategories, trimmed];
+      setCustomCategories(updated);
+      try {
+        localStorage.setItem('cost_custom_ingredient_categories', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Failed to save category', err);
+      }
+    }
+    setSelectedCategory(trimmed);
+    setNewCategoryName('');
+    setIsAddCategoryModalOpen(false);
+  };
 
   // Filtered ingredients
   const filteredIngredients = ingredients.filter((ing) => {
@@ -278,34 +266,15 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* View Switcher Tabs */}
-          <div className="flex bg-black/40 border border-white/15 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('LIST')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeSubTab === 'LIST'
-                  ? 'bg-[#F27D26] text-black shadow-md shadow-[#F27D26]/20'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>ทะเบียนวัตถุดิบ</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('YIELD_LAB')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeSubTab === 'YIELD_LAB'
-                  ? 'bg-[#10B981] text-black shadow-md shadow-[#10B981]/20'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Scale className="w-3.5 h-3.5" />
-              <span>🧪 ขั้นตอนที่ 2: แลบทดสอบ Yield</span>
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsAddCategoryModalOpen(true)}
+            className="px-3.5 py-2 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-[#F27D26]" />
+            <span>+ เพิ่มหมวดหมู่</span>
+          </button>
 
           <button
             type="button"
@@ -318,225 +287,56 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         </div>
       </div>
 
-      {/* Yield Success Notice */}
-      {yieldNotice && (
-        <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{yieldNotice}</span>
-        </div>
-      )}
-
-      {activeSubTab === 'YIELD_LAB' ? (
-        /* STEP 2: YIELD TEST LAB */
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 text-white space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10 pb-4 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Scale className="h-5 w-5 text-[#10B981]" />
-                  <h2 className="text-lg font-bold text-white">
-                    ขั้นตอนที่ 2: ห้องแลบทดสอบ Yield & การสูญเสียในการเตรียม
-                  </h2>
-                </div>
-                <p className="text-xs text-white/50 mt-1">
-                  คำนวณ Yield จริงจากการชั่งน้ำหนักก่อน/หลังเตรียม (ตัดแต่งสูญเสีย ≤100% หรือต้ม/ดูดซึมน้ำขยายตัว &gt;100%)
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-white/60">เลือกวัตถุดิบ:</span>
-                <select
-                  value={selectedYieldIngId}
-                  onChange={(e) => handleSelectYieldIng(e.target.value)}
-                  className="rounded-xl border border-white/15 py-2 px-3 text-xs bg-black/50 font-bold text-white focus:border-[#10B981] focus:outline-none cursor-pointer"
-                >
-                  {ingredients.map((ing) => (
-                    <option key={ing.id} value={ing.id} className="bg-[#1c1c1e]">
-                      {ing.name} (Yield: {ing.yieldPercent}%, ฿{ing.purchasePrice}/{ing.purchaseUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {/* Filters & Search */}
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-3 rounded-2xl flex items-center gap-2.5 overflow-x-auto scrollbar-none">
+        {/* Compact Search: Magnifying glass icon only to save screen space */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isSearchExpanded ? (
+            <div className="relative flex items-center w-56 sm:w-64 transition-all">
+              <Search className="w-4 h-4 absolute left-3 text-white/40 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="ค้นหาวัตถุดิบ..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-1.5 bg-black/40 border border-[#F27D26]/60 rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-[#F27D26]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setIsSearchExpanded(false);
+                }}
+                className="absolute right-2.5 text-white/40 hover:text-white p-0.5 cursor-pointer"
+                title="ปิดค้นหา"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* 3 Step Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-black/30 p-4 rounded-xl border border-white/10">
-                <label className="block text-xs font-semibold text-white/70 mb-1">
-                  1. น้ำหนักวัตถุดิบก่อนเตรียม (Raw Weight)
-                </label>
-                <div className="flex items-center gap-2 mt-2">
-                  <NumericInput
-                    type="number"
-                    step="any"
-                    min="1"
-                    value={rawWeight}
-                    onChange={(e) => setRawWeight(parseFloat(e.target.value) || 0)}
-                    className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-sm font-mono font-bold text-white focus:border-[#10B981] focus:outline-none"
-                  />
-                  <span className="text-xs font-medium text-white/40">กรัม (g)</span>
-                </div>
-                <p className="text-[11px] text-white/40 mt-1.5">เช่น หมูดิบ, อกไก่, หรือข้าวสารดิบ</p>
-              </div>
-
-              <div className="bg-black/30 p-4 rounded-xl border border-white/10">
-                <label className="block text-xs font-semibold text-white/70 mb-1">
-                  2. น้ำหนักหลังตัดแต่ง/ปรุงเสร็จ (Usable Weight)
-                </label>
-                <div className="flex items-center gap-2 mt-2">
-                  <NumericInput
-                    type="number"
-                    step="any"
-                    min="1"
-                    value={usableWeight}
-                    onChange={(e) => setUsableWeight(parseFloat(e.target.value) || 0)}
-                    className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-sm font-mono font-bold text-white focus:border-[#10B981] focus:outline-none"
-                  />
-                  <span className="text-xs font-medium text-white/40">กรัม (g)</span>
-                </div>
-                <p className="text-[11px] text-white/40 mt-1.5">หลังลอกเอ็น/หั่นแต่ง หรือหลังหุงข้าวสุก</p>
-              </div>
-
-              <div className="bg-black/30 p-4 rounded-xl border border-white/10">
-                <label className="block text-xs font-semibold text-white/70 mb-1">
-                  3. ราคาซื้อล็อตนี้ (Raw Cost ฿)
-                </label>
-                <div className="flex items-center gap-2 mt-2">
-                  <NumericInput
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={rawPrice}
-                    onChange={(e) => setRawPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-sm font-mono font-bold text-white focus:border-[#10B981] focus:outline-none"
-                  />
-                  <span className="text-xs font-medium text-white/40">บาท (฿)</span>
-                </div>
-                <p className="text-[11px] text-white/40 mt-1.5">ราคาตามใบเสร็จรับเงินหรือใบส่งของ</p>
-              </div>
-            </div>
-
-            {/* Results Banner */}
-            <div className="p-5 rounded-xl bg-black/40 border border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="space-y-1 text-center sm:text-left">
-                <div className="text-xs font-semibold uppercase tracking-wider text-white/70 flex items-center gap-1.5 justify-center sm:justify-start">
-                  <Percent className="h-4 w-4 text-[#10B981]" />
-                  <span>ผลลัพธ์การทดสอบ Yield จริง</span>
-                </div>
-                <div className="text-3xl font-bold text-[#10B981] font-mono">
-                  {testYieldPercent.toFixed(1)}%
-                </div>
-                <div className="text-xs text-white/60">
-                  {isAbsorption
-                    ? '⚡ การดูดซึมน้ำ/การขยายตัว (>100%): น้ำหนักเพิ่มขึ้นจากการต้ม, หุง, หรือแช่น้ำ'
-                    : `🔪 การสูญเสียจากการตัดแต่ง ${(100 - testYieldPercent).toFixed(1)}% (Yield คงเหลือ ${testYieldPercent.toFixed(1)}%)`}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <div className="text-[11px] text-white/50">ต้นทุนจริงหลังคิด Yield</div>
-                  <div className="text-xl font-bold text-white font-mono">
-                    ฿{testEffectiveCostPerKg.toFixed(2)} <span className="text-xs font-normal text-white/50">/ กก.</span>
-                  </div>
-                  <div className="text-[10px] text-white/40 font-mono">
-                    (฿{(testEffectiveCostPerKg / 1000).toFixed(4)} / กรัม)
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleApplyYieldTest}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:bg-[#0ea372] px-5 py-3 text-xs font-bold text-black transition-all shadow-lg shadow-[#10B981]/20 cursor-pointer"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>อัปเดตลงในทะเบียนวัตถุดิบ</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* All Ingredients Yield Comparison Table */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 text-white">
-            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-              <Scale className="w-4 h-4 text-[#10B981]" />
-              <span>ตารางสรุป Yield และต้นทุนจริงของวัตถุดิบทั้งหมดในร้าน</span>
-            </h3>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/5 text-white/50 font-bold uppercase text-[10px]">
-                    <th className="py-2.5 px-3">วัตถุดิบ</th>
-                    <th className="py-2.5 px-3">หมวดหมู่</th>
-                    <th className="py-2.5 px-3 text-right">Yield %</th>
-                    <th className="py-2.5 px-3 text-right">ประเภท Yield</th>
-                    <th className="py-2.5 px-3 text-right">ราคาซื้อ</th>
-                    <th className="py-2.5 px-3 text-right">ต้นทุนจริงต่อหน่วยใช้งาน</th>
-                    <th className="py-2.5 px-3 text-center">ทดสอบ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-white/70">
-                  {ingredients.map((ing) => (
-                    <tr key={ing.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-2.5 px-3 font-semibold text-white">{ing.name}</td>
-                      <td className="py-2.5 px-3 text-white/50">{ing.category}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] ${
-                            ing.yieldPercent > 100
-                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                              : ing.yieldPercent >= 80
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          }`}
-                        >
-                          {ing.yieldPercent}%
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-white/50">
-                        {ing.yieldPercent > 100 ? 'ขยายตัว/ดูดซึมน้ำ (>100%)' : 'สูญเสียตัดแต่ง (≤100%)'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-white/60">
-                        ฿{ing.purchasePrice.toLocaleString()} /{ing.purchaseUnit}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#FFC107]">
-                        ฿{ing.costPerBaseUnit.toFixed(4)} /{ing.usageUnit}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectYieldIng(ing.id)}
-                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold cursor-pointer transition-colors"
-                        >
-                          เลือกคำนวณ
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* STEP 1: MASTER INGREDIENTS LIST */
-        <>
-          {/* Filters & Search */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-4 rounded-2xl flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-          <input
-            type="text"
-            placeholder="ค้นหาวัตถุดิบ (เช่น หมู, กุ้ง, ซอส)..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-black/30 border border-white/10 rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#F27D26]"
-          />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsSearchExpanded(true)}
+              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                searchTerm
+                  ? 'bg-[#F27D26]/20 border-[#F27D26] text-[#F27D26]'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
+              }`}
+              title="ค้นหาวัตถุดิบ"
+            >
+              <Search className="w-4 h-4" />
+              {searchTerm && (
+                <span className="ml-1.5 text-[11px] font-medium max-w-[90px] truncate text-white">
+                  {searchTerm}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-          <Filter className="w-4 h-4 text-white/40 shrink-0 hidden sm:block mr-1" />
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <Filter className="w-4 h-4 text-white/40 shrink-0 hidden sm:block mr-0.5" />
           {categories.map((cat) => (
             <button
               key={cat}
@@ -561,7 +361,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
             <thead>
               <tr className="bg-white/5 border-b border-white/10 text-white/50 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">วัตถุดิบ</th>
-                <th className="py-3 px-3">หมวดหมู่</th>
+                <th className="py-3 px-3">ปริมาณที่ซื้อ</th>
                 <th className="py-3 px-3">ราคาซื้อ</th>
                 <th className="py-3 px-3">Yield (%)</th>
                 <th className="py-3 px-3">น้ำหนักสุทธิ</th>
@@ -603,9 +403,11 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                         </div>
                       )}
                     </td>
-                    <td className="py-3.5 px-3 text-white/70">{ing.category}</td>
+                    <td className="py-3.5 px-3 text-white/70 font-mono">
+                      {ing.purchaseQuantity.toLocaleString()} {ing.purchaseUnit}
+                    </td>
                     <td className="py-3.5 px-3 font-mono text-white font-bold">
-                      ฿{ing.purchasePrice.toLocaleString()} / {ing.purchaseQuantity} {ing.purchaseUnit}
+                      ฿{ing.purchasePrice.toLocaleString()}
                     </td>
                     <td className="py-3.5 px-3">
                       <span
@@ -637,16 +439,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
-                      {/* Price Impact Simulator button */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenSimulate(ing)}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#F27D26]/20 hover:bg-[#F27D26]/30 border border-[#F27D26]/30 text-[#F27D26] font-bold text-xs transition-colors cursor-pointer"
-                        title="จำลองผลกระทบหากราคาเปลี่ยน"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 inline mr-1" />
-                        จำลองราคา
-                      </button>
                       {/* Edit button */}
                       <button
                         type="button"
@@ -656,6 +448,15 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={() => onDeleteIngredient?.(ing.id)}
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors cursor-pointer"
+                        title="ลบวัตถุดิบ"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -664,8 +465,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           </table>
         </div>
       </div>
-        </>
-      )}
 
       {/* EDIT / ADD INGREDIENT MODAL */}
       {isEditingModalOpen && editingIngredient && (
@@ -1134,6 +933,66 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD CATEGORY MODAL */}
+      {isAddCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-2xl max-w-md w-full p-6 shadow-2xl border border-white/20 text-white animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-[#F27D26]" />
+                <span>เพิ่มหมวดหมู่วัตถุดิบใหม่</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddCategoryModalOpen(false);
+                  setNewCategoryName('');
+                }}
+                className="p-1 text-white/50 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategory} className="space-y-4 mt-4 text-xs">
+              <div>
+                <label className="block font-bold text-white/80 mb-1.5">
+                  ชื่อหมวดหมู่ใหม่ <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white font-medium focus:border-[#F27D26] focus:outline-none placeholder-white/30"
+                  placeholder="เช่น เครื่องดื่ม, ของหวาน, เบเกอรี่, อาหารแปรรูป"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddCategoryModalOpen(false);
+                    setNewCategoryName('');
+                  }}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl shadow-md shadow-[#F27D26]/20 transition-all cursor-pointer"
+                >
+                  บันทึกหมวดหมู่
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

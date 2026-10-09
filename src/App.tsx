@@ -161,6 +161,11 @@ export default function App() {
     }
   };
 
+  const handleDeleteIngredient = (ingredientId: string) => {
+    setIngredients((prev) => prev.filter((i) => i.id !== ingredientId));
+    setInventory((prev) => prev.filter((inv) => inv.ingredientId !== ingredientId));
+  };
+
   const handleRecordPriceChange = (record: PriceHistoryRecord) => {
     setPriceHistory([record, ...priceHistory]);
   };
@@ -445,6 +450,7 @@ export default function App() {
               settings={settings}
               priceHistory={priceHistory}
               onSaveIngredient={handleSaveIngredient}
+              onDeleteIngredient={handleDeleteIngredient}
               onRecordPriceChange={handleRecordPriceChange}
             />
           )}

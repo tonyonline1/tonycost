@@ -237,32 +237,34 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
   return (
     <div className="bg-[#FAF8F5] border border-stone-300 rounded-2xl overflow-hidden shadow-md my-2 text-stone-900 font-sans">
       {/* Top Header Row with Menu Title, Serving Mode & Channel Switcher Buttons */}
-      <div className="bg-white border-b border-stone-300 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="bg-white border-b border-stone-300 px-4 py-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Serving Mode Badge */}
+          {/* Serving Mode Badge - Ultra High Contrast */}
           <span
-            className={`px-3 py-1 text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-xs tracking-wider flex items-center gap-1 ${
-              currentServingMode === 'ON_RICE' ? 'bg-[#E53935]' : 'bg-[#8E24AA]'
+            className={`px-3 py-1 !text-white font-black text-xs sm:text-sm rounded-lg shadow-xs tracking-wider flex items-center gap-1 border ${
+              currentServingMode === 'ON_RICE'
+                ? 'bg-rose-600 border-rose-700'
+                : 'bg-purple-700 border-purple-800'
             }`}
           >
             {currentServingMode === 'ON_RICE' ? '🍚 ราดข้าว' : '🍲 กับข้าว (จานกลาง)'}
           </span>
-          <h2 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-stone-950 tracking-tight">
             {menu.name}
           </h2>
-          <span className="text-xs px-2 py-0.5 bg-stone-100 border border-stone-200 text-stone-600 rounded-md font-semibold">
+          <span className="text-xs px-2 py-0.5 bg-stone-100 border border-stone-300 text-stone-700 rounded-md font-bold">
             {menu.variants.length} ตัวเลือก
           </span>
 
-          {/* Serving Mode Switcher Buttons */}
-          <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-stone-300 shadow-2xs ml-0 sm:ml-2">
+          {/* Serving Mode Switcher Buttons - Distinct High Contrast */}
+          <div className="flex items-center bg-stone-200 p-0.5 rounded-xl border border-stone-300 shadow-2xs ml-0 sm:ml-2">
             <button
               type="button"
               onClick={() => handleSelectServingMode('ON_RICE')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
                 currentServingMode === 'ON_RICE'
-                  ? 'bg-white text-[#E53935] shadow-xs font-extrabold border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-rose-600 !text-white shadow-xs border border-rose-700'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
               title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
             >
@@ -271,10 +273,10 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => handleSelectServingMode('A_LA_CARTE')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
                 currentServingMode === 'A_LA_CARTE'
-                  ? 'bg-white text-[#8E24AA] shadow-xs font-extrabold border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-purple-700 !text-white shadow-xs border border-purple-800'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
               title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
             >
@@ -285,15 +287,15 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
 
         {/* Channel Selector Buttons: กินที่ร้าน / Grab Food / Line Man / Robinhood / แสดงทั้งหมด */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 shadow-2xs">
+          <div className="flex items-center bg-stone-200 p-1 rounded-xl border border-stone-300 shadow-2xs">
             {/* กินที่ร้าน */}
             <button
               type="button"
               onClick={() => handleSelectChannel('DINE_IN')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                 currentChannel === 'DINE_IN'
-                  ? 'bg-[#00BCD4] text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                  ? 'bg-cyan-700 !text-white shadow-xs'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
             >
               <Store className="w-3.5 h-3.5" />
@@ -304,10 +306,10 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => handleSelectChannel('GRAB')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                 currentChannel === 'GRAB'
-                  ? 'bg-[#00B14F] text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                  ? 'bg-[#00873e] !text-white shadow-xs'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
             >
               <Bike className="w-3.5 h-3.5" />
@@ -318,10 +320,10 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => handleSelectChannel('LINEMAN')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                 currentChannel === 'LINEMAN'
-                  ? 'bg-[#06C755] text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                  ? 'bg-[#05963c] !text-white shadow-xs'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -332,10 +334,10 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => handleSelectChannel('ROBINHOOD')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                 currentChannel === 'ROBINHOOD'
-                  ? 'bg-[#8B5CF6] text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                  ? 'bg-[#6d28d9] !text-white shadow-xs'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
             >
               <Flame className="w-3.5 h-3.5" />
@@ -346,10 +348,10 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => handleSelectChannel('ALL')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
                 currentChannel === 'ALL'
-                  ? 'bg-stone-800 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                  ? 'bg-stone-900 !text-white shadow-xs'
+                  : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
               }`}
               title="เปรียบเทียบทุกช่องทางพร้อมกัน"
             >
@@ -362,7 +364,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <button
               type="button"
               onClick={() => onOpenAddVariant(menu)}
-              className="px-3 py-1.5 bg-[#F27D26] hover:bg-[#d96817] text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
+              className="px-3 py-1.5 bg-[#F27D26] hover:bg-[#d96817] !text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1 cursor-pointer transition-colors border border-[#c2580e]"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ เพิ่มตัวเลือก</span>
@@ -379,40 +381,40 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             <tr className="text-xs font-black select-none border-b border-black">
               {currentChannel === 'DINE_IN' && (
                 <>
-                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
-                  <th colSpan={8} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนวัตถุดิบ & การตั้งราคาหน้าร้าน</th>
-                  <th colSpan={2} className="bg-[#00BCD4] text-white py-1.5 tracking-wide">กำไรหน้าร้าน</th>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
+                  <th colSpan={8} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนวัตถุดิบ & การตั้งราคาหน้าร้าน</th>
+                  <th colSpan={2} className="bg-cyan-700 !text-white font-black py-1.5 tracking-wide">กำไรหน้าร้าน</th>
                 </>
               )}
 
               {currentChannel === 'GRAB' && (
                 <>
-                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
-                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
-                  <th colSpan={6} className="bg-[#00C853] text-white py-1.5 tracking-wide">Grab Food (GP 26.75% รวม VAT)</th>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#00873e] !text-white font-black py-1.5 tracking-wide">Grab Food (GP 26.75% รวม VAT)</th>
                 </>
               )}
 
               {currentChannel === 'LINEMAN' && (
                 <>
-                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
-                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
-                  <th colSpan={6} className="bg-[#FFB300] text-black py-1.5 tracking-wide">Line Man (GP 32.1% รวม VAT)</th>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#FFB300] text-stone-950 font-black py-1.5 tracking-wide">Line Man (GP 32.1% รวม VAT)</th>
                 </>
               )}
 
               {currentChannel === 'ROBINHOOD' && (
                 <>
-                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1">ข้อมูลเมนู</th>
-                  <th colSpan={4} className="bg-[#FFF9C4] text-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
-                  <th colSpan={6} className="bg-[#8B5CF6] text-white py-1.5 tracking-wide">Robinhood (0% GP)</th>
+                  <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
+                  <th colSpan={4} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
+                  <th colSpan={6} className="bg-[#6d28d9] !text-white font-black py-1.5 tracking-wide">Robinhood (0% GP)</th>
                 </>
               )}
 
               {currentChannel === 'ALL' && (
                 <>
                   <th colSpan={10} className="bg-[#FAF8F5] border-r border-black py-1"></th>
-                  <th colSpan={12} className="bg-[#FFFF00] text-black text-sm font-black py-1.5 border-b border-black tracking-wide">
+                  <th colSpan={12} className="bg-[#FFFF00] text-stone-950 text-sm font-black py-1.5 border-b border-black tracking-wide">
                     กำไรแต่ละรายการ
                   </th>
                 </>
@@ -423,9 +425,9 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             {currentChannel === 'ALL' && (
               <tr className="text-xs font-bold select-none border-b border-black">
                 <th colSpan={10} className="bg-[#FAF8F5] border-r border-black"></th>
-                <th colSpan={2} className="bg-[#00BCD4] text-white font-black py-1 border-r border-black">ที่ร้าน</th>
-                <th colSpan={5} className="bg-[#00C853] text-white font-black py-1 border-r border-black">Grab Food</th>
-                <th colSpan={5} className="bg-[#FFB300] text-black font-black py-1">Line Man</th>
+                <th colSpan={2} className="bg-cyan-700 !text-white font-black py-1 border-r border-black">ที่ร้าน</th>
+                <th colSpan={5} className="bg-[#00873e] !text-white font-black py-1 border-r border-black">Grab Food</th>
+                <th colSpan={5} className="bg-[#FFB300] text-stone-950 font-black py-1">Line Man</th>
               </tr>
             )}
 
@@ -1022,14 +1024,26 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{overheadCost}</td>
                       <td className="py-2 px-2 bg-white text-stone-900 font-bold border-r border-black">{totalCost}</td>
                       <td
-                        className={`py-2 px-2 font-bold border-r-2 border-black ${
-                          fcPercent > 50 ? 'bg-[#FFB300] text-black font-extrabold' : 'bg-white text-stone-900'
+                        className={`py-2 px-2 font-black border-r-2 border-black ${
+                          fcPercent > 50
+                            ? 'bg-rose-200 text-rose-950 font-black'
+                            : fcPercent > 40
+                            ? 'bg-amber-200 text-amber-950 font-black'
+                            : 'bg-white text-stone-950 font-bold'
                         }`}
                       >
                         {fcPercent}%
                       </td>
-                      <td className="py-2 px-2 bg-[#C8E6C9] text-stone-900 font-bold border-r border-black">{dineInProfit}</td>
-                      <td className="py-2 px-2 bg-[#C8E6C9] text-stone-900 font-bold">{takeawayProfit}</td>
+                      <td className={`py-2 px-2 font-black border-r border-black ${
+                        dineInProfit < 0 ? 'bg-rose-600 text-white' : 'bg-[#C8E6C9] text-stone-950'
+                      }`}>
+                        {dineInProfit}
+                      </td>
+                      <td className={`py-2 px-2 font-black ${
+                        takeawayProfit < 0 ? 'bg-rose-600 text-white' : 'bg-[#C8E6C9] text-stone-950'
+                      }`}>
+                        {takeawayProfit}
+                      </td>
                     </>
                   )}
 
