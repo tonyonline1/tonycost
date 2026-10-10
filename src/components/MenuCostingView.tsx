@@ -132,7 +132,7 @@ export const MenuCostingView: React.FC<MenuCostingViewProps> = ({
     if (!selectedBreakdown) return;
     onUpdateVariantPrice(selectedBreakdown.menu.id, selectedBreakdown.variant.id, {
       sellingPrice: newDineIn,
-      takeawayPrice: newDineIn + (settings.packagingCostTakeaway || 5),
+      takeawayPrice: newDineIn + (settings.takeawayPackagingCost ?? settings.packagingCostTakeaway ?? 5),
       deliveryPrice: newDelivery,
     });
     // Refresh modal

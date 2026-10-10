@@ -10,9 +10,9 @@ import {
 
 /**
  * 1. INGREDIENT CALCULATION ENGINE
- * Formula from Excel & Guidelines:
- * actualCost = purchasePrice * (100 / yieldPercent)
- * costPerBaseUnit = actualCost / actualQuantity
+ * Standard F&B Costing Formula (Reference Formula 1):
+ * Cost per purchase unit (AP) = purchasePrice / purchaseQuantity (normalized to recipe-usage unit)
+ * Cost per usable unit (EP) = Cost per purchase unit / (yieldPercent / 100)
  * 
  * For piece-based items (like Shrimp with piecesPerPurchaseUnit):
  * costPerBaseUnit = purchasePrice / piecesPerPurchaseUnit
@@ -26,6 +26,7 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
   const purchasePrice = Number(ingredient.purchasePrice);
   const yieldPercent = Number(ingredient.yieldPercent);
   const actualQuantity = Number(ingredient.actualQuantity);
+  const purchaseQuantity = Number(ingredient.purchaseQuantity);
 
   // Missing or invalid data check: DO NOT fallback to 0 silently!
   if (isNaN(purchasePrice) || purchasePrice <= 0) {
@@ -60,18 +61,42 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
     };
   }
 
-  if (isNaN(actualQuantity) || actualQuantity <= 0) {
+  // Resolve purchase quantity (fallback to actualQuantity / (yieldPercent / 100) if not provided)
+  const resolvedPurchaseQuantity =
+    !isNaN(purchaseQuantity) && purchaseQuantity > 0
+      ? purchaseQuantity
+      : !isNaN(actualQuantity) && actualQuantity > 0
+      ? actualQuantity / (yieldPercent / 100)
+      : 0;
+
+  if (resolvedPurchaseQuantity <= 0) {
     return {
       actualCost: 0,
       costPerBaseUnit: 0,
       isValid: false,
-      errorMessage: 'ปริมาณสุทธิ (Actual Quantity) ไม่ถูกต้อง (DATA_REVIEW_REQUIRED)',
+      errorMessage: 'ปริมาณที่ซื้อ (Purchase Quantity) ไม่ถูกต้อง (DATA_REVIEW_REQUIRED)',
     };
   }
 
-  // Deterministic standard formula
+  // Unit conversion factor between purchase unit and usage/base unit (e.g. kg -> g, l -> ml)
+  const pUnit = (ingredient.purchaseUnit || '').toLowerCase();
+  const uUnit = (ingredient.usageUnit || ingredient.baseUnit || '').toLowerCase();
+  let unitMultiplier = 1;
+
+  if ((pUnit === 'kg' || pUnit === 'กิโลกรัม') && (uUnit === 'g' || uUnit === 'กรัม')) {
+    unitMultiplier = 1000;
+  } else if ((pUnit === 'l' || pUnit === 'ลิตร') && (uUnit === 'ml' || uUnit === 'มิลลิลิตร')) {
+    unitMultiplier = 1000;
+  } else if ((pUnit === 'g' || pUnit === 'กรัม') && (uUnit === 'kg' || uUnit === 'กิโลกรัม')) {
+    unitMultiplier = 0.001;
+  } else if ((pUnit === 'ml' || pUnit === 'มิลลิลิตร') && (uUnit === 'l' || uUnit === 'ลิตร')) {
+    unitMultiplier = 0.001;
+  }
+
+  const purchaseQuantityInUsageUnits = resolvedPurchaseQuantity * unitMultiplier;
+  const costPerPurchaseUnit = purchasePrice / purchaseQuantityInUsageUnits;
+  const costPerBaseUnit = costPerPurchaseUnit / (yieldPercent / 100);
   const actualCost = purchasePrice * (100 / yieldPercent);
-  const costPerBaseUnit = actualCost / actualQuantity;
 
   return {
     actualCost,
@@ -82,11 +107,11 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
 
 /**
  * 2. SAUCE / PREPARED ITEM COST ENGINE
- * Formula:
+ * Standard F&B Costing Formula:
  * lineCost = quantity * unitCost
  * productionCost = SUM(lineCost)
  * actualCost = productionCost * (100 / yieldPercent)
- * costPerGram = actualCost / actualQuantity
+ * costPerGram = productionCost / actualQuantity
  */
 export function calculateSauceCost(
   sauce: Partial<Sauce>,
@@ -160,7 +185,7 @@ export function calculateSauceCost(
   });
 
   const actualCost = productionCost * (100 / yieldPercent);
-  const costPerGram = actualCost / actualQuantity;
+  const costPerGram = actualQuantity > 0 ? productionCost / actualQuantity : 0;
 
   return {
     productionCost,
@@ -352,7 +377,8 @@ export function calculateVariantCostBreakdown(
   const takeawayPackagingCost = Number.isFinite(settings.takeawayPackagingCost)
     ? Math.max(0, settings.takeawayPackagingCost)
     : 0;
-  const takeawayProfit = takeawayPrice - totalCost;
+  const takeawayTotalCost = totalIngredientCost + overheadCost + (takeawayPackagingCost > 0 ? takeawayPackagingCost : packagingCost);
+  const takeawayProfit = takeawayPrice - takeawayTotalCost;
   const takeawayFoodCostPercent = takeawayPrice > 0 ? (totalIngredientCost / takeawayPrice) * 100 : 0;
 
   // 3. Delivery Platform Profitability. Sourced from sub-item packaging cost (fallback to channel setting if 0)
@@ -652,7 +678,7 @@ export function runFullSpecificationTests(): TestResultItem[] {
     };
     const calc = calculateIngredientCost(porkIng);
     const expectedActualCost = 200 * (100 / 95); // 210.526315789...
-    const expectedCostPerGram = expectedActualCost / 950; // 0.221606648...
+    const expectedCostPerGram = 200 / 950; // 0.210526315789... (200 ฿ / 950g usable weight)
     const passed =
       Math.abs(calc.actualCost - expectedActualCost) < 0.0001 &&
       Math.abs(calc.costPerBaseUnit - expectedCostPerGram) < 0.0001;
@@ -706,8 +732,8 @@ export function runFullSpecificationTests(): TestResultItem[] {
     };
     const calc = calculateIngredientCost(squidIng);
     const expectedActualCost = 200 * (100 / 65); // 307.692307...
-    const expectedCostPerGram = expectedActualCost / 520; // 0.5917159...
-    const fortyGramsCost = 40 * expectedCostPerGram; // 23.6686...
+    const expectedCostPerGram = 200 / 520; // 0.38461538... (200 ฿ / 520g usable weight)
+    const fortyGramsCost = 40 * expectedCostPerGram; // 15.3846...
     const passed =
       Math.abs(calc.costPerBaseUnit - expectedCostPerGram) < 0.0001 &&
       Math.abs(40 * calc.costPerBaseUnit - fortyGramsCost) < 0.0001;
@@ -756,7 +782,7 @@ export function runFullSpecificationTests(): TestResultItem[] {
       yieldPercent: 65,
       actualCost: 200 * (100 / 65),
       baseUnit: 'g',
-      costPerBaseUnit: (200 * (100 / 65)) / 520, // 0.5917159
+      costPerBaseUnit: 200 / 520, // 0.38461538 (200 ฿ / 520g usable weight)
       usageUnit: 'g',
       active: true,
       createdAt: '',
@@ -895,7 +921,7 @@ export function runFullSpecificationTests(): TestResultItem[] {
     const sCalc = calculateSauceCost(testSauce, sauceIngMap);
     const expectedProdCost = 50; // 30 + 20
     const expectedActualCost = 50 * (100 / 95); // 52.6315
-    const expectedCostPerGram = expectedActualCost / 950; // 0.055401
+    const expectedCostPerGram = 50 / 950; // 0.0526315789... (50 ฿ / 950g usable batch)
 
     const passed =
       Math.abs(sCalc.productionCost - expectedProdCost) < 0.001 &&
@@ -1223,7 +1249,7 @@ export function runSection11SpecificationTests(): TestResultItem[] {
       yieldPercent: 95,
       actualCost: 200 / 0.95, // 210.5263
       baseUnit: 'g',
-      costPerBaseUnit: (200 / 0.95) / 950, // 0.221606
+      costPerBaseUnit: 200 / 950, // 0.2105263 (200 ฿ / 950g usable weight)
       usageUnit: 'g',
       active: true,
       createdAt: '',

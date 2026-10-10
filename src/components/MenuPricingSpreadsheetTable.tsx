@@ -65,6 +65,15 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
     }
   };
 
+  // Delivery GP rates with 7% VAT linked directly to restaurant settings
+  const grabCommissionBase = settings.grabFoodCommissionPercent ?? 30;
+  const grabGpRateWithVat = (grabCommissionBase * 1.07) / 100;
+  const grabGpPctDisplay = (grabCommissionBase * 1.07).toFixed(2);
+
+  const linemanCommissionBase = settings.lineManCommissionPercent ?? 25;
+  const linemanGpRateWithVat = (linemanCommissionBase * 1.07) / 100;
+  const linemanGpPctDisplay = (linemanCommissionBase * 1.07).toFixed(2);
+
   // Local state for real-time responsiveness when typing
   const [localEdits, setLocalEdits] = useState<
     Record<
@@ -391,7 +400,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                 <>
                   <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
                   <th colSpan={4} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
-                  <th colSpan={6} className="bg-[#00873e] !text-white font-black py-1.5 tracking-wide">Grab Food (GP 26.75% รวม VAT)</th>
+                  <th colSpan={6} className="bg-[#00873e] !text-white font-black py-1.5 tracking-wide">Grab Food (GP {grabGpPctDisplay}% รวม VAT)</th>
                 </>
               )}
 
@@ -399,7 +408,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                 <>
                   <th colSpan={2} className="bg-[#FAF8F5] border-r border-black py-1 font-bold text-stone-900">ข้อมูลเมนู</th>
                   <th colSpan={4} className="bg-[#FFF9C4] text-stone-950 font-black border-r border-black py-1">ต้นทุนอ้างอิง</th>
-                  <th colSpan={6} className="bg-[#FFB300] text-stone-950 font-black py-1.5 tracking-wide">Line Man (GP 32.1% รวม VAT)</th>
+                  <th colSpan={6} className="bg-[#FFB300] text-stone-950 font-black py-1.5 tracking-wide">Line Man (GP {linemanGpPctDisplay}% รวม VAT)</th>
                 </>
               )}
 
@@ -506,7 +515,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   </th>
                   <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
                     <div>ถูกหัก GP ไป</div>
-                    <div className="text-[10px] text-stone-600">(26.75%)</div>
+                    <div className="text-[10px] text-stone-600">({grabGpPctDisplay}%)</div>
                   </th>
                   <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
                     <div>หลังหัก</div>
@@ -546,7 +555,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   </th>
                   <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
                     <div>ถูกหัก GP</div>
-                    <div className="text-[10px] text-stone-600">(32.1%)</div>
+                    <div className="text-[10px] text-stone-600">({linemanGpPctDisplay}%)</div>
                   </th>
                   <th className="py-2.5 px-2 bg-white text-stone-900 border-r border-black min-w-[75px]">
                     <div>หลังหัก</div>
@@ -833,7 +842,8 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
               // 12. Profits at restaurant
               const packagingAmount = v.packagingCost || 9;
               const dineInProfit = Math.round(sellingPrice - totalCost + packagingAmount);
-              const takeawayProfit = Math.round(sellingPrice - totalCost);
+              const effectiveTakeawayPrice = v.takeawayPrice || sellingPrice;
+              const takeawayProfit = Math.round(effectiveTakeawayPrice - totalCost);
 
               // 13-17. Grab Food calculations
               const grabSuggestedPrice = Number((sellingPrice * 1.5).toFixed(1));
@@ -843,7 +853,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   : (localEdits[v.id]?.grabPrice !== undefined
                       ? localEdits[v.id]!.grabPrice!
                       : baseGrabPrice);
-              const grabGpValue = Math.round(grabPrice * 0.2675); // 25% + 7% VAT
+              const grabGpValue = Math.round(grabPrice * grabGpRateWithVat);
               const grabNet = grabPrice - grabGpValue;
               const grabProfit = grabNet - totalCost;
               const grabMargin = grabPrice > 0 ? Math.round((grabProfit / grabPrice) * 100) : 0;
@@ -856,7 +866,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   : (localEdits[v.id]?.linemanPrice !== undefined
                       ? localEdits[v.id]!.linemanPrice!
                       : baseLinemanPrice);
-              const linemanGpValue = Math.round(linemanPrice * 0.321); // 30% + 7% VAT
+              const linemanGpValue = Math.round(linemanPrice * linemanGpRateWithVat);
               const linemanNet = linemanPrice - linemanGpValue;
               const linemanProfit = linemanNet - totalCost;
               const linemanMargin = linemanPrice > 0 ? Math.round((linemanProfit / linemanPrice) * 100) : 0;
@@ -1264,8 +1274,8 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
         </div>
         <div className="text-[10px] text-stone-400">
           {currentChannel === 'DINE_IN' && 'แสดงเฉพาะรายการขายหน้าร้านและใส่กล่องกลับบ้าน'}
-          {currentChannel === 'GRAB' && 'คำนวณหัก GP Grab Food: 25% + VAT 7% = 26.75%'}
-          {currentChannel === 'LINEMAN' && 'คำนวณหัก GP Line Man: 30% + VAT 7% = 32.1%'}
+          {currentChannel === 'GRAB' && `คำนวณหัก GP Grab Food: ${grabCommissionBase}% + VAT 7% = ${grabGpPctDisplay}%`}
+          {currentChannel === 'LINEMAN' && `คำนวณหัก GP Line Man: ${linemanCommissionBase}% + VAT 7% = ${linemanGpPctDisplay}%`}
           {currentChannel === 'ROBINHOOD' && 'คำนวณ Robinhood: 0% GP รับเงินเต็มจำนวน'}
           {currentChannel === 'ALL' && 'ตารางเปรียบเทียบทุกช่องทางพร้อมกัน'}
         </div>

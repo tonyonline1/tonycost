@@ -166,6 +166,10 @@ export default function App() {
     setInventory((prev) => prev.filter((inv) => inv.ingredientId !== ingredientId));
   };
 
+  const handleReorderIngredients = (reordered: Ingredient[]) => {
+    setIngredients(reordered);
+  };
+
   const handleRecordPriceChange = (record: PriceHistoryRecord) => {
     setPriceHistory([record, ...priceHistory]);
   };
@@ -451,6 +455,7 @@ export default function App() {
               priceHistory={priceHistory}
               onSaveIngredient={handleSaveIngredient}
               onDeleteIngredient={handleDeleteIngredient}
+              onReorderIngredients={handleReorderIngredients}
               onRecordPriceChange={handleRecordPriceChange}
             />
           )}

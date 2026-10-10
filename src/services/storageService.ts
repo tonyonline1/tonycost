@@ -91,7 +91,18 @@ export const StorageService = {
   },
 
   getIngredients(): Ingredient[] {
-    return safeLoad(STORAGE_KEYS.INGREDIENTS, INITIAL_INGREDIENTS);
+    const raw = safeLoad(STORAGE_KEYS.INGREDIENTS, INITIAL_INGREDIENTS);
+    return raw.map((ing) => {
+      const calc = calculateIngredientCost(ing);
+      if (calc.isValid && Math.abs(calc.costPerBaseUnit - (ing.costPerBaseUnit || 0)) > 0.00001) {
+        return {
+          ...ing,
+          actualCost: calc.actualCost,
+          costPerBaseUnit: calc.costPerBaseUnit,
+        };
+      }
+      return ing;
+    });
   },
   saveIngredients(ingredients: Ingredient[]): void {
     safeSave(STORAGE_KEYS.INGREDIENTS, ingredients);

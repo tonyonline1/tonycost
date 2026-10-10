@@ -13,6 +13,9 @@ import {
   AlertTriangle,
   Layers,
   ArrowRight,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import {
   Ingredient,
@@ -38,6 +41,7 @@ interface IngredientsViewProps {
   priceHistory: PriceHistoryRecord[];
   onSaveIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient?: (id: string) => void;
+  onReorderIngredients?: (reordered: Ingredient[]) => void;
   onRecordPriceChange: (record: PriceHistoryRecord) => void;
 }
 
@@ -50,6 +54,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   priceHistory,
   onSaveIngredient,
   onDeleteIngredient,
+  onReorderIngredients,
   onRecordPriceChange,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -123,11 +128,70 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     return matchesSearch && matchesCategory;
   });
 
+  // Drag & drop and reorder state
+  const [draggedIngredientId, setDraggedIngredientId] = useState<string | null>(null);
+  const [dragOverIngredientId, setDragOverIngredientId] = useState<string | null>(null);
+
+  const handleMoveIngredient = (fromId: string, direction: 'up' | 'down') => {
+    const fromIndex = ingredients.findIndex((i) => i.id === fromId);
+    if (fromIndex === -1) return;
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= ingredients.length) return;
+
+    const updated = [...ingredients];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    onReorderIngredients?.(updated);
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedIngredientId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', id);
+    } catch {}
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIngredientId !== id) {
+      setDragOverIngredientId(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggedIngredientId || e.dataTransfer.getData('text/plain');
+    setDraggedIngredientId(null);
+    setDragOverIngredientId(null);
+
+    if (!sourceId || sourceId === targetId) return;
+    const fromIndex = ingredients.findIndex((i) => i.id === sourceId);
+    const toIndex = ingredients.findIndex((i) => i.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const updated = [...ingredients];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    onReorderIngredients?.(updated);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIngredientId(null);
+    setDragOverIngredientId(null);
+  };
+
   const handleOpenAdd = () => {
+    const defaultCat =
+      selectedCategory !== 'ALL'
+        ? (selectedCategory as IngredientCategory)
+        : ('เนื้อสัตว์และอาหารทะเล' as IngredientCategory);
+
     const newIng: Partial<Ingredient> = {
       id: `ing_${Date.now()}`,
       name: '',
-      category: 'เนื้อสัตว์และอาหารทะเล',
+      category: defaultCat,
       purchaseQuantity: 1000,
       purchaseUnit: 'g',
       purchasePrice: 100,
@@ -254,41 +318,43 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     : null;
 
   return (
-    <div className="space-y-4 pb-8">
-      {/* Title & Actions */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            ฐานข้อมูลวัตถุดิบและต้นทุน Yield
-          </h1>
-          <p className="text-xs text-white/60 mt-0.5">
-            กำหนดราคาซื้อ, ปริมาณสูญเสีย (Yield %), และต้นทุนต่อหน่วยใช้งานจริงตามสูตรบัญชี
-          </p>
+    <div className="flex flex-col h-[calc(100vh-5.5rem)] min-h-[500px] overflow-hidden -mb-8">
+      {/* LOCKED TOP SECTION (Title, Action buttons, Search & Category filters) */}
+      <div className="shrink-0 z-20 space-y-3 pb-3 bg-stone-900/40 backdrop-blur-md pt-1">
+        {/* Title & Actions */}
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 shadow-sm">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              ฐานข้อมูลวัตถุดิบและต้นทุน Yield
+            </h1>
+            <p className="text-xs text-white/60 mt-0.5">
+              กำหนดราคาซื้อ, ปริมาณสูญเสีย (Yield %), และต้นทุนต่อหน่วยใช้งานจริงตามสูตรบัญชี
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsAddCategoryModalOpen(true)}
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-[#F27D26]" />
+              <span>+ เพิ่มหมวดหมู่</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="px-4 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl text-xs shadow-lg shadow-[#F27D26]/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ เพิ่มวัตถุดิบใหม่</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsAddCategoryModalOpen(true)}
-            className="px-3.5 py-2 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-[#F27D26]" />
-            <span>+ เพิ่มหมวดหมู่</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            className="px-4 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl text-xs shadow-lg shadow-[#F27D26]/20 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ เพิ่มวัตถุดิบใหม่</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filters & Search */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-3 rounded-2xl flex items-center gap-2.5 overflow-x-auto scrollbar-none">
+        {/* Filters & Search */}
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-2.5 sm:p-3 rounded-2xl flex items-center gap-2.5 overflow-x-auto scrollbar-none shadow-sm">
         {/* Compact Search: Magnifying glass icon only to save screen space */}
         <div className="flex items-center gap-2 shrink-0">
           {isSearchExpanded ? (
@@ -353,13 +419,15 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           ))}
         </div>
       </div>
+      </div>
 
-      {/* INGREDIENTS TABLE */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* INGREDIENTS TABLE (Scrollable area) */}
+      <div className="flex-1 min-h-0 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col mb-4">
+        <div className="flex-1 overflow-x-auto overflow-y-auto">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-white/5 border-b border-white/10 text-white/50 font-bold uppercase tracking-wider text-[10px]">
+            <thead className="sticky top-0 z-20 bg-[#161618] border-b border-white/15 shadow-sm">
+              <tr className="text-white/70 font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3 w-12 text-center">ลำดับ</th>
                 <th className="py-3 px-4">วัตถุดิบ</th>
                 <th className="py-3 px-3">ปริมาณที่ซื้อ</th>
                 <th className="py-3 px-3">ราคาซื้อ</th>
@@ -373,13 +441,70 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
             <tbody className="divide-y divide-white/5">
               {filteredIngredients.map((ing) => {
                 const isShrimp = ing.usageUnit === 'ตัว';
+                const isDragged = draggedIngredientId === ing.id;
+                const isDragOver = dragOverIngredientId === ing.id;
+                const globalIndex = ingredients.findIndex((i) => i.id === ing.id);
+                const isFirst = globalIndex <= 0;
+                const isLast = globalIndex === -1 || globalIndex >= ingredients.length - 1;
+
                 return (
                   <tr
                     key={ing.id}
-                    className={`hover:bg-white/10 transition-colors ${
-                      ing.isReviewRequired ? 'bg-red-500/10' : ''
+                    onDragOver={(e) => handleDragOver(e, ing.id)}
+                    onDrop={(e) => handleDrop(e, ing.id)}
+                    className={`transition-colors ${
+                      isDragged
+                        ? 'opacity-40 bg-white/5'
+                        : isDragOver
+                        ? 'bg-[#F27D26]/20 border-t-2 border-[#F27D26]'
+                        : ing.isReviewRequired
+                        ? 'bg-red-500/10 hover:bg-red-500/15'
+                        : 'hover:bg-white/10'
                     }`}
                   >
+                    {/* Reorder drag handle & up/down arrow buttons */}
+                    <td className="py-3.5 px-2 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, ing.id)}
+                          onDragEnd={handleDragEnd}
+                          className="p-1 text-white/40 hover:text-[#F27D26] cursor-grab active:cursor-grabbing hover:bg-white/10 rounded transition-colors"
+                          title="กดค้างแล้วลากเพื่อย้ายตำแหน่ง"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col -space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveIngredient(ing.id, 'up')}
+                            disabled={isFirst}
+                            className={`p-0.5 rounded transition-colors ${
+                              isFirst
+                                ? 'text-white/15 cursor-not-allowed'
+                                : 'text-white/50 hover:text-white hover:bg-white/10 cursor-pointer'
+                            }`}
+                            title="ย้ายขึ้น"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveIngredient(ing.id, 'down')}
+                            disabled={isLast}
+                            className={`p-0.5 rounded transition-colors ${
+                              isLast
+                                ? 'text-white/15 cursor-not-allowed'
+                                : 'text-white/50 hover:text-white hover:bg-white/10 cursor-pointer'
+                            }`}
+                            title="ย้ายลง"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+
                     <td className="py-3.5 px-4 font-semibold text-white">
                       <div className="flex items-center gap-2">
                         <span>{ing.name}</span>
@@ -397,11 +522,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                           </span>
                         )}
                       </div>
-                      {ing.notes && (
-                        <div className="text-[11px] text-white/50 font-normal truncate max-w-xs mt-0.5">
-                          {ing.notes}
-                        </div>
-                      )}
                     </td>
                     <td className="py-3.5 px-3 text-white/70 font-mono">
                       {ing.purchaseQuantity.toLocaleString()} {ing.purchaseUnit}
@@ -465,7 +585,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           </table>
         </div>
       </div>
-
       {/* EDIT / ADD INGREDIENT MODAL */}
       {isEditingModalOpen && editingIngredient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
