@@ -27,6 +27,7 @@ import {
   Sauce,
   RestaurantSettings,
   RecipeCostBreakdown,
+  RecipeItem,
 } from '../types';
 import {
   calculateVariantCostBreakdown,
@@ -42,6 +43,7 @@ interface FoodCostViewProps {
   settings: RestaurantSettings;
   initialServingMode?: 'ON_RICE' | 'A_LA_CARTE';
   onSaveMenu: (menu: MenuItem) => void;
+  onDeleteMenu?: (menuId: string) => void;
   onUpdateVariantPrice: (
     menuId: string,
     variantId: string,
@@ -57,6 +59,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   settings,
   initialServingMode,
   onSaveMenu,
+  onDeleteMenu,
   onUpdateVariantPrice,
   onNavigateToRecipeBuilder,
 }) => {
@@ -74,6 +77,39 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     }
   }, [initialServingMode]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
+
+  // Delete Menu Modal state
+  const [menuToDelete, setMenuToDelete] = useState<MenuItem | null>(null);
+
+  // Variant Modal state (Add or Edit)
+  const [variantModalState, setVariantModalState] = useState<{
+    isOpen: boolean;
+    mode: 'ADD' | 'EDIT';
+    menu: MenuItem | null;
+    variant: Partial<MenuVariant> | null;
+    selectedIngredientId: string;
+    meatQuantity: number;
+  }>({
+    isOpen: false,
+    mode: 'ADD',
+    menu: null,
+    variant: null,
+    selectedIngredientId: '',
+    meatQuantity: 80,
+  });
+
+  // Variant Delete Modal state
+  const [variantToDelete, setVariantToDelete] = useState<{
+    menu: MenuItem;
+    variant: MenuVariant;
+  } | null>(null);
+
+  // Meat ingredients list for quick protein selection
+  const meatIngredients = useMemo(() => {
+    return ingredients.filter(
+      (i) => i.category === 'เนื้อสัตว์และอาหารทะเล' || i.category?.includes('เนื้อสัตว์')
+    );
+  }, [ingredients]);
 
   // Breakdown Modal state
   const [selectedBreakdown, setSelectedBreakdown] = useState<{
@@ -356,10 +392,15 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   };
 
   const handleOpenAddMenu = () => {
+    const currentCat =
+      selectedCategory !== 'ALL'
+        ? selectedCategory
+        : (categories.find((c) => c !== 'ALL') || 'ผัดและกะเพรา');
+
     const newMenu: Partial<MenuItem> = {
       id: `menu_${Date.now()}`,
       name: '',
-      category: 'ผัดและกะเพรา',
+      category: currentCat,
       variants: [
         {
           id: `var_${Date.now()}_1`,
@@ -408,25 +449,184 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   };
 
   const handleOpenAddVariant = (menu: MenuItem) => {
-    const newVariant: MenuVariant = {
+    // Find default meat ingredient if available from ingredients
+    const defaultIng = meatIngredients[0] || ingredients[0];
+    const defaultProtein = defaultIng ? defaultIng.name.split(' (')[0].split(' ')[0] : 'หมูสับ';
+    const initialQty = defaultIng?.usageUnit === 'ตัว' || defaultIng?.baseUnit === 'ตัว' ? 4 : 80;
+
+    const newVariant: Partial<MenuVariant> = {
       id: `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       menuId: menu.id,
-      name: `${menu.name} หมูสับ`,
-      proteinType: 'หมูสับ',
+      name: `${menu.name} ${defaultProtein}`,
+      proteinType: defaultProtein,
       sellingPrice: 65,
       takeawayPrice: 70,
       deliveryPrice: 89,
-      overheadCost: 25,
-      packagingCost: 9,
-      recipeItems: [],
+      grabPrice: 89,
+      linemanPrice: 89,
+      robinhoodPrice: 65,
+      overheadCost: 6.0,
+      packagingCost: 9.0,
+      recipeItems: defaultIng
+        ? [
+            {
+              ingredientId: defaultIng.id,
+              name: defaultIng.name,
+              quantity: initialQty,
+              unit: defaultIng.usageUnit || 'g',
+              calculatedUnitCost: defaultIng.costPerBaseUnit || 0,
+              calculatedLineCost: Number(((defaultIng.costPerBaseUnit || 0) * initialQty).toFixed(2)),
+            },
+          ]
+        : [],
       active: true,
     };
-    const updatedMenu = {
+
+    setVariantModalState({
+      isOpen: true,
+      mode: 'ADD',
+      menu,
+      variant: newVariant,
+      selectedIngredientId: defaultIng ? defaultIng.id : '',
+      meatQuantity: initialQty,
+    });
+  };
+
+  const handleOpenEditVariant = (menu: MenuItem, variant: MenuVariant) => {
+    // Detect linked ingredient if exists
+    let matchedIngId = '';
+    const proteinItem = (variant.recipeItems || []).find((it) => {
+      const lower = (it.name || '').toLowerCase();
+      return (
+        lower.includes('หมู') ||
+        lower.includes('ไก่') ||
+        lower.includes('เนื้อ') ||
+        lower.includes('กุ้ง') ||
+        lower.includes('หมึก') ||
+        lower.includes('ไส้กรอก') ||
+        lower.includes('ปลา')
+      );
+    }) || (variant.recipeItems && variant.recipeItems[0]);
+
+    if (proteinItem?.ingredientId) {
+      matchedIngId = proteinItem.ingredientId;
+    } else {
+      const pName = (variant.proteinType || variant.name).toLowerCase();
+      const matched = ingredients.find(
+        (i) => i.name.toLowerCase().includes(pName) || pName.includes(i.name.toLowerCase().split(' ')[0])
+      );
+      if (matched) matchedIngId = matched.id;
+    }
+
+    const defaultQty = proteinItem?.quantity || (variant.proteinType?.includes('กุ้ง') ? 4 : 80);
+
+    setVariantModalState({
+      isOpen: true,
+      mode: 'EDIT',
+      menu,
+      variant: JSON.parse(JSON.stringify(variant)),
+      selectedIngredientId: matchedIngId,
+      meatQuantity: defaultQty,
+    });
+  };
+
+  const handleOpenDeleteVariant = (menu: MenuItem, variantId: string) => {
+    const v = menu.variants.find((item) => item.id === variantId);
+    if (!v) return;
+    setVariantToDelete({ menu, variant: v });
+  };
+
+  const handleConfirmDeleteVariant = () => {
+    if (!variantToDelete) return;
+    const { menu, variant } = variantToDelete;
+    const updatedVariants = menu.variants.filter((v) => v.id !== variant.id);
+    const updatedMenu: MenuItem = {
       ...menu,
-      variants: [...menu.variants, newVariant],
+      variants: updatedVariants,
       updatedAt: new Date().toISOString(),
     };
     onSaveMenu(updatedMenu);
+    if (selectedBreakdown?.variant.id === variant.id) {
+      setSelectedBreakdown(null);
+    }
+    setVariantToDelete(null);
+  };
+
+  const handleSaveVariantModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!variantModalState.menu || !variantModalState.variant) return;
+    const targetMenu = variantModalState.menu;
+    const v = variantModalState.variant;
+    const pType = v.proteinType?.trim() || 'หมูสับ';
+    const linkedIng = ingredients.find((i) => i.id === variantModalState.selectedIngredientId);
+    const qty = Number(variantModalState.meatQuantity) || (pType.includes('กุ้ง') ? 4 : 80);
+
+    const proteinRecipeItem: RecipeItem = {
+      ingredientId: linkedIng ? linkedIng.id : '',
+      name: linkedIng ? linkedIng.name : pType,
+      quantity: qty,
+      unit: (linkedIng?.usageUnit as any) || (linkedIng?.baseUnit as any) || 'g',
+      calculatedUnitCost: linkedIng?.costPerBaseUnit || 0,
+      calculatedLineCost: Number(((linkedIng?.costPerBaseUnit || 0) * qty).toFixed(2)),
+    };
+
+    // Keep existing non-protein recipe items if any
+    const existingOtherItems = (v.recipeItems || []).filter((it) => {
+      const lower = (it.name || '').toLowerCase();
+      return !(
+        lower.includes('หมู') ||
+        lower.includes('ไก่') ||
+        lower.includes('เนื้อ') ||
+        lower.includes('กุ้ง') ||
+        lower.includes('หมึก') ||
+        lower.includes('ไส้กรอก') ||
+        lower.includes('ปลา')
+      );
+    });
+
+    const finalRecipeItems = [proteinRecipeItem, ...existingOtherItems];
+
+    const finalVariant: MenuVariant = {
+      id: v.id || `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      menuId: targetMenu.id,
+      name: v.name?.trim() || `${targetMenu.name} ${pType}`,
+      proteinType: pType,
+      sellingPrice: Number(v.sellingPrice) || 60,
+      takeawayPrice: Number(v.takeawayPrice) || Number(v.sellingPrice) || 65,
+      deliveryPrice: Number(v.deliveryPrice) || Number(v.sellingPrice) || 85,
+      grabPrice: Number(v.grabPrice) || Math.round((Number(v.sellingPrice) || 60) * 1.5) || 89,
+      linemanPrice: Number(v.linemanPrice) || Math.round((Number(v.sellingPrice) || 60) * 1.5) || 89,
+      robinhoodPrice: Number(v.robinhoodPrice) || Number(v.sellingPrice) || 65,
+      overheadCost: v.overheadCost !== undefined && !isNaN(Number(v.overheadCost)) ? Number(v.overheadCost) : 6.0,
+      packagingCost: v.packagingCost !== undefined && !isNaN(Number(v.packagingCost)) ? Number(v.packagingCost) : 9.0,
+      recipeItems: finalRecipeItems,
+      active: v.active !== undefined ? v.active : true,
+    };
+
+    let updatedVariants: MenuVariant[];
+    if (variantModalState.mode === 'ADD') {
+      updatedVariants = [...targetMenu.variants, finalVariant];
+    } else {
+      updatedVariants = targetMenu.variants.map((item) =>
+        item.id === finalVariant.id ? finalVariant : item
+      );
+    }
+
+    const updatedMenu: MenuItem = {
+      ...targetMenu,
+      variants: updatedVariants,
+      updatedAt: new Date().toISOString(),
+    };
+
+    onSaveMenu(updatedMenu);
+    setVariantModalState({
+      isOpen: false,
+      mode: 'ADD',
+      menu: null,
+      variant: null,
+      selectedIngredientId: '',
+      meatQuantity: 80,
+    });
   };
 
   // Packaging Line Items Management for Sub-Items
@@ -721,20 +921,6 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               </button>
             </div>
 
-            {/* Requirement 1: Move "เพิ่มหมวดหมู่" next to "เพิ่มเมนูใหม่" */}
-            <button
-              type="button"
-              onClick={() => {
-                setCategoryError(null);
-                setNewCategoryInput('');
-                setIsAddCategoryModalOpen(true);
-              }}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 !text-white font-black rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer shrink-0 border border-amber-600"
-              title="เพิ่มหมวดหมู่อาหารใหม่"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ เพิ่มหมวดหมู่</span>
-            </button>
 
             {/* Add menu button */}
             <button
@@ -842,6 +1028,14 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setMenuToDelete(menu)}
+                        className="p-1.5 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0 transition-colors"
+                        title="ลบเมนู"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     {/* Inline accordion detail panel directly beneath this menu row */}
@@ -855,6 +1049,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                           onSaveMenu={onSaveMenu}
                           onSelectBreakdown={setSelectedBreakdown}
                           onOpenAddVariant={handleOpenAddVariant}
+                          onEditVariant={handleOpenEditVariant}
+                          onDeleteVariant={handleOpenDeleteVariant}
                           activeChannel={activeChannel}
                           onChannelChange={(ch) => setActiveChannel(ch as any)}
                           activeServingMode={activeServingMode}
@@ -883,6 +1079,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               onSaveMenu={onSaveMenu}
               onSelectBreakdown={setSelectedBreakdown}
               onOpenAddVariant={handleOpenAddVariant}
+              onEditVariant={handleOpenEditVariant}
+              onDeleteVariant={handleOpenDeleteVariant}
               activeChannel={activeChannel}
               onChannelChange={(ch) => setActiveChannel(ch as any)}
               activeServingMode={activeServingMode}
@@ -1316,118 +1514,18 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
             <form onSubmit={handleSaveMenuModal} className="space-y-4 mt-4 text-xs">
               <div>
-                <label className="block text-stone-700 mb-1 font-semibold">ชื่อเมนูอาหาร</label>
+                <label className="block text-stone-700 mb-1.5 font-bold text-sm">
+                  ชื่อเมนูอาหาร <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
+                  autoFocus
                   placeholder="เช่น ข้าวกะเพราโบราณ, ข้าวผัดพริกเผา"
                   value={editingMenu.name || ''}
                   onChange={(e) => setEditingMenu({ ...editingMenu, name: e.target.value })}
-                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 focus:outline-none focus:border-[#F27D26]"
+                  className="w-full p-3 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-sm font-medium focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
                 />
-              </div>
-
-              <div>
-                <label className="block text-stone-700 mb-1 font-semibold">หมวดหมู่อาหาร</label>
-                <div className="flex gap-2">
-                  <select
-                    value={editingMenu.category || (categories.filter((c) => c !== 'ALL')[0] || 'ผัดและกะเพรา')}
-                    onChange={(e) => setEditingMenu({ ...editingMenu, category: e.target.value })}
-                    className="flex-1 p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 focus:outline-none focus:border-[#F27D26]"
-                  >
-                    {categories
-                      .filter((c) => c !== 'ALL')
-                      .map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategoryError(null);
-                      setNewCategoryInput('');
-                      setIsAddCategoryModalOpen(true);
-                    }}
-                    className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-[#D6CEBE] rounded-xl text-xs font-bold text-stone-700 shrink-0 cursor-pointer"
-                    title="สร้างหมวดหมู่ใหม่"
-                  >
-                    + หมวดหมู่
-                  </button>
-                </div>
-              </div>
-
-              {/* Variants Price editor */}
-              <div>
-                <label className="block text-stone-700 mb-1 font-semibold">
-                  ตัวเลือกเมนูและราคาขาย
-                </label>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {(editingMenu.variants || []).map((v, idx) => (
-                    <div
-                      key={v.id || idx}
-                      className="p-3 bg-[#FAF8F5] border border-[#EAE4D9] rounded-xl space-y-2"
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-stone-900">{v.name} ({v.proteinType})</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-[10px] text-stone-500 block font-medium">หน้าร้าน (฿)</label>
-                          <NumericInput
-                            type="number"
-                            min="0"
-                            value={v.sellingPrice}
-                            onChange={(e) => {
-                              const updated = [...(editingMenu.variants || [])];
-                              updated[idx] = {
-                                ...updated[idx],
-                                sellingPrice: parseFloat(e.target.value) || 0,
-                              };
-                              setEditingMenu({ ...editingMenu, variants: updated });
-                            }}
-                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-stone-500 block font-medium">กลับบ้าน (฿)</label>
-                          <NumericInput
-                            type="number"
-                            min="0"
-                            value={v.takeawayPrice}
-                            onChange={(e) => {
-                              const updated = [...(editingMenu.variants || [])];
-                              updated[idx] = {
-                                ...updated[idx],
-                                takeawayPrice: parseFloat(e.target.value) || 0,
-                              };
-                              setEditingMenu({ ...editingMenu, variants: updated });
-                            }}
-                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-stone-500 block font-medium">Delivery (฿)</label>
-                          <NumericInput
-                            type="number"
-                            min="0"
-                            value={v.deliveryPrice}
-                            onChange={(e) => {
-                              const updated = [...(editingMenu.variants || [])];
-                              updated[idx] = {
-                                ...updated[idx],
-                                deliveryPrice: parseFloat(e.target.value) || 0,
-                              };
-                              setEditingMenu({ ...editingMenu, variants: updated });
-                            }}
-                            className="w-full p-1.5 bg-white border border-[#D6CEBE] rounded-lg text-stone-900 font-mono font-bold"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-[#EAE4D9]">
@@ -1826,6 +1924,527 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   className="px-3.5 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold rounded-xl cursor-pointer"
                 >
                   ปิด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE MENU CONFIRMATION MODAL */}
+      {menuToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917]">
+            <div className="flex items-center justify-between border-b border-[#EAE4D9] pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                  <Trash2 className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-[#1C1917] text-base">ยืนยันการลบเมนูอาหาร</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMenuToDelete(null)}
+                className="p-1 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4 mt-4 text-xs">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold text-xs">
+                    ต้องการลบเมนู "{menuToDelete.name}" ใช่หรือไม่?
+                  </p>
+                  <p className="text-[11px] text-rose-700 leading-relaxed">
+                    ตัวเลือกเนื้อสัตว์และข้อมูลต้นทุนทั้งหมด ({menuToDelete.variants.length} รายการ) ในเมนูนี้จะถูกลบออกด้วย
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#EAE4D9]">
+                <button
+                  type="button"
+                  onClick={() => setMenuToDelete(null)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-stone-700 font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onDeleteMenu) {
+                      onDeleteMenu(menuToDelete.id);
+                    }
+                    if (selectedMenuId === menuToDelete.id) {
+                      setSelectedMenuId(null);
+                    }
+                    setMenuToDelete(null);
+                  }}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>ยืนยันการลบเมนู</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD / EDIT VARIANT MODAL (เชื่อมโยงกับข้อมูลวัตถุดิบจริง) */}
+      {variantModalState.isOpen && variantModalState.menu && variantModalState.variant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-stone-300 text-stone-900 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-xl bg-[#F27D26]/15 border border-[#F27D26]/30 text-[#F27D26] flex items-center justify-center font-bold">
+                  <UtensilsCrossed className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="font-black text-stone-950 text-base">
+                    {variantModalState.mode === 'ADD'
+                      ? '+ เพิ่มตัวเลือกเนื้อสัตว์ใหม่'
+                      : 'แก้ไขตัวเลือกเนื้อสัตว์'}
+                  </h3>
+                  <p className="text-xs text-stone-500 font-medium">
+                    เมนู: <strong className="text-stone-800">{variantModalState.menu.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setVariantModalState({ isOpen: false, mode: 'ADD', menu: null, variant: null, selectedIngredientId: '', meatQuantity: 80 })
+                }
+                className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveVariantModal} className="space-y-4 mt-4 text-xs">
+              {/* 1. เลือกประเภทเนื้อสัตว์จากฐานข้อมูลวัตถุดิบ */}
+              <div className="p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-stone-900 font-black text-xs">
+                    เลือกประเภทเนื้อสัตว์จากฐานข้อมูลวัตถุดิบ <span className="text-[#F27D26]">*</span>
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                    เชื่อมโยงต้นทุนจริงอัตโนมัติ
+                  </span>
+                </div>
+
+                <select
+                  value={variantModalState.selectedIngredientId}
+                  onChange={(e) => {
+                    const ingId = e.target.value;
+                    const ing = ingredients.find((i) => i.id === ingId);
+                    if (ing) {
+                      const pName = ing.name.split(' (')[0].split(' ')[0];
+                      const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                      setVariantModalState((prev) => ({
+                        ...prev,
+                        selectedIngredientId: ingId,
+                        meatQuantity: defaultQty,
+                        variant: {
+                          ...prev.variant,
+                          proteinType: pName,
+                          name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${pName}` : prev.variant?.name,
+                        },
+                      }));
+                    } else {
+                      setVariantModalState((prev) => ({
+                        ...prev,
+                        selectedIngredientId: '',
+                      }));
+                    }
+                  }}
+                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
+                >
+                  <option value="">-- เลือกจากฐานข้อมูลวัตถุดิบ หรือพิมพ์เองด้านล่าง --</option>
+                  <optgroup label="วัตถุดิบหมวดเนื้อสัตว์และอาหารทะเล">
+                    {meatIngredients.map((ing) => (
+                      <option key={ing.id} value={ing.id}>
+                        {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
+                      </option>
+                    ))}
+                  </optgroup>
+                  {ingredients.filter((i) => !meatIngredients.some((m) => m.id === i.id)).length > 0 && (
+                    <optgroup label="วัตถุดิบอื่นๆ ทั้งหมด">
+                      {ingredients
+                        .filter((i) => !meatIngredients.some((m) => m.id === i.id))
+                        .map((ing) => (
+                          <option key={ing.id} value={ing.id}>
+                            {ing.name} ({ing.category})
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </select>
+
+                {/* Quick Selection Chips */}
+                {meatIngredients.length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-stone-500 font-semibold mb-1">ปุ่มลัดเลือกด่วน:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {meatIngredients.slice(0, 8).map((ing) => {
+                        const isSelected = variantModalState.selectedIngredientId === ing.id;
+                        const shortName = ing.name.split(' (')[0];
+                        return (
+                          <button
+                            key={ing.id}
+                            type="button"
+                            onClick={() => {
+                              const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                              setVariantModalState((prev) => ({
+                                ...prev,
+                                selectedIngredientId: ing.id,
+                                meatQuantity: defaultQty,
+                                variant: {
+                                  ...prev.variant,
+                                  proteinType: shortName,
+                                  name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${shortName}` : prev.variant?.name,
+                                },
+                              }));
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                              isSelected
+                                ? 'bg-[#F27D26] text-white border-[#c2580e] shadow-2xs'
+                                : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            {shortName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. รายละเอียดตัวเลือก */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 mb-1 font-bold text-xs">
+                    ประเภทเนื้อสัตว์ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น หมูสับ, หมูหมัก, อกไก่, กุ้ง, ทะเล"
+                    value={variantModalState.variant.proteinType || ''}
+                    onChange={(e) =>
+                      setVariantModalState((prev) => ({
+                        ...prev,
+                        variant: {
+                          ...prev.variant,
+                          proteinType: e.target.value,
+                          name: prev.mode === 'ADD' && (!prev.variant?.name || prev.variant.name.startsWith(prev.menu?.name || ''))
+                            ? `${prev.menu?.name} ${e.target.value}`
+                            : prev.variant?.name,
+                        },
+                      }))
+                    }
+                    className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-800 mb-1 font-bold text-xs">
+                    ชื่อรายการตัวเลือก
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ข้าวกะเพรา หมูสับ"
+                    value={variantModalState.variant.name || ''}
+                    onChange={(e) =>
+                      setVariantModalState((prev) => ({
+                        ...prev,
+                        variant: { ...prev.variant, name: e.target.value },
+                      }))
+                    }
+                    className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
+                  />
+                </div>
+              </div>
+
+              {/* 3. ปริมาณเนื้อสัตว์ที่ใช้ */}
+              <div>
+                <label className="block text-stone-800 mb-1 font-bold text-xs">
+                  ปริมาณเนื้อสัตว์ที่ใช้ต่อจาน{' '}
+                  <span className="text-stone-500 font-normal">
+                    ({ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม หรือ ตัว'})
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    value={variantModalState.meatQuantity}
+                    onChange={(e) =>
+                      setVariantModalState((prev) => ({
+                        ...prev,
+                        meatQuantity: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-32 p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
+                  />
+                  <span className="text-xs text-stone-600 font-semibold">
+                    {ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม (g)'}
+                  </span>
+                  {/* Quick preset weight buttons */}
+                  <div className="flex items-center gap-1 ml-auto">
+                    {[60, 70, 80, 100, 120].map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() =>
+                          setVariantModalState((prev) => ({ ...prev, meatQuantity: w }))
+                        }
+                        className={`px-2 py-1 text-[10px] font-bold rounded-lg border ${
+                          variantModalState.meatQuantity === w
+                            ? 'bg-[#F27D26] text-white border-[#c2580e]'
+                            : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
+                        }`}
+                      >
+                        {w}g
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. ราคาขายแต่ละช่องทาง */}
+              <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl space-y-3">
+                <div className="font-black text-stone-900 text-xs">การตั้งราคาขายแต่ละช่องทาง (บาท)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ราคาหน้าร้าน (Dine-in) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={variantModalState.variant.sellingPrice || ''}
+                      onChange={(e) => {
+                        const price = parseFloat(e.target.value) || 0;
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: {
+                            ...prev.variant,
+                            sellingPrice: price,
+                            takeawayPrice: prev.variant?.takeawayPrice || (price > 0 ? price + 5 : 0),
+                            grabPrice: prev.variant?.grabPrice || Math.round(price * 1.5),
+                            linemanPrice: prev.variant?.linemanPrice || Math.round(price * 1.5),
+                            robinhoodPrice: prev.variant?.robinhoodPrice || price,
+                          },
+                        }));
+                      }}
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ราคาใส่กล่อง (Takeaway)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variantModalState.variant.takeawayPrice || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, takeawayPrice: parseFloat(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ราคา Grab Food
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variantModalState.variant.grabPrice || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, grabPrice: parseFloat(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ราคา Line Man
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variantModalState.variant.linemanPrice || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, linemanPrice: parseFloat(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ราคา Robinhood
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variantModalState.variant.robinhoodPrice || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, robinhoodPrice: parseFloat(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      ค่ากล่อง/แพ็กเกจจิ้ง (บาท)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variantModalState.variant.packagingCost ?? 9}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, packagingCost: parseFloat(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Live Calculation Preview Card */}
+              {(() => {
+                const linked = ingredients.find((i) => i.id === variantModalState.selectedIngredientId);
+                const unitCost = linked?.costPerBaseUnit || 0.125;
+                const meatCost = Math.round(unitCost * (Number(variantModalState.meatQuantity) || 0));
+                const sellPrice = Number(variantModalState.variant.sellingPrice) || 65;
+                const estTotalCost = meatCost + 6.0 + 9.0;
+                const estProfit = sellPrice - estTotalCost;
+                const estFc = sellPrice > 0 ? Math.round((meatCost / sellPrice) * 100) : 0;
+
+                return (
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs font-mono">
+                    <div>
+                      <span className="text-emerald-900 font-bold">ต้นทุนเนื้อสัตว์: </span>
+                      <strong className="text-emerald-950 font-black">฿{meatCost}</strong>
+                      {linked && (
+                        <span className="text-[10px] text-emerald-700 ml-1">
+                          (฿{(unitCost * 1000).toFixed(0)}/กก.)
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-stone-700 font-bold">กำไรหน้าร้าน: </span>
+                      <strong className="text-emerald-800 font-black">฿{estProfit}</strong>
+                      <span className="text-[10px] text-stone-600 ml-1.5 font-sans">
+                        (FC ~{estFc}%)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#EAE4D9]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVariantModalState({ isOpen: false, mode: 'ADD', menu: null, variant: null, selectedIngredientId: '', meatQuantity: 80 })
+                  }
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-stone-700 font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-white font-bold rounded-xl shadow-lg shadow-[#F27D26]/20 cursor-pointer"
+                >
+                  {variantModalState.mode === 'ADD' ? 'บันทึกตัวเลือกใหม่' : 'บันทึกการแก้ไข'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE VARIANT CONFIRMATION MODAL */}
+      {variantToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm">
+          <div className="bg-[#FFFDF9] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4D9] text-[#1C1917]">
+            <div className="flex items-center justify-between border-b border-[#EAE4D9] pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                  <Trash2 className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-[#1C1917] text-base">ยืนยันการลบตัวเลือกเนื้อสัตว์</h3>
+                  <p className="text-xs text-stone-500 font-medium">เมนู: {variantToDelete.menu.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVariantToDelete(null)}
+                className="p-1 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4 mt-4 text-xs">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold text-xs">
+                    ต้องการลบตัวเลือก "{variantToDelete.variant.name || variantToDelete.variant.proteinType}" ใช่หรือไม่?
+                  </p>
+                  <p className="text-[11px] text-rose-700 leading-relaxed">
+                    ตัวเลือกเนื้อสัตว์นี้จะถูกลบออกจากตารางต้นทุนและการตั้งราคาของเมนู {variantToDelete.menu.name} ทันที
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#EAE4D9]">
+                <button
+                  type="button"
+                  onClick={() => setVariantToDelete(null)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-stone-700 font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteVariant}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>ยืนยันการลบตัวเลือก</span>
                 </button>
               </div>
             </div>

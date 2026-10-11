@@ -200,6 +200,14 @@ export default function App() {
     });
   };
 
+  const handleDeleteMenu = (menuId: string) => {
+    setMenus((prevMenus) => {
+      const updated = prevMenus.filter((m) => m.id !== menuId);
+      StorageService.saveMenus(updated);
+      return updated;
+    });
+  };
+
   const handleUpdateVariantPrice = (
     menuId: string,
     variantId: string,
@@ -399,6 +407,7 @@ export default function App() {
               settings={settings}
               initialServingMode="ON_RICE"
               onSaveMenu={handleSaveMenu}
+              onDeleteMenu={handleDeleteMenu}
               onUpdateVariantPrice={handleUpdateVariantPrice}
               onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
             />
@@ -413,6 +422,7 @@ export default function App() {
               settings={settings}
               initialServingMode="A_LA_CARTE"
               onSaveMenu={handleSaveMenu}
+              onDeleteMenu={handleDeleteMenu}
               onUpdateVariantPrice={handleUpdateVariantPrice}
               onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
             />

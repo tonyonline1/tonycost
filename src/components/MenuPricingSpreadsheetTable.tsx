@@ -7,7 +7,7 @@ import {
   RestaurantSettings,
   RecipeCostBreakdown,
 } from '../types';
-import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid, UtensilsCrossed } from 'lucide-react';
+import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid, UtensilsCrossed, Edit2, Trash2 } from 'lucide-react';
 
 export type PricingChannelTab = 'DINE_IN' | 'GRAB' | 'LINEMAN' | 'ROBINHOOD' | 'ALL';
 export type ServingDishMode = 'ON_RICE' | 'A_LA_CARTE';
@@ -24,6 +24,8 @@ interface MenuPricingSpreadsheetTableProps {
     breakdown: RecipeCostBreakdown;
   }) => void;
   onOpenAddVariant?: (menu: MenuItem) => void;
+  onEditVariant?: (menu: MenuItem, variant: MenuVariant) => void;
+  onDeleteVariant?: (menu: MenuItem, variantId: string) => void;
   activeChannel?: PricingChannelTab;
   onChannelChange?: (channel: PricingChannelTab) => void;
   activeServingMode?: ServingDishMode;
@@ -38,6 +40,8 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
   onSaveMenu,
   onSelectBreakdown,
   onOpenAddVariant,
+  onEditVariant,
+  onDeleteVariant,
   activeChannel: parentChannel,
   onChannelChange,
   activeServingMode: parentServingMode,
@@ -748,6 +752,19 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                 }
               }
               if (!proteinUnitCost) {
+                // Look up matching ingredient from ingredientsMap by protein name
+                for (const ing of ingredientsMap.values()) {
+                  const ingLower = ing.name.toLowerCase();
+                  if (
+                    ingLower.includes(pName) ||
+                    pName.includes(ingLower.split(' ')[0])
+                  ) {
+                    proteinUnitCost = ing.costPerBaseUnit || (ing.purchasePrice / (ing.purchaseQuantity * ((ing.yieldPercent || 100) / 100)));
+                    break;
+                  }
+                }
+              }
+              if (!proteinUnitCost) {
                 if (pName.includes('หมูหมัก')) proteinUnitCost = 0.214;
                 else if (pName.includes('หมูบด') || pName.includes('หมูสับ')) proteinUnitCost = 0.113;
                 else if (pName.includes('ไก่')) proteinUnitCost = 0.10;
@@ -948,12 +965,33 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
 
                   {/* Common 1. รายการ */}
                   <td className="py-2 px-3 bg-[#FFE0B2] text-stone-900 font-bold border-r border-black text-left whitespace-nowrap">
-                    <div className="flex items-center justify-between gap-1">
-                      <span>{v.proteinType || v.name}</span>
-                      {onSelectBreakdown && (
-                        <button
-                          type="button"
-                          onClick={() => {
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="font-bold">{v.proteinType || v.name}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {onEditVariant && (
+                          <button
+                            type="button"
+                            onClick={() => onEditVariant(menu, v)}
+                            className="p-1 text-stone-600 hover:text-amber-800 hover:bg-amber-200/80 rounded cursor-pointer transition-colors"
+                            title="แก้ไขตัวเลือกเนื้อสัตว์"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {onDeleteVariant && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteVariant(menu, v.id)}
+                            className="p-1 text-stone-600 hover:text-rose-600 hover:bg-rose-100 rounded cursor-pointer transition-colors"
+                            title="ลบตัวเลือกเนื้อสัตว์"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {onSelectBreakdown && (
+                          <button
+                            type="button"
+                            onClick={() => {
                             const breakdown: RecipeCostBreakdown = {
                               variantId: v.id,
                               variantName: v.name,
@@ -996,6 +1034,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                           <SlidersHorizontal className="w-3 h-3" />
                         </button>
                       )}
+                      </div>
                     </div>
                   </td>
 
