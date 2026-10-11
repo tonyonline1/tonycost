@@ -89,6 +89,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     variant: Partial<MenuVariant> | null;
     selectedIngredientId: string;
     meatQuantity: number;
+    seafoodShrimpQty?: number;
+    seafoodSquidQty?: number;
   }>({
     isOpen: false,
     mode: 'ADD',
@@ -96,6 +98,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     variant: null,
     selectedIngredientId: '',
     meatQuantity: 80,
+    seafoodShrimpQty: 4,
+    seafoodSquidQty: 40,
   });
 
   // Variant Delete Modal state
@@ -489,6 +493,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       variant: newVariant,
       selectedIngredientId: defaultIng ? defaultIng.id : '',
       meatQuantity: initialQty,
+      seafoodShrimpQty: 4,
+      seafoodSquidQty: 40,
     });
   };
 
@@ -519,14 +525,26 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     }
 
     const defaultQty = proteinItem?.quantity || (variant.proteinType?.includes('กุ้ง') ? 4 : 80);
+    const isSeafoodItem =
+      variant.proteinType?.includes('ทะเล') ||
+      variant.proteinType?.includes('ซีฟู้ด') ||
+      variant.name?.includes('ทะเล');
+    const existingShrimp = (variant.recipeItems || []).find(
+      (it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง')
+    );
+    const existingSquid = (variant.recipeItems || []).find(
+      (it) => it.proteinCategory === 'SQUID' || it.name.includes('หมึก')
+    );
 
     setVariantModalState({
       isOpen: true,
       mode: 'EDIT',
       menu,
       variant: JSON.parse(JSON.stringify(variant)),
-      selectedIngredientId: matchedIngId,
+      selectedIngredientId: isSeafoodItem ? 'seafood_combo' : matchedIngId,
       meatQuantity: defaultQty,
+      seafoodShrimpQty: existingShrimp?.quantity || 4,
+      seafoodSquidQty: existingSquid?.quantity || 40,
     });
   };
 
@@ -558,17 +576,13 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     const targetMenu = variantModalState.menu;
     const v = variantModalState.variant;
     const pType = v.proteinType?.trim() || 'หมูสับ';
+    const isSeafoodSelected =
+      pType.includes('ทะเล') ||
+      pType.includes('ซีฟู้ด') ||
+      variantModalState.selectedIngredientId === 'seafood_combo';
+
     const linkedIng = ingredients.find((i) => i.id === variantModalState.selectedIngredientId);
     const qty = Number(variantModalState.meatQuantity) || (pType.includes('กุ้ง') ? 4 : 80);
-
-    const proteinRecipeItem: RecipeItem = {
-      ingredientId: linkedIng ? linkedIng.id : '',
-      name: linkedIng ? linkedIng.name : pType,
-      quantity: qty,
-      unit: (linkedIng?.usageUnit as any) || (linkedIng?.baseUnit as any) || 'g',
-      calculatedUnitCost: linkedIng?.costPerBaseUnit || 0,
-      calculatedLineCost: Number(((linkedIng?.costPerBaseUnit || 0) * qty).toFixed(2)),
-    };
 
     // Keep existing non-protein recipe items if any
     const existingOtherItems = (v.recipeItems || []).filter((it) => {
@@ -584,7 +598,51 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       );
     });
 
-    const finalRecipeItems = [proteinRecipeItem, ...existingOtherItems];
+    let finalRecipeItems: RecipeItem[];
+    if (isSeafoodSelected) {
+      const shrimpIng = ingredients.find((i) => i.id === 'ing_shrimp_xl' || i.name.includes('กุ้ง'));
+      const squidIng = ingredients.find((i) => i.id === 'ing_squid_fresh' || i.name.includes('หมึก'));
+      const sQty = Number(variantModalState.seafoodShrimpQty) || 4;
+      const qQty = Number(variantModalState.seafoodSquidQty) || 40;
+      const sUnitCost = shrimpIng?.costPerBaseUnit || 8.5;
+      const qUnitCost = squidIng?.costPerBaseUnit || 0.388;
+
+      finalRecipeItems = [
+        {
+          id: 'sea_shrimp_' + Date.now(),
+          ingredientType: 'INGREDIENT',
+          ingredientId: shrimpIng ? shrimpIng.id : 'ing_shrimp_xl',
+          name: shrimpIng ? shrimpIng.name : 'กุ้งสด (XL)',
+          quantity: sQty,
+          unit: (shrimpIng?.usageUnit as any) || 'ตัว',
+          proteinCategory: 'SHRIMP',
+          calculatedUnitCost: sUnitCost,
+          calculatedLineCost: Number((sUnitCost * sQty).toFixed(2)),
+        },
+        {
+          id: 'sea_squid_' + Date.now(),
+          ingredientType: 'INGREDIENT',
+          ingredientId: squidIng ? squidIng.id : 'ing_squid_fresh',
+          name: squidIng ? squidIng.name : 'ปลาหมึกกล้วยสด',
+          quantity: qQty,
+          unit: (squidIng?.usageUnit as any) || 'g',
+          proteinCategory: 'SQUID',
+          calculatedUnitCost: qUnitCost,
+          calculatedLineCost: Number((qUnitCost * qQty).toFixed(2)),
+        },
+        ...existingOtherItems,
+      ];
+    } else {
+      const proteinRecipeItem: RecipeItem = {
+        ingredientId: linkedIng ? linkedIng.id : '',
+        name: linkedIng ? linkedIng.name : pType,
+        quantity: qty,
+        unit: (linkedIng?.usageUnit as any) || (linkedIng?.baseUnit as any) || 'g',
+        calculatedUnitCost: linkedIng?.costPerBaseUnit || 0,
+        calculatedLineCost: Number(((linkedIng?.costPerBaseUnit || 0) * qty).toFixed(2)),
+      };
+      finalRecipeItems = [proteinRecipeItem, ...existingOtherItems];
+    }
 
     const finalVariant: MenuVariant = {
       id: v.id || `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -746,6 +804,98 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       variant: updatedVariant,
       breakdown: updatedBreakdown,
     });
+  };
+
+  // Handler for selecting breakdown with robust seafood auto-enrichment
+  const handleSelectBreakdown = (data: {
+    menu: MenuItem;
+    variant: MenuVariant;
+    breakdown: RecipeCostBreakdown;
+  }) => {
+    const isSeafood =
+      data.variant.proteinType?.includes('ทะเล') ||
+      data.variant.proteinType?.includes('ซีฟู้ด') ||
+      data.variant.name?.includes('ทะเล') ||
+      (data.breakdown.shrimpCost > 0 && data.breakdown.squidCost > 0);
+
+    if (isSeafood) {
+      const shrimpIng = ingredients.find((i) => i.id === 'ing_shrimp_xl' || i.name.includes('กุ้ง'));
+      const squidIng = ingredients.find((i) => i.id === 'ing_squid_fresh' || i.name.includes('หมึก'));
+      const sUnitCost = shrimpIng?.costPerBaseUnit || 8.5;
+      const qUnitCost = squidIng?.costPerBaseUnit || 0.388;
+
+      const existingShrimp = (data.variant.recipeItems || []).find(
+        (it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง')
+      );
+      const existingSquid = (data.variant.recipeItems || []).find(
+        (it) => it.proteinCategory === 'SQUID' || it.name.includes('หมึก')
+      );
+
+      const sQty = existingShrimp?.quantity || 4;
+      const qQty = existingSquid?.quantity || 40;
+      const calcShrimpCost = Number((sQty * sUnitCost).toFixed(2));
+      const calcSquidCost = Number((qQty * qUnitCost).toFixed(2));
+      const totalSeaCost = Number((calcShrimpCost + calcSquidCost).toFixed(2));
+
+      let items = [...(data.breakdown.items || [])];
+      const hasShrimp = items.some((it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง'));
+      const hasSquid = items.some((it) => it.proteinCategory === 'SQUID' || it.name.includes('หมึก'));
+
+      if (!hasShrimp) {
+        items.unshift({
+          id: 'seafood_shrimp_auto',
+          ingredientType: 'INGREDIENT',
+          ingredientId: shrimpIng?.id || 'ing_shrimp_xl',
+          name: shrimpIng?.name || 'กุ้งสด (XL)',
+          quantity: sQty,
+          unit: (shrimpIng?.usageUnit as any) || 'ตัว',
+          proteinCategory: 'SHRIMP',
+          calculatedUnitCost: sUnitCost,
+          calculatedLineCost: calcShrimpCost,
+        });
+      }
+      if (!hasSquid) {
+        const shrimpIdx = items.findIndex((it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง'));
+        const squidItem = {
+          id: 'seafood_squid_auto',
+          ingredientType: 'INGREDIENT' as const,
+          ingredientId: squidIng?.id || 'ing_squid_fresh',
+          name: squidIng?.name || 'ปลาหมึกกล้วยสด',
+          quantity: qQty,
+          unit: (squidIng?.usageUnit as any) || 'g',
+          proteinCategory: 'SQUID' as const,
+          calculatedUnitCost: qUnitCost,
+          calculatedLineCost: calcSquidCost,
+        };
+        if (shrimpIdx >= 0) {
+          items.splice(shrimpIdx + 1, 0, squidItem);
+        } else {
+          items.unshift(squidItem);
+        }
+      }
+
+      // Filter out any single generic duplicate
+      items = items.filter(
+        (it) => it.proteinCategory === 'SHRIMP' || it.proteinCategory === 'SQUID' || (it.name !== 'ทะเล' && it.name !== data.variant.proteinType)
+      );
+
+      const enrichedBreakdown: RecipeCostBreakdown = {
+        ...data.breakdown,
+        shrimpCost: calcShrimpCost,
+        squidCost: calcSquidCost,
+        seafoodTotalCost: totalSeaCost,
+        items,
+      };
+
+      setSelectedBreakdown({
+        menu: data.menu,
+        variant: data.variant,
+        breakdown: enrichedBreakdown,
+      });
+      return;
+    }
+
+    setSelectedBreakdown(data);
   };
 
   // Check if a breakdown has seafood
@@ -1047,7 +1197,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                           saucesMap={saucesMap}
                           settings={settings}
                           onSaveMenu={onSaveMenu}
-                          onSelectBreakdown={setSelectedBreakdown}
+                          onSelectBreakdown={handleSelectBreakdown}
                           onOpenAddVariant={handleOpenAddVariant}
                           onEditVariant={handleOpenEditVariant}
                           onDeleteVariant={handleOpenDeleteVariant}
@@ -1077,7 +1227,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               saucesMap={saucesMap}
               settings={settings}
               onSaveMenu={onSaveMenu}
-              onSelectBreakdown={setSelectedBreakdown}
+              onSelectBreakdown={handleSelectBreakdown}
               onOpenAddVariant={handleOpenAddVariant}
               onEditVariant={handleOpenEditVariant}
               onDeleteVariant={handleOpenDeleteVariant}
@@ -1177,7 +1327,69 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-200 font-mono">
-                      {selectedBreakdown.breakdown.items.map((item, idx) => (
+                      {(() => {
+                        // Ensure for Seafood variants that both Shrimp and Squid are present in items
+                        const isSeafood =
+                          selectedBreakdown.variant.proteinType?.includes('ทะเล') ||
+                          selectedBreakdown.variant.proteinType?.includes('ซีฟู้ด') ||
+                          selectedBreakdown.variant.name?.includes('ทะเล') ||
+                          (selectedBreakdown.breakdown.shrimpCost > 0 && selectedBreakdown.breakdown.squidCost > 0);
+
+                        let displayItems = [...selectedBreakdown.breakdown.items];
+
+                        if (isSeafood) {
+                          const hasShrimp = displayItems.some(
+                            (it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง')
+                          );
+                          const hasSquid = displayItems.some(
+                            (it) => it.proteinCategory === 'SQUID' || it.name.includes('หมึก')
+                          );
+
+                          // If shrimp is missing from items but has cost or default, add it
+                          if (!hasShrimp) {
+                            const shrimpCost = selectedBreakdown.breakdown.shrimpCost || 34.0;
+                            const shrimpQty = Math.round(shrimpCost / 8.5) || 4;
+                            displayItems.unshift({
+                              id: 'seafood_shrimp_display',
+                              name: 'กุ้งสด (XL)',
+                              quantity: shrimpQty,
+                              unit: 'ตัว' as any,
+                              proteinCategory: 'SHRIMP',
+                              calculatedUnitCost: 8.5,
+                              calculatedLineCost: shrimpCost,
+                            });
+                          }
+
+                          // If squid is missing from items but has cost or default, add it
+                          if (!hasSquid) {
+                            const squidCost = selectedBreakdown.breakdown.squidCost || 15.52;
+                            const squidQty = Math.round(squidCost / 0.388) || 40;
+                            const insertIdx = displayItems.findIndex(
+                              (it) => it.proteinCategory === 'SHRIMP' || it.name.includes('กุ้ง')
+                            );
+                            const newItem = {
+                              id: 'seafood_squid_display',
+                              name: 'ปลาหมึกกล้วยสด',
+                              quantity: squidQty,
+                              unit: 'g' as any,
+                              proteinCategory: 'SQUID',
+                              calculatedUnitCost: 0.388,
+                              calculatedLineCost: squidCost,
+                            };
+                            if (insertIdx >= 0) {
+                              displayItems.splice(insertIdx + 1, 0, newItem);
+                            } else {
+                              displayItems.unshift(newItem);
+                            }
+                          }
+
+                          // Remove single generic "ทะเล" if it exists
+                          displayItems = displayItems.filter(
+                            (it) => it.proteinCategory === 'SHRIMP' || it.proteinCategory === 'SQUID' || (it.name !== 'ทะเล' && it.name !== selectedBreakdown.variant.proteinType)
+                          );
+                        }
+
+                        return displayItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-stone-50">
                           <td className="py-2 px-3 font-sans text-stone-900 font-bold">
                             {item.name}
@@ -1195,7 +1407,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                             ฿{(item.calculatedLineCost || 0).toFixed(2)}
                           </td>
                         </tr>
-                      ))}
+                      ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -2040,20 +2253,34 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   value={variantModalState.selectedIngredientId}
                   onChange={(e) => {
                     const ingId = e.target.value;
-                    const ing = ingredients.find((i) => i.id === ingId);
-                    if (ing) {
-                      const pName = ing.name.split(' (')[0].split(' ')[0];
-                      const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                    if (ingId === 'seafood_combo') {
                       setVariantModalState((prev) => ({
                         ...prev,
-                        selectedIngredientId: ingId,
-                        meatQuantity: defaultQty,
+                        selectedIngredientId: 'seafood_combo',
+                        seafoodShrimpQty: prev.seafoodShrimpQty || 4,
+                        seafoodSquidQty: prev.seafoodSquidQty || 40,
                         variant: {
                           ...prev.variant,
-                          proteinType: pName,
-                          name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${pName}` : prev.variant?.name,
+                          proteinType: 'ทะเล',
+                          name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ทะเล` : prev.variant?.name,
                         },
                       }));
+                    } else if (ingId) {
+                      const ing = ingredients.find((i) => i.id === ingId);
+                      if (ing) {
+                        const pName = ing.name.split(' (')[0].split(' ')[0];
+                        const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          selectedIngredientId: ingId,
+                          meatQuantity: defaultQty,
+                          variant: {
+                            ...prev.variant,
+                            proteinType: pName,
+                            name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${pName}` : prev.variant?.name,
+                          },
+                        }));
+                      }
                     } else {
                       setVariantModalState((prev) => ({
                         ...prev,
@@ -2063,25 +2290,15 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   }}
                   className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
                 >
-                  <option value="">-- เลือกจากฐานข้อมูลวัตถุดิบ หรือพิมพ์เองด้านล่าง --</option>
-                  <optgroup label="วัตถุดิบหมวดเนื้อสัตว์และอาหารทะเล">
-                    {meatIngredients.map((ing) => (
-                      <option key={ing.id} value={ing.id}>
-                        {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
-                      </option>
-                    ))}
-                  </optgroup>
-                  {ingredients.filter((i) => !meatIngredients.some((m) => m.id === i.id)).length > 0 && (
-                    <optgroup label="วัตถุดิบอื่นๆ ทั้งหมด">
-                      {ingredients
-                        .filter((i) => !meatIngredients.some((m) => m.id === i.id))
-                        .map((ing) => (
-                          <option key={ing.id} value={ing.id}>
-                            {ing.name} ({ing.category})
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
+                  <option value="">-- เลือกจากหมวดเนื้อสัตว์และอาหารทะเล --</option>
+                  <option value="seafood_combo" className="font-bold text-[#F27D26]">
+                    🌊 ทะเล (กุ้งสด + ปลาหมึกสด คู่กัน)
+                  </option>
+                  {meatIngredients.map((ing) => (
+                    <option key={ing.id} value={ing.id}>
+                      {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
+                    </option>
+                  ))}
                 </select>
 
                 {/* Quick Selection Chips */}
@@ -2089,6 +2306,29 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                   <div>
                     <div className="text-[10px] text-stone-500 font-semibold mb-1">ปุ่มลัดเลือกด่วน:</div>
                     <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVariantModalState((prev) => ({
+                            ...prev,
+                            selectedIngredientId: 'seafood_combo',
+                            seafoodShrimpQty: prev.seafoodShrimpQty || 4,
+                            seafoodSquidQty: prev.seafoodSquidQty || 40,
+                            variant: {
+                              ...prev.variant,
+                              proteinType: 'ทะเล',
+                              name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ทะเล` : prev.variant?.name,
+                            },
+                          }));
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                          variantModalState.selectedIngredientId === 'seafood_combo' || variantModalState.variant?.proteinType === 'ทะเล'
+                            ? 'bg-[#0284C7] text-white border-[#0369A1] shadow-2xs'
+                            : 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                        }`}
+                      >
+                        🌊 ทะเล (กุ้ง+หมึก)
+                      </button>
                       {meatIngredients.slice(0, 8).map((ing) => {
                         const isSelected = variantModalState.selectedIngredientId === ing.id;
                         const shortName = ing.name.split(' (')[0];
@@ -2170,53 +2410,130 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 </div>
               </div>
 
-              {/* 3. ปริมาณเนื้อสัตว์ที่ใช้ */}
-              <div>
-                <label className="block text-stone-800 mb-1 font-bold text-xs">
-                  ปริมาณเนื้อสัตว์ที่ใช้ต่อจาน{' '}
-                  <span className="text-stone-500 font-normal">
-                    ({ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม หรือ ตัว'})
-                  </span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    required
-                    value={variantModalState.meatQuantity}
-                    onChange={(e) =>
-                      setVariantModalState((prev) => ({
-                        ...prev,
-                        meatQuantity: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="w-32 p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
-                  />
-                  <span className="text-xs text-stone-600 font-semibold">
-                    {ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม (g)'}
-                  </span>
-                  {/* Quick preset weight buttons */}
-                  <div className="flex items-center gap-1 ml-auto">
-                    {[60, 70, 80, 100, 120].map((w) => (
-                      <button
-                        key={w}
-                        type="button"
-                        onClick={() =>
-                          setVariantModalState((prev) => ({ ...prev, meatQuantity: w }))
+              {/* 3. ปริมาณเนื้อสัตว์ที่ใช้ (รองรับทั้งเนื้อสัตว์เดี่ยว และ ทะเล กุ้ง+หมึก) */}
+              {(() => {
+                const pType = (variantModalState.variant?.proteinType || '').toLowerCase();
+                const isSeafoodChoice =
+                  variantModalState.selectedIngredientId === 'seafood_combo' ||
+                  pType.includes('ทะเล') ||
+                  pType.includes('ซีฟู้ด');
+
+                if (isSeafoodChoice) {
+                  return (
+                    <div className="p-3 bg-sky-50 border border-sky-300 rounded-2xl space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sky-950 text-xs flex items-center gap-1.5">
+                          <span>🌊 สัดส่วนวัตถุดิบทะเล (กุ้งสด + ปลาหมึกสด ต้องมีทั้งคู่):</span>
+                        </span>
+                        <span className="text-[10px] text-sky-800 bg-sky-100 px-2 py-0.5 rounded-md font-bold border border-sky-300">
+                          Seafood Rule (แยกชิ้น/กรัม)
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-white p-2.5 rounded-xl border border-amber-300 shadow-2xs space-y-1">
+                          <label className="block text-amber-950 font-bold text-xs">
+                            🦐 กุ้งสด (XL):
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              required
+                              value={variantModalState.seafoodShrimpQty ?? 4}
+                              onChange={(e) =>
+                                setVariantModalState((prev) => ({
+                                  ...prev,
+                                  seafoodShrimpQty: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                              className="w-24 p-2 bg-amber-50/50 border border-amber-400 rounded-lg text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-amber-600"
+                            />
+                            <span className="text-xs text-stone-700 font-bold">ตัว</span>
+                            <span className="text-[10px] text-stone-500 ml-auto">
+                              (@ ฿8.50/ตัว)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-xl border border-sky-300 shadow-2xs space-y-1">
+                          <label className="block text-sky-950 font-bold text-xs">
+                            🦑 ปลาหมึกกล้วยสด:
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              required
+                              value={variantModalState.seafoodSquidQty ?? 40}
+                              onChange={(e) =>
+                                setVariantModalState((prev) => ({
+                                  ...prev,
+                                  seafoodSquidQty: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                              className="w-24 p-2 bg-sky-50/50 border border-sky-400 rounded-lg text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-sky-600"
+                            />
+                            <span className="text-xs text-stone-700 font-bold">กรัม (g)</span>
+                            <span className="text-[10px] text-stone-500 ml-auto">
+                              (@ ฿0.388/g)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <label className="block text-stone-800 mb-1 font-bold text-xs">
+                      ปริมาณเนื้อสัตว์ที่ใช้ต่อจาน{' '}
+                      <span className="text-stone-500 font-normal">
+                        ({ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม หรือ ตัว'})
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        required
+                        value={variantModalState.meatQuantity}
+                        onChange={(e) =>
+                          setVariantModalState((prev) => ({
+                            ...prev,
+                            meatQuantity: parseFloat(e.target.value) || 0,
+                          }))
                         }
-                        className={`px-2 py-1 text-[10px] font-bold rounded-lg border ${
-                          variantModalState.meatQuantity === w
-                            ? 'bg-[#F27D26] text-white border-[#c2580e]'
-                            : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
-                        }`}
-                      >
-                        {w}g
-                      </button>
-                    ))}
+                        className="w-32 p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
+                      />
+                      <span className="text-xs text-stone-600 font-semibold">
+                        {ingredients.find((i) => i.id === variantModalState.selectedIngredientId)?.usageUnit || 'กรัม (g)'}
+                      </span>
+                      {/* Quick preset weight buttons */}
+                      <div className="flex items-center gap-1 ml-auto">
+                        {[60, 70, 80, 100, 120].map((w) => (
+                          <button
+                            key={w}
+                            type="button"
+                            onClick={() =>
+                              setVariantModalState((prev) => ({ ...prev, meatQuantity: w }))
+                            }
+                            className={`px-2 py-1 text-[10px] font-bold rounded-lg border ${
+                              variantModalState.meatQuantity === w
+                                ? 'bg-[#F27D26] text-white border-[#c2580e]'
+                                : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
+                            }`}
+                          >
+                            {w}g
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* 4. ราคาขายแต่ละช่องทาง */}
               <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl space-y-3">
@@ -2343,9 +2660,31 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
               {/* 5. Live Calculation Preview Card */}
               {(() => {
-                const linked = ingredients.find((i) => i.id === variantModalState.selectedIngredientId);
-                const unitCost = linked?.costPerBaseUnit || 0.125;
-                const meatCost = Math.round(unitCost * (Number(variantModalState.meatQuantity) || 0));
+                const pType = (variantModalState.variant?.proteinType || '').toLowerCase();
+                const isSeafoodChoice =
+                  variantModalState.selectedIngredientId === 'seafood_combo' ||
+                  pType.includes('ทะเล') ||
+                  pType.includes('ซีฟู้ด');
+
+                let meatCost = 0;
+                let costDetail = '';
+
+                if (isSeafoodChoice) {
+                  const shrimpIng = ingredients.find((i) => i.id === 'ing_shrimp_xl' || i.name.includes('กุ้ง'));
+                  const squidIng = ingredients.find((i) => i.id === 'ing_squid_fresh' || i.name.includes('หมึก'));
+                  const sCost = (shrimpIng?.costPerBaseUnit || 8.5) * (Number(variantModalState.seafoodShrimpQty) || 4);
+                  const qCost = (squidIng?.costPerBaseUnit || 0.388) * (Number(variantModalState.seafoodSquidQty) || 40);
+                  meatCost = Math.round(sCost + qCost);
+                  costDetail = `กุ้ง ฿${Math.round(sCost)} + หมึก ฿${Math.round(qCost)}`;
+                } else {
+                  const linked = ingredients.find((i) => i.id === variantModalState.selectedIngredientId);
+                  const unitCost = linked?.costPerBaseUnit || 0.125;
+                  meatCost = Math.round(unitCost * (Number(variantModalState.meatQuantity) || 0));
+                  if (linked) {
+                    costDetail = `฿${(unitCost * 1000).toFixed(0)}/กก.`;
+                  }
+                }
+
                 const sellPrice = Number(variantModalState.variant.sellingPrice) || 65;
                 const estTotalCost = meatCost + 6.0 + 9.0;
                 const estProfit = sellPrice - estTotalCost;
@@ -2356,9 +2695,9 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                     <div>
                       <span className="text-emerald-900 font-bold">ต้นทุนเนื้อสัตว์: </span>
                       <strong className="text-emerald-950 font-black">฿{meatCost}</strong>
-                      {linked && (
+                      {costDetail && (
                         <span className="text-[10px] text-emerald-700 ml-1">
-                          (฿{(unitCost * 1000).toFixed(0)}/กก.)
+                          ({costDetail})
                         </span>
                       )}
                     </div>
