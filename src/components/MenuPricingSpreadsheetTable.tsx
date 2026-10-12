@@ -7,7 +7,7 @@ import {
   RestaurantSettings,
   RecipeCostBreakdown,
 } from '../types';
-import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid, UtensilsCrossed, Edit2, Trash2 } from 'lucide-react';
+import { Plus, SlidersHorizontal, Store, Bike, Smartphone, Flame, LayoutGrid, UtensilsCrossed, Edit2, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 
 export type PricingChannelTab = 'DINE_IN' | 'GRAB' | 'LINEMAN' | 'ROBINHOOD' | 'ALL';
 export type ServingDishMode = 'ON_RICE' | 'A_LA_CARTE';
@@ -78,6 +78,59 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
   const linemanGpRateWithVat = (linemanCommissionBase * 1.07) / 100;
   const linemanGpPctDisplay = (linemanCommissionBase * 1.07).toFixed(2);
 
+  // State & Handlers for reordering meat variants (Drag & Drop + Up/Down arrows)
+  const [draggedVariantId, setDraggedVariantId] = useState<string | null>(null);
+  const [dragOverVariantId, setDragOverVariantId] = useState<string | null>(null);
+
+  const handleMoveVariant = (variantId: string, direction: 'up' | 'down') => {
+    const fromIndex = menu.variants.findIndex((v) => v.id === variantId);
+    if (fromIndex === -1) return;
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= menu.variants.length) return;
+    const updated = [...menu.variants];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    onSaveMenu({ ...menu, variants: updated });
+  };
+
+  const handleVariantDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedVariantId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', id);
+    } catch {}
+  };
+
+  const handleVariantDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverVariantId !== id) {
+      setDragOverVariantId(id);
+    }
+  };
+
+  const handleVariantDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggedVariantId || e.dataTransfer.getData('text/plain');
+    setDraggedVariantId(null);
+    setDragOverVariantId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const fromIndex = menu.variants.findIndex((v) => v.id === sourceId);
+    const toIndex = menu.variants.findIndex((v) => v.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const updated = [...menu.variants];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    onSaveMenu({ ...menu, variants: updated });
+  };
+
+  const handleVariantDragEnd = () => {
+    setDraggedVariantId(null);
+    setDragOverVariantId(null);
+  };
+
   // Local state for real-time responsiveness when typing
   const [localEdits, setLocalEdits] = useState<
     Record<
@@ -120,7 +173,11 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
         if (v.id !== variantId) return v;
 
         if (field === 'sellingPrice') {
-          return { ...v, sellingPrice: val };
+          const boxMarkup =
+            v.takeawayPrice && v.sellingPrice && v.takeawayPrice > v.sellingPrice
+              ? v.takeawayPrice - v.sellingPrice
+              : 0;
+          return { ...v, sellingPrice: val, takeawayPrice: val + boxMarkup };
         }
         if (field === 'grabPrice') {
           return { ...v, grabPrice: val, deliveryPrice: val };
@@ -260,7 +317,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                 : 'bg-purple-700 border-purple-800'
             }`}
           >
-            {currentServingMode === 'ON_RICE' ? '🍚 ราดข้าว' : '🍲 กับข้าว (จานกลาง)'}
+            {currentServingMode === 'ON_RICE' ? '🍚 จานเดียว / ราดข้าว' : '🍲 กับข้าว (จานกลาง)'}
           </span>
           <h2 className="text-xl sm:text-2xl font-black text-stone-950 tracking-tight">
             {menu.name}
@@ -281,7 +338,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
               }`}
               title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
             >
-              <span>🍚 ราดข้าว</span>
+              <span>🍚 จานเดียว / ราดข้าว</span>
             </button>
             <button
               type="button"
@@ -447,7 +504,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
             {/* Header Tier 3: Detailed Column Headers per Active Channel */}
             <tr className="text-[11px] font-bold text-stone-900 border-b-2 border-black whitespace-nowrap">
               {/* Common Columns */}
-              <th className="py-2.5 px-2 bg-[#E53935] text-white border-r border-black w-8">No.</th>
+              <th className="py-2.5 px-2 bg-[#E53935] text-white border-r border-black min-w-[70px]">ลำดับ</th>
               <th className="py-2.5 px-3 bg-[#90CAF9] text-stone-900 border-r border-black text-left min-w-[120px]">รายการ</th>
 
               {/* DINE_IN COLUMNS */}
@@ -859,7 +916,11 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
               // 12. Profits at restaurant
               const packagingAmount = v.packagingCost || 9;
               const dineInProfit = Math.round(sellingPrice - totalCost + packagingAmount);
-              const effectiveTakeawayPrice = v.takeawayPrice || sellingPrice;
+              const boxMarkup =
+                v.takeawayPrice && v.sellingPrice && v.takeawayPrice > v.sellingPrice
+                  ? v.takeawayPrice - v.sellingPrice
+                  : 0;
+              const effectiveTakeawayPrice = sellingPrice + boxMarkup;
               const takeawayProfit = Math.round(effectiveTakeawayPrice - totalCost);
 
               // 13-17. Grab Food calculations
@@ -957,10 +1018,58 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
               };
 
               return (
-                <tr key={v.id} className="hover:bg-amber-50/40 transition-colors">
-                  {/* Common 0. ลำดับ */}
-                  <td className="py-2 px-2 bg-[#E53935] text-white font-extrabold border-r border-black">
-                    {idx + 1}
+                <tr
+                  key={v.id}
+                  draggable
+                  onDragStart={(e) => handleVariantDragStart(e, v.id)}
+                  onDragOver={(e) => handleVariantDragOver(e, v.id)}
+                  onDrop={(e) => handleVariantDrop(e, v.id)}
+                  onDragEnd={handleVariantDragEnd}
+                  className={`transition-colors ${
+                    draggedVariantId === v.id ? 'opacity-40 bg-stone-200' : ''
+                  } ${
+                    dragOverVariantId === v.id
+                      ? 'border-t-2 border-[#F27D26] bg-amber-100/50'
+                      : 'hover:bg-amber-50/40'
+                  }`}
+                >
+                  {/* Common 0. ลำดับ พร้อมปุ่มลากย้าย & ลูกศร ขึ้น-ลง */}
+                  <td className="py-1 px-1.5 bg-[#E53935] text-white font-extrabold border-r border-black select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <div
+                        className="p-0.5 text-white/80 hover:text-white cursor-grab active:cursor-grabbing rounded hover:bg-black/20"
+                        title="กดเมาส์ค้างไว้เพื่อลากย้ายลำดับเนื้อสัตว์"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-mono font-black text-xs min-w-[14px] text-center">{idx + 1}</span>
+                      <div className="flex flex-col -space-y-0.5 ml-0.5">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveVariant(v.id, 'up');
+                          }}
+                          className="p-0.5 text-white/80 hover:text-white disabled:opacity-20 disabled:hover:text-white/80 rounded cursor-pointer transition-colors"
+                          title="ย้ายขึ้น"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === menu.variants.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveVariant(v.id, 'down');
+                          }}
+                          className="p-0.5 text-white/80 hover:text-white disabled:opacity-20 disabled:hover:text-white/80 rounded cursor-pointer transition-colors"
+                          title="ย้ายลง"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                   </td>
 
                   {/* Common 1. รายการ */}
@@ -998,7 +1107,7 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                               menuName: menu.name,
                               proteinType: v.proteinType,
                               sellingPrice,
-                              takeawayPrice: v.takeawayPrice || sellingPrice,
+                              takeawayPrice: effectiveTakeawayPrice,
                               deliveryPrice: v.deliveryPrice || sellingPrice,
                               shrimpCost: isSeafood ? shrimpTotalCost : (v.proteinType.includes('กุ้ง') ? proteinCost : 0),
                               squidCost: isSeafood ? squidTotalCost : (v.proteinType.includes('หมึก') ? proteinCost : 0),

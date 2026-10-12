@@ -208,6 +208,11 @@ export default function App() {
     });
   };
 
+  const handleReorderMenus = (reordered: MenuItem[]) => {
+    setMenus(reordered);
+    StorageService.saveMenus(reordered);
+  };
+
   const handleUpdateVariantPrice = (
     menuId: string,
     variantId: string,
@@ -408,6 +413,7 @@ export default function App() {
               initialServingMode="ON_RICE"
               onSaveMenu={handleSaveMenu}
               onDeleteMenu={handleDeleteMenu}
+              onReorderMenus={handleReorderMenus}
               onUpdateVariantPrice={handleUpdateVariantPrice}
               onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
             />
@@ -423,6 +429,7 @@ export default function App() {
               initialServingMode="A_LA_CARTE"
               onSaveMenu={handleSaveMenu}
               onDeleteMenu={handleDeleteMenu}
+              onReorderMenus={handleReorderMenus}
               onUpdateVariantPrice={handleUpdateVariantPrice}
               onNavigateToRecipeBuilder={handleNavigateToRecipeBuilder}
             />

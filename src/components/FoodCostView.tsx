@@ -7,6 +7,7 @@ import {
   Edit2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Eye,
   AlertTriangle,
   CheckCircle2,
@@ -19,6 +20,7 @@ import {
   SlidersHorizontal,
   Package,
   Trash2,
+  GripVertical,
 } from 'lucide-react';
 import {
   MenuItem,
@@ -44,6 +46,7 @@ interface FoodCostViewProps {
   initialServingMode?: 'ON_RICE' | 'A_LA_CARTE';
   onSaveMenu: (menu: MenuItem) => void;
   onDeleteMenu?: (menuId: string) => void;
+  onReorderMenus?: (reordered: MenuItem[]) => void;
   onUpdateVariantPrice: (
     menuId: string,
     variantId: string,
@@ -60,6 +63,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
   initialServingMode,
   onSaveMenu,
   onDeleteMenu,
+  onReorderMenus,
   onUpdateVariantPrice,
   onNavigateToRecipeBuilder,
 }) => {
@@ -77,6 +81,65 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     }
   }, [initialServingMode]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
+
+  // Menu reordering (Drag & Drop + Up/Down arrows)
+  const [draggedMenuId, setDraggedMenuId] = useState<string | null>(null);
+  const [dragOverMenuId, setDragOverMenuId] = useState<string | null>(null);
+
+  const handleMoveMenu = (fromId: string, direction: 'up' | 'down') => {
+    const fromIndex = menus.findIndex((m) => m.id === fromId);
+    if (fromIndex === -1) return;
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= menus.length) return;
+    const updated = [...menus];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    if (onReorderMenus) {
+      onReorderMenus(updated);
+    } else {
+      updated.forEach((m) => onSaveMenu(m));
+    }
+  };
+
+  const handleMenuDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedMenuId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', id);
+    } catch {}
+  };
+
+  const handleMenuDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverMenuId !== id) {
+      setDragOverMenuId(id);
+    }
+  };
+
+  const handleMenuDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggedMenuId || e.dataTransfer.getData('text/plain');
+    setDraggedMenuId(null);
+    setDragOverMenuId(null);
+    if (!sourceId || sourceId === targetId) return;
+    const fromIndex = menus.findIndex((m) => m.id === sourceId);
+    const toIndex = menus.findIndex((m) => m.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const updated = [...menus];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    if (onReorderMenus) {
+      onReorderMenus(updated);
+    } else {
+      updated.forEach((m) => onSaveMenu(m));
+    }
+  };
+
+  const handleMenuDragEnd = () => {
+    setDraggedMenuId(null);
+    setDragOverMenuId(null);
+  };
 
   // Delete Menu Modal state
   const [menuToDelete, setMenuToDelete] = useState<MenuItem | null>(null);
@@ -909,43 +972,14 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
 
   return (
     <div className="space-y-4 pb-8">
-      {/* Consolidated Ultra-Compact Control Header (Takes minimum screen height) */}
+      {/* Consolidated Ultra-Compact Control Header */}
       <div className="bg-white border border-stone-300 rounded-2xl shadow-xs p-2.5 sm:p-3 space-y-2">
-        {/* Row 1: Title, Serving Mode Switcher (High Contrast), Key Metrics (Avg FC + Clickable High-Cost Alert), Channels, View Mode & Add Menu */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {/* Left section: Title + Mode Switcher + Metrics */}
+          {/* Left section: Title + Metrics */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5 font-black text-stone-900 text-sm sm:text-base mr-1">
               <UtensilsCrossed className="w-4 h-4 text-[#F27D26]" />
               <span>ต้นทุนอาหาร</span>
-            </div>
-
-            {/* Serving Mode Switcher Buttons - Highest Contrast */}
-            <div className="flex items-center bg-stone-200 p-0.5 rounded-xl border border-stone-300 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setActiveServingMode('ON_RICE')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                  activeServingMode === 'ON_RICE'
-                    ? 'bg-rose-600 !text-white shadow-xs border border-rose-700'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-                title="คำนวณต้นทุนอาหารจานเดียวแบบราดข้าว (รวมข้าวสวย 200g, ปริมาณเนื้อสัตว์จานเดี่ยว)"
-              >
-                <span>🍚 ราดข้าว</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveServingMode('A_LA_CARTE')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                  activeServingMode === 'A_LA_CARTE'
-                    ? 'bg-purple-700 !text-white shadow-xs border border-purple-800'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-                title="คำนวณต้นทุนอาหารเป็นกับข้าว (ไม่รวมข้าวสวย, กำหนดราคาและปริมาณเนื้อสัตว์ได้เอง)"
-              >
-                <span>🍲 กับข้าว</span>
-              </button>
             </div>
 
             {/* Metric 1: Avg Food Cost (Compact) */}
@@ -959,27 +993,27 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               </span>
             </div>
 
-            {/* Metric 2: Clickable High Cost / Needs Review Filter Card (Requirement 3) */}
+            {/* Metric 2: Clickable High Cost / Needs Review Filter Card */}
             <button
               type="button"
               onClick={handleToggleHighCostFilter}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black transition-all cursor-pointer border ${
                 filterHighCostOnly
-                  ? 'bg-rose-600 !text-white border-rose-700 shadow-md ring-2 ring-rose-400'
+                  ? "bg-rose-600 !text-white border-rose-700 shadow-md ring-2 ring-rose-400"
                   : warningCount > 0
-                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-950 border-2 border-rose-300 shadow-2xs hover:scale-[1.02]'
-                  : 'bg-stone-100 text-stone-600 border border-stone-300'
+                  ? "bg-rose-50 hover:bg-rose-100 text-rose-950 border-2 border-rose-300 shadow-2xs hover:scale-[1.02]"
+                  : "bg-stone-100 text-stone-600 border border-stone-300"
               }`}
               title={
                 filterHighCostOnly
-                  ? 'คลิกเพื่อยกเลิกการกรอง และแสดงเมนูทั้งหมด'
-                  : 'คลิกเพื่อแสดงเฉพาะเมนูต้นทุนสูง / ควรทบทวน ทันที'
+                  ? "คลิกเพื่อยกเลิกการกรอง และแสดงเมนูทั้งหมด"
+                  : "คลิกเพื่อแสดงเฉพาะเมนูต้นทุนสูง / ควรทบทวน ทันที"
               }
             >
-              <AlertTriangle className={`w-3.5 h-3.5 ${filterHighCostOnly ? 'text-white' : 'text-rose-600'}`} />
+              <AlertTriangle className={`w-3.5 h-3.5 ${filterHighCostOnly ? "text-white" : "text-rose-600"}`} />
               <span className="whitespace-nowrap">เมนูต้นทุนสูง / ควรทบทวน:</span>
               <span className={`px-1.5 py-0.2 rounded-md font-mono font-black text-xs ${
-                filterHighCostOnly ? 'bg-white text-rose-700' : 'bg-rose-600 text-white'
+                filterHighCostOnly ? "bg-white text-rose-700" : "bg-rose-600 text-white"
               }`}>
                 {warningCount} รายการ
               </span>
@@ -995,84 +1029,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
             </button>
           </div>
 
-          {/* Right section: Channel selector, View Mode, Add Menu */}
+          {/* Right section: Add Menu */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Channel buttons */}
-            <div className="flex items-center bg-stone-200 p-0.5 rounded-xl border border-stone-300 text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveChannel('DINE_IN')}
-                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                  activeChannel === 'DINE_IN'
-                    ? 'bg-cyan-700 !text-white font-black shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-              >
-                หน้าร้าน
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChannel('GRAB')}
-                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                  activeChannel === 'GRAB'
-                    ? 'bg-[#00873e] !text-white font-black shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-              >
-                Grab ({grabCommissionPct}%)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChannel('LINEMAN')}
-                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                  activeChannel === 'LINEMAN'
-                    ? 'bg-[#05963c] !text-white font-black shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-              >
-                LINE MAN ({linemanCommissionPct}%)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChannel('ROBINHOOD')}
-                className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                  activeChannel === 'ROBINHOOD'
-                    ? 'bg-[#6d28d9] !text-white font-black shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold hover:bg-stone-300'
-                }`}
-              >
-                Robinhood (0%)
-              </button>
-            </div>
-
-            {/* View Mode */}
-            <div className="flex bg-stone-200 border border-stone-300 p-0.5 rounded-xl text-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode('CARDS')}
-                className={`px-2 py-1 rounded-lg font-black transition-all cursor-pointer ${
-                  viewMode === 'CARDS'
-                    ? 'bg-[#F27D26] !text-white shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold'
-                }`}
-              >
-                การ์ดเมนู
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('TABLE')}
-                className={`px-2 py-1 rounded-lg font-black transition-all cursor-pointer ${
-                  viewMode === 'TABLE'
-                    ? 'bg-[#F27D26] !text-white shadow-xs'
-                    : 'text-stone-800 hover:text-stone-950 font-bold'
-                }`}
-              >
-                ตารางต้นทุน
-              </button>
-            </div>
-
-
-            {/* Add menu button */}
             <button
               type="button"
               onClick={handleOpenAddMenu}
@@ -1113,8 +1071,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
         </div>
       )}
 
-      {/* VIEW 1: CLEAN MENU LIST + ON-DEMAND VARIANT DETAILS */}
-      {viewMode === 'CARDS' && (
+      {/* CLEAN MENU LIST + ON-DEMAND VARIANT DETAILS */}
+      {(
         <div className="space-y-4">
           {/* Menu names only — one per row */}
           <div className="bg-white border border-stone-200 rounded-2xl shadow-xs overflow-hidden">
@@ -1127,17 +1085,62 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
             </div>
 
             <div className="divide-y divide-stone-200">
-              {filteredMenus.map((menu) => {
+              {filteredMenus.map((menu, mIdx) => {
                 const isSelected = selectedMenuId === menu.id;
                 const hasWarning = warningMenuIds.has(menu.id);
+                const isDragging = draggedMenuId === menu.id;
+                const isDragOver = dragOverMenuId === menu.id;
 
                 return (
                   <React.Fragment key={menu.id}>
                     <div
+                      draggable
+                      onDragStart={(e) => handleMenuDragStart(e, menu.id)}
+                      onDragOver={(e) => handleMenuDragOver(e, menu.id)}
+                      onDrop={(e) => handleMenuDrop(e, menu.id)}
+                      onDragEnd={handleMenuDragEnd}
                       className={`group flex items-center gap-3 px-4 py-3 transition-all ${
+                        isDragging ? 'opacity-40 bg-stone-100' : ''
+                      } ${isDragOver ? 'border-t-2 border-[#F27D26] bg-amber-50/40' : ''} ${
                         isSelected ? 'bg-amber-50/70 border-l-4 border-[#F27D26]' : 'hover:bg-stone-50'
                       }`}
                     >
+                      {/* Drag Handle & Reorder Up/Down Controls */}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <div
+                          className="p-1 text-stone-400 hover:text-stone-700 cursor-grab active:cursor-grabbing rounded hover:bg-stone-200 transition-colors"
+                          title="กดเมาส์ค้างไว้เพื่อลากย้ายตำแหน่งเมนู"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col -space-y-0.5">
+                          <button
+                            type="button"
+                            disabled={mIdx === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveMenu(menu.id, 'up');
+                            }}
+                            className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-20 disabled:hover:text-stone-400 rounded cursor-pointer"
+                            title="ย้ายขึ้น"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={mIdx === filteredMenus.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveMenu(menu.id, 'down');
+                            }}
+                            className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-20 disabled:hover:text-stone-400 rounded cursor-pointer"
+                            title="ย้ายลง"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => setSelectedMenuId(isSelected ? null : menu.id)}
@@ -1152,9 +1155,6 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                         </span>
                         <div className="min-w-0 flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-stone-900 truncate">{menu.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-600 font-semibold">
-                            {menu.category}
-                          </span>
                           <span className="text-[11px] text-stone-500 font-medium">
                             ({menu.variants.length} ตัวเลือก)
                           </span>
@@ -1213,30 +1213,6 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
               })}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* VIEW 2: COMPREHENSIVE COSTING SPREADSHEET */}
-      {viewMode === 'TABLE' && (
-        <div className="space-y-6">
-          {filteredMenus.map((menu) => (
-            <MenuPricingSpreadsheetTable
-              key={menu.id}
-              menu={menu}
-              ingredientsMap={ingredientsMap}
-              saucesMap={saucesMap}
-              settings={settings}
-              onSaveMenu={onSaveMenu}
-              onSelectBreakdown={handleSelectBreakdown}
-              onOpenAddVariant={handleOpenAddVariant}
-              onEditVariant={handleOpenEditVariant}
-              onDeleteVariant={handleOpenDeleteVariant}
-              activeChannel={activeChannel}
-              onChannelChange={(ch) => setActiveChannel(ch as any)}
-              activeServingMode={activeServingMode}
-              onServingModeChange={setActiveServingMode}
-            />
-          ))}
         </div>
       )}
 
