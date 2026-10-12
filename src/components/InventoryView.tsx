@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   Search,
@@ -13,6 +13,7 @@ import {
   Ingredient,
 } from '../types';
 import { NumericInput } from './common/NumericInput';
+import { CategoryIngredientSelect } from './common/CategoryIngredientSelect';
 
 interface InventoryViewProps {
   inventory: InventoryItem[];
@@ -40,6 +41,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [adjustReason, setAdjustReason] = useState<string>('');
 
   const ingredientsMap = new Map<string, Ingredient>(ingredients.map((i) => [i.id, i]));
+
+  const inventoryWithCategories = useMemo(() => {
+    return inventory.map((item) => ({
+      ...item,
+      name: item.ingredientName,
+      category: item.category || ingredientsMap.get(item.ingredientId)?.category || 'ของแห้งและเบ็ดเตล็ด',
+    }));
+  }, [inventory, ingredientsMap]);
 
   const filteredInventory = inventory.filter((item) =>
     item.ingredientName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -365,20 +374,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveAdjust} className="space-y-3.5 mt-4 text-xs">
-              <div>
-                <label className="block font-bold text-white/80 mb-1">เลือกวัตถุดิบ</label>
-                <select
-                  value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(e.target.value)}
-                  className="w-full p-2.5 bg-[#1a1a1a] border border-white/15 rounded-xl font-bold text-white focus:outline-none focus:border-[#F27D26]"
-                >
-                  {inventory.map((i) => (
-                    <option key={i.id} value={i.id} className="bg-[#1a1a1a] text-white">
-                      {i.ingredientName} (คงเหลือ: {i.currentStock} {i.unit})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CategoryIngredientSelect
+                ingredients={inventoryWithCategories}
+                selectedIngredientId={selectedItemId}
+                onSelectIngredientId={(id) => setSelectedItemId(id)}
+                formatIngredientOption={(item) => `${item.ingredientName} (คงเหลือ: ${item.currentStock} ${item.unit})`}
+                categoryLabel="1. เลือกหมวดหมู่วัตถุดิบก่อน"
+                ingredientLabel="2. เลือกวัตถุดิบย่อย"
+                theme="dark"
+                layout="row"
+                required
+              />
 
               <div>
                 <label className="block font-bold text-white/80 mb-1">ประเภทการปรับปรุง</label>

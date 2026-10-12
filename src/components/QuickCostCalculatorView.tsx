@@ -181,6 +181,22 @@ export const QuickCostCalculatorView: React.FC<QuickCostCalculatorViewProps> = (
     },
   ]);
 
+  // Category filter state for pulling ingredients from inventory
+  const [selectedQuickCategory, setSelectedQuickCategory] = useState<string>('ALL');
+
+  const quickCategories = useMemo(() => {
+    const set = new Set<string>();
+    ingredients.forEach((i) => {
+      if (i.category) set.add(i.category);
+    });
+    return Array.from(set);
+  }, [ingredients]);
+
+  const filteredQuickIngredients = useMemo(() => {
+    if (selectedQuickCategory === 'ALL') return ingredients;
+    return ingredients.filter((i) => i.category === selectedQuickCategory);
+  }, [ingredients, selectedQuickCategory]);
+
   // --- Handlers for Primary Recipe Items ---
   const handleAddItem = (ingredientId?: string) => {
     if (ingredientId) {
@@ -650,26 +666,46 @@ export const QuickCostCalculatorView: React.FC<QuickCostCalculatorViewProps> = (
                 </p>
               </div>
 
-              {/* Add from Stock Dropdown / Custom button */}
-              <div className="flex items-center gap-2">
+              {/* Add from Stock Dropdown: Select Category First, then Sub-ingredient */}
+              <div className="flex items-center gap-2 flex-wrap">
                 {ingredients.length > 0 && (
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleAddItem(e.target.value);
-                        e.target.value = '';
-                      }
-                    }}
-                    defaultValue=""
-                    className="text-xs px-2.5 py-1.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-700 font-semibold cursor-pointer max-w-[160px] truncate"
-                  >
-                    <option value="" disabled>+ ดึงจากคลัง...</option>
-                    {ingredients.map((ing) => (
-                      <option key={ing.id} value={ing.id}>
-                        {ing.name} ({ing.pricePerPack}฿/{ing.packQuantity}{ing.packUnit})
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-stone-500 font-bold hidden sm:inline">หมวด:</span>
+                      <select
+                        value={selectedQuickCategory}
+                        onChange={(e) => setSelectedQuickCategory(e.target.value)}
+                        className="text-xs px-2 py-1.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-800 font-semibold cursor-pointer max-w-[140px]"
+                        title="เลือกหมวดหมู่วัตถุดิบก่อน"
+                      >
+                        <option value="ALL">📁 ทุกหมวดหมู่</option>
+                        {quickCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat === 'เนื้อสัตว์และอาหารทะเล' ? '🥩 ' : cat === 'ผักและสมุนไพร' ? '🥬 ' : cat === 'เครื่องปรุงและซอส' ? '🧂 ' : cat === 'ข้าวและเส้น' ? '🍚 ' : cat === 'ไข่และเต้าหู้' ? '🥚 ' : cat === 'บรรจุภัณฑ์' ? '🥡 ' : '📦 '}{cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddItem(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      defaultValue=""
+                      className="text-xs px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-stone-900 font-bold cursor-pointer max-w-[170px] truncate shadow-2xs focus:ring-2 focus:ring-[#F27D26]"
+                      title="เลือกวัตถุดิบย่อยเพื่อเพิ่มเข้าสูตร"
+                    >
+                      <option value="" disabled>+ ดึงวัตถุดิบย่อย ({filteredQuickIngredients.length})...</option>
+                      {filteredQuickIngredients.map((ing) => (
+                        <option key={ing.id} value={ing.id}>
+                          {ing.name} ({ing.pricePerPack}฿/{ing.packQuantity}{ing.packUnit})
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
                 <button
                   type="button"

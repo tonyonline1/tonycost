@@ -150,6 +150,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     mode: 'ADD' | 'EDIT';
     menu: MenuItem | null;
     variant: Partial<MenuVariant> | null;
+    selectedCategory?: string;
     selectedIngredientId: string;
     meatQuantity: number;
     seafoodShrimpQty?: number;
@@ -159,6 +160,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     mode: 'ADD',
     menu: null,
     variant: null,
+    selectedCategory: 'เนื้อสัตว์และอาหารทะเล',
     selectedIngredientId: '',
     meatQuantity: 80,
     seafoodShrimpQty: 4,
@@ -177,6 +179,22 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       (i) => i.category === 'เนื้อสัตว์และอาหารทะเล' || i.category?.includes('เนื้อสัตว์')
     );
   }, [ingredients]);
+
+  // All unique ingredient categories
+  const ingredientCategories = useMemo(() => {
+    const set = new Set<string>();
+    ingredients.forEach((i) => {
+      if (i.category) set.add(i.category);
+    });
+    return Array.from(set);
+  }, [ingredients]);
+
+  // Filtered ingredients according to selected category in variant modal
+  const currentCategoryIngredients = useMemo(() => {
+    const cat = variantModalState.selectedCategory || 'เนื้อสัตว์และอาหารทะเล';
+    if (cat === 'ALL') return ingredients;
+    return ingredients.filter((i) => i.category === cat);
+  }, [ingredients, variantModalState.selectedCategory]);
 
   // Breakdown Modal state
   const [selectedBreakdown, setSelectedBreakdown] = useState<{
@@ -554,6 +572,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       mode: 'ADD',
       menu,
       variant: newVariant,
+      selectedCategory: defaultIng?.category || 'เนื้อสัตว์และอาหารทะเล',
       selectedIngredientId: defaultIng ? defaultIng.id : '',
       meatQuantity: initialQty,
       seafoodShrimpQty: 4,
@@ -599,11 +618,14 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       (it) => it.proteinCategory === 'SQUID' || it.name.includes('หมึก')
     );
 
+    const matchedIng = ingredients.find((i) => i.id === matchedIngId);
+
     setVariantModalState({
       isOpen: true,
       mode: 'EDIT',
       menu,
       variant: JSON.parse(JSON.stringify(variant)),
+      selectedCategory: isSeafoodItem ? 'เนื้อสัตว์และอาหารทะเล' : (matchedIng?.category || 'เนื้อสัตว์และอาหารทะเล'),
       selectedIngredientId: isSeafoodItem ? 'seafood_combo' : matchedIngId,
       meatQuantity: defaultQty,
       seafoodShrimpQty: existingShrimp?.quantity || 4,
@@ -2214,77 +2236,54 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveVariantModal} className="space-y-4 mt-4 text-xs">
-              {/* 1. เลือกประเภทเนื้อสัตว์จากฐานข้อมูลวัตถุดิบ */}
+              {/* 1. เลือกประเภทวัตถุดิบ/เนื้อสัตว์จากฐานข้อมูล (เลือกหมวดหมู่ก่อน แล้วเลือกวัตถุดิบย่อย) */}
               <div className="p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-stone-900 font-black text-xs">
-                    เลือกประเภทเนื้อสัตว์จากฐานข้อมูลวัตถุดิบ <span className="text-[#F27D26]">*</span>
+                    เลือกวัตถุดิบจากฐานข้อมูล <span className="text-[#F27D26]">*</span>
                   </label>
                   <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
                     เชื่อมโยงต้นทุนจริงอัตโนมัติ
                   </span>
                 </div>
 
-                <select
-                  value={variantModalState.selectedIngredientId}
-                  onChange={(e) => {
-                    const ingId = e.target.value;
-                    if (ingId === 'seafood_combo') {
-                      setVariantModalState((prev) => ({
-                        ...prev,
-                        selectedIngredientId: 'seafood_combo',
-                        seafoodShrimpQty: prev.seafoodShrimpQty || 4,
-                        seafoodSquidQty: prev.seafoodSquidQty || 40,
-                        variant: {
-                          ...prev.variant,
-                          proteinType: 'ทะเล',
-                          name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ทะเล` : prev.variant?.name,
-                        },
-                      }));
-                    } else if (ingId) {
-                      const ing = ingredients.find((i) => i.id === ingId);
-                      if (ing) {
-                        const pName = ing.name.split(' (')[0].split(' ')[0];
-                        const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* ขั้นที่ 1: เลือกหมวดหมู่วัตถุดิบ */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                      1. เลือกหมวดหมู่วัตถุดิบก่อน <span className="text-[#F27D26]">*</span>
+                    </label>
+                    <select
+                      value={variantModalState.selectedCategory || 'เนื้อสัตว์และอาหารทะเล'}
+                      onChange={(e) => {
+                        const newCat = e.target.value;
                         setVariantModalState((prev) => ({
                           ...prev,
-                          selectedIngredientId: ingId,
-                          meatQuantity: defaultQty,
-                          variant: {
-                            ...prev.variant,
-                            proteinType: pName,
-                            name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${pName}` : prev.variant?.name,
-                          },
+                          selectedCategory: newCat,
+                          selectedIngredientId: '',
                         }));
-                      }
-                    } else {
-                      setVariantModalState((prev) => ({
-                        ...prev,
-                        selectedIngredientId: '',
-                      }));
-                    }
-                  }}
-                  className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26]"
-                >
-                  <option value="">-- เลือกจากหมวดเนื้อสัตว์และอาหารทะเล --</option>
-                  <option value="seafood_combo" className="font-bold text-[#F27D26]">
-                    🌊 ทะเล (กุ้งสด + ปลาหมึกสด คู่กัน)
-                  </option>
-                  {meatIngredients.map((ing) => (
-                    <option key={ing.id} value={ing.id}>
-                      {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
-                    </option>
-                  ))}
-                </select>
+                      }}
+                      className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26] cursor-pointer"
+                    >
+                      <option value="ALL">📁 ทุกหมวดหมู่วัตถุดิบ</option>
+                      {ingredientCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat === 'เนื้อสัตว์และอาหารทะเล' ? '🥩 ' : cat === 'ผักและสมุนไพร' ? '🥬 ' : cat === 'เครื่องปรุงและซอส' ? '🧂 ' : cat === 'ข้าวและเส้น' ? '🍚 ' : cat === 'ไข่และเต้าหู้' ? '🥚 ' : cat === 'บรรจุภัณฑ์' ? '🥡 ' : '📦 '}{cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Quick Selection Chips */}
-                {meatIngredients.length > 0 && (
+                  {/* ขั้นที่ 2: เลือกวัตถุดิบย่อย */}
                   <div>
-                    <div className="text-[10px] text-stone-500 font-semibold mb-1">ปุ่มลัดเลือกด่วน:</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
+                    <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                      2. เลือกวัตถุดิบย่อย <span className="text-[#F27D26]">*</span>
+                    </label>
+                    <select
+                      value={variantModalState.selectedIngredientId}
+                      onChange={(e) => {
+                        const ingId = e.target.value;
+                        if (ingId === 'seafood_combo') {
                           setVariantModalState((prev) => ({
                             ...prev,
                             selectedIngredientId: 'seafood_combo',
@@ -2296,16 +2295,78 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                               name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ทะเล` : prev.variant?.name,
                             },
                           }));
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
-                          variantModalState.selectedIngredientId === 'seafood_combo' || variantModalState.variant?.proteinType === 'ทะเล'
-                            ? 'bg-[#0284C7] text-white border-[#0369A1] shadow-2xs'
-                            : 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
-                        }`}
-                      >
-                        🌊 ทะเล (กุ้ง+หมึก)
-                      </button>
-                      {meatIngredients.slice(0, 8).map((ing) => {
+                        } else if (ingId) {
+                          const ing = ingredients.find((i) => i.id === ingId);
+                          if (ing) {
+                            const pName = ing.name.split(' (')[0].split(' ')[0];
+                            const defaultQty = ing.usageUnit === 'ตัว' || ing.baseUnit === 'ตัว' ? 4 : 80;
+                            setVariantModalState((prev) => ({
+                              ...prev,
+                              selectedCategory: ing.category || prev.selectedCategory,
+                              selectedIngredientId: ingId,
+                              meatQuantity: defaultQty,
+                              variant: {
+                                ...prev.variant,
+                                proteinType: pName,
+                                name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ${pName}` : prev.variant?.name,
+                              },
+                            }));
+                          }
+                        } else {
+                          setVariantModalState((prev) => ({
+                            ...prev,
+                            selectedIngredientId: '',
+                          }));
+                        }
+                      }}
+                      className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-semibold focus:outline-none focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26] cursor-pointer"
+                    >
+                      <option value="">-- เลือกวัตถุดิบย่อย ({currentCategoryIngredients.length} รายการ) --</option>
+                      {(variantModalState.selectedCategory === 'ALL' || variantModalState.selectedCategory === 'เนื้อสัตว์และอาหารทะเล') && (
+                        <option value="seafood_combo" className="font-bold text-[#F27D26]">
+                          🌊 ทะเล (กุ้งสด + ปลาหมึกสด คู่กัน)
+                        </option>
+                      )}
+                      {currentCategoryIngredients.map((ing) => (
+                        <option key={ing.id} value={ing.id}>
+                          {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Quick Selection Chips - Filtered dynamically by currentCategoryIngredients */}
+                {currentCategoryIngredients.length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-stone-500 font-semibold mb-1">ปุ่มลัดเลือกด่วนในหมวดนี้:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(variantModalState.selectedCategory === 'ALL' || variantModalState.selectedCategory === 'เนื้อสัตว์และอาหารทะเล') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVariantModalState((prev) => ({
+                              ...prev,
+                              selectedIngredientId: 'seafood_combo',
+                              seafoodShrimpQty: prev.seafoodShrimpQty || 4,
+                              seafoodSquidQty: prev.seafoodSquidQty || 40,
+                              variant: {
+                                ...prev.variant,
+                                proteinType: 'ทะเล',
+                                name: prev.mode === 'ADD' || !prev.variant?.name ? `${prev.menu?.name} ทะเล` : prev.variant?.name,
+                              },
+                            }));
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                            variantModalState.selectedIngredientId === 'seafood_combo' || variantModalState.variant?.proteinType === 'ทะเล'
+                              ? 'bg-[#0284C7] text-white border-[#0369A1] shadow-2xs'
+                              : 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                          }`}
+                        >
+                          🌊 ทะเล (กุ้ง+หมึก)
+                        </button>
+                      )}
+                      {currentCategoryIngredients.slice(0, 8).map((ing) => {
                         const isSelected = variantModalState.selectedIngredientId === ing.id;
                         const shortName = ing.name.split(' (')[0];
                         return (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Calendar, AlertTriangle, Scale, DollarSign } from 'lucide-react';
 import { WasteRecord, Ingredient, WasteReason } from '../../types/domain';
 import { NumericInput } from '../common/NumericInput';
+import { CategoryIngredientSelect } from '../common/CategoryIngredientSelect';
 
 interface WasteTrackingViewProps {
   wasteRecords: WasteRecord[];
@@ -225,20 +226,17 @@ export const WasteTrackingView: React.FC<WasteTrackingViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-white/60 mb-1">เลือกวัตถุดิบ *</label>
-                <select
-                  value={formData.ingredientId}
-                  onChange={(e) => setFormData({ ...formData, ingredientId: e.target.value })}
-                  className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-1.5 text-xs text-white focus:border-[#FF6321] focus:outline-none"
-                >
-                  {ingredients.map((ing) => (
-                    <option key={ing.id} value={ing.id}>
-                      {ing.thaiName} (฿{ing.effectiveCost.toFixed(2)}/{ing.purchaseUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CategoryIngredientSelect
+                ingredients={ingredients.map((i) => ({ ...i, name: i.thaiName }))}
+                selectedIngredientId={formData.ingredientId}
+                onSelectIngredientId={(id) => setFormData({ ...formData, ingredientId: id })}
+                formatIngredientOption={(ing) => `${ing.thaiName} (฿${(ing.effectiveCost || 0).toFixed(2)}/${ing.purchaseUnit})`}
+                categoryLabel="1. เลือกหมวดหมู่วัตถุดิบก่อน"
+                ingredientLabel="2. เลือกวัตถุดิบย่อย"
+                theme="dark"
+                layout="row"
+                required
+              />
 
               <div>
                 <label className="block text-xs text-white/60 mb-1">ปริมาณที่ทิ้ง</label>

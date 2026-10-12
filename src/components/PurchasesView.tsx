@@ -16,6 +16,7 @@ import {
 } from '../types';
 import { calculateIngredientCost } from '../services/calculationEngine';
 import { NumericInput } from './common/NumericInput';
+import { CategoryIngredientSelect } from './common/CategoryIngredientSelect';
 
 interface PurchasesViewProps {
   ingredients: Ingredient[];
@@ -327,25 +328,19 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             </div>
 
             <form onSubmit={handleSavePurchaseForm} className="space-y-3.5 mt-4 text-xs">
-              <div>
-                <label className="block font-bold text-white/80 mb-1">เลือกวัตถุดิบ</label>
-                <select
-                  value={selectedIngredientId}
-                  onChange={(e) => {
-                    const ingId = e.target.value;
-                    setSelectedIngredientId(ingId);
-                    const ing = ingredients.find((i) => i.id === ingId);
-                    if (ing) setTotalPrice(ing.purchasePrice);
-                  }}
-                  className="w-full p-2.5 bg-[#1a1a1a] border border-white/15 rounded-xl font-bold text-white focus:outline-none focus:border-[#F27D26]"
-                >
-                  {ingredients.map((ing) => (
-                    <option key={ing.id} value={ing.id} className="bg-[#1a1a1a] text-white">
-                      {ing.name} (ปัจจุบัน: ฿{ing.purchasePrice}/{ing.purchaseUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CategoryIngredientSelect
+                ingredients={ingredients}
+                selectedIngredientId={selectedIngredientId}
+                onSelectIngredientId={(ingId, ing) => {
+                  setSelectedIngredientId(ingId);
+                  if (ing) setTotalPrice(ing.purchasePrice);
+                }}
+                categoryLabel="1. เลือกหมวดหมู่วัตถุดิบก่อน"
+                ingredientLabel="2. เลือกวัตถุดิบย่อย"
+                theme="dark"
+                layout="row"
+                required
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
