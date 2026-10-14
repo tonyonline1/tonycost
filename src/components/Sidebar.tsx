@@ -246,6 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
 
+
         {/* Data Management - Compact & Comfortable */}
         <section className="pt-3 border-t border-[#EAE4D9] space-y-2">
           <div className="px-2 flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase text-stone-500">

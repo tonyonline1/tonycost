@@ -1065,6 +1065,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
         </div>
       </div>
 
+
       {/* Active High-Cost Filter Alert Banner (Displayed when filtering warning items) */}
       {filterHighCostOnly && (
         <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs shadow-2xs">
@@ -2329,7 +2330,7 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       )}
                       {currentCategoryIngredients.map((ing) => (
                         <option key={ing.id} value={ing.id}>
-                          {ing.name} (ต้นทุน: ฿{(ing.costPerBaseUnit || 0).toFixed(3)}/{ing.usageUnit || ing.baseUnit || 'g'})
+                          {ing.name}
                         </option>
                       ))}
                     </select>

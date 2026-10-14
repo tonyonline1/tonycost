@@ -191,7 +191,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                   >
                     {ingredients.map((ing) => (
                       <option key={ing.id} value={ing.id}>
-                        {ing.thaiName} (฿{ing.costPerBaseUnit.toFixed(4)}/{ing.baseUnit})
+                        {ing.thaiName}
                       </option>
                     ))}
                   </select>
@@ -276,7 +276,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                   >
                     {subRecipes.map((sub) => (
                       <option key={sub.id} value={sub.id}>
-                        {sub.thaiName} (฿{sub.costPerFinalUnit.toFixed(4)}/{sub.outputUnit})
+                        {sub.thaiName}
                       </option>
                     ))}
                   </select>

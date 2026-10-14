@@ -339,13 +339,21 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
 
   const nonPackagingItems = useMemo(() => {
     return localBaseItems.filter(
-      (it) => it.type !== 'PACKAGING' && it.ingredientType !== 'PACKAGING'
+      (it) =>
+        it.type !== 'PACKAGING' &&
+        it.ingredientType !== 'PACKAGING' &&
+        it.type !== 'PREPARED_ITEM' &&
+        it.ingredientType !== 'PREPARED_ITEM'
     );
   }, [localBaseItems]);
 
-  const packagingItems = useMemo(() => {
+  const packagingAndSideItems = useMemo(() => {
     return localBaseItems.filter(
-      (it) => it.type === 'PACKAGING' || it.ingredientType === 'PACKAGING'
+      (it) =>
+        it.type === 'PACKAGING' ||
+        it.ingredientType === 'PACKAGING' ||
+        it.type === 'PREPARED_ITEM' ||
+        it.ingredientType === 'PREPARED_ITEM'
     );
   }, [localBaseItems]);
 
@@ -437,7 +445,70 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  const handleAddBaseIngredient = () => {
+  // Category management for Base Recipe & Sauce items
+  const uniqueCategories = useMemo(() => {
+    const defaultOrder = [
+      'เนื้อสัตว์และอาหารทะเล',
+      'ผักและสมุนไพร',
+      'เครื่องปรุงและซอส',
+      'ข้าวและเส้น',
+      'ไข่และเต้าหู้',
+      'ของแห้งและเบ็ดเตล็ด',
+      'บรรจุภัณฑ์',
+    ];
+    const set = new Set<string>();
+    ingredients.forEach((ing) => {
+      if (ing.category) set.add(ing.category);
+    });
+    const ordered: string[] = [];
+    defaultOrder.forEach((cat) => {
+      if (set.has(cat)) {
+        ordered.push(cat);
+        set.delete(cat);
+      }
+    });
+    set.forEach((cat) => ordered.push(cat));
+    return ordered;
+  }, [ingredients]);
+
+  const getCategoryIcon = (category?: string) => {
+    switch (category) {
+      case 'เนื้อสัตว์และอาหารทะเล':
+        return '🥩';
+      case 'ผักและสมุนไพร':
+        return '🥬';
+      case 'เครื่องปรุงและซอส':
+        return '🧂';
+      case 'ข้าวและเส้น':
+        return '🍚';
+      case 'ไข่และเต้าหู้':
+        return '🥚';
+      case 'บรรจุภัณฑ์':
+        return '🥡';
+      case 'ของแห้งและเบ็ดเตล็ด':
+        return '📦';
+      default:
+        return '📁';
+    }
+  };
+
+  // Only seasonings and sauces category for Sauce modal (เครื่องปรุงและซอส)
+  const seasoningIngredients = useMemo(() => {
+    const list = ingredients.filter((i) => i.category === 'เครื่องปรุงและซอส');
+    return list.length > 0 ? list : ingredients;
+  }, [ingredients]);
+
+  // State for category overrides in base recipe items and sauce items
+  const [baseItemCategoryOverrides, setBaseItemCategoryOverrides] = useState<Record<string, string>>({});
+  const [sauceItemCategoryOverrides, setSauceItemCategoryOverrides] = useState<Record<number, string>>({});
+
+  // Modal for adding an ingredient to Base Recipe with 2-step selection
+  const [isAddBaseIngModalOpen, setIsAddBaseIngModalOpen] = useState(false);
+  const [newBaseIngCategory, setNewBaseIngCategory] = useState<string>('ผักและสมุนไพร');
+  const [newBaseIngId, setNewBaseIngId] = useState<string>('');
+  const [newBaseIngQty, setNewBaseIngQty] = useState<number>(10);
+
+  const handleOpenAddBaseIngModal = () => {
     const candidate =
       ingredients.find(
         (i) =>
@@ -448,6 +519,18 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
           !i.name.includes('หมึก') &&
           i.category !== 'บรรจุภัณฑ์'
       ) || ingredients[0];
+
+    const defaultCat = candidate?.category || 'ผักและสมุนไพร';
+    const firstInCat = ingredients.find((i) => i.category === defaultCat) || candidate || ingredients[0];
+    setNewBaseIngCategory(defaultCat);
+    setNewBaseIngId(firstInCat?.id || '');
+    setNewBaseIngQty(firstInCat?.usageUnit === 'g' ? 10 : 1);
+    setIsAddBaseIngModalOpen(true);
+  };
+
+  const handleConfirmAddBaseIngredient = (e: React.FormEvent) => {
+    e.preventDefault();
+    const candidate = ingredientsMap.get(newBaseIngId) || ingredients[0];
     if (!candidate) return;
     const newItem: RecipeItem = {
       id: `base_ing_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -455,13 +538,21 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
       ingredientType: 'INGREDIENT',
       ingredientId: candidate.id,
       name: candidate.name,
-      quantity: candidate.usageUnit === 'g' ? 10 : 1,
+      quantity: newBaseIngQty > 0 ? newBaseIngQty : (candidate.usageUnit === 'g' ? 10 : 1),
       unit: candidate.usageUnit,
       calculatedUnitCost: candidate.costPerBaseUnit,
-      calculatedLineCost: (candidate.usageUnit === 'g' ? 10 : 1) * candidate.costPerBaseUnit,
+      calculatedLineCost: (newBaseIngQty > 0 ? newBaseIngQty : (candidate.usageUnit === 'g' ? 10 : 1)) * candidate.costPerBaseUnit,
     };
     setLocalBaseItems([...localBaseItems, newItem]);
+    if (candidate.category) {
+      setBaseItemCategoryOverrides((prev) => ({ ...prev, [newItem.id]: candidate.category! }));
+    }
     setHasUnsavedChanges(true);
+    setIsAddBaseIngModalOpen(false);
+  };
+
+  const handleAddBaseIngredient = () => {
+    handleOpenAddBaseIngModal();
   };
 
   const handleAddSauce = () => {
@@ -877,6 +968,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
         </div>
       </div>
 
+
       {/* ========================================================= */}
       {/* TAB 1: CENTRAL BASE RECIPES (คลังสูตรอาหารกลาง)              */}
       {/* ========================================================= */}
@@ -895,7 +987,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
               >
                 {menus.map((m) => (
                   <option key={m.id} value={m.id} className="bg-[#1a1a1a]">
-                    สูตร {m.name} ({m.category}) — {m.variants.length} ตัวเลือกเนื้อสัตว์
+                    สูตร {m.name}
                   </option>
                 ))}
               </select>
@@ -929,24 +1021,11 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
             </div>
           </div>
 
-          {/* Central Recipe Repository Info Card */}
-          <div className="bg-[#F27D26]/10 border border-[#F27D26]/30 p-3.5 rounded-2xl flex items-start gap-3 text-xs text-white/80">
-            <Sparkles className="w-4 h-4 text-[#F27D26] shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-white block">
-                คลังสูตรอาหารกลาง: สูตร {currentMenu?.name} (กำหนดค่าครั้งเดียว ใช้ร่วมกันทุกเนื้อสัตว์)
-              </span>
-              <p className="text-[11px] text-white/70 mt-0.5">
-                วัตถุดิบกลาง, ซอสปรุง, เครื่องเคียง, และแพ็คเกจจิ้งด้านล่างนี้ใช้ร่วมกันกับทุกประเภทเนื้อสัตว์ (หมูหมัก, หมูบด, ไก่, เนื้อ, กุ้ง, หมึก, ทะเล) โดยน้ำหนักและราคาต้นทุนของเนื้อสัตว์แต่ละชนิดสามารถปรับแต่งได้อิสระที่หน้ารายการเมนูอาหาร
-              </p>
-            </div>
-          </div>
-
           {/* Main Grid: Recipe Builder Left, Live Breakdown Right */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Left: Central Recipe Items Builder (2 cols) */}
             <div className="lg:col-span-2 space-y-4">
-              {/* Card 1: Central Recipe Ingredients, Sauces & Side Dishes */}
+              {/* Card 1: Central Recipe Ingredients & Sauces */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/10 gap-2">
                   <div>
@@ -954,11 +1033,11 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                       รายการส่วนประกอบในสูตรกลาง ({nonPackagingItems.length} รายการ)
                     </h3>
                     <p className="text-[11px] text-white/50">
-                      รวมวัตถุดิบกลาง, ซอสปรุง และเครื่องเคียง (ไม่รวมบรรจุภัณฑ์)
+                      รวมวัตถุดิบกลาง และซอสปรุง
                     </p>
                   </div>
 
-                  {/* 3 Add buttons: วัตถุดิบ, ซอสปรุง, เครื่องเคียง */}
+                  {/* 2 Add buttons: วัตถุดิบ, ซอสปรุง */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
@@ -977,15 +1056,6 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>+ ซอสปรุง</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddSideDish}
-                      className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1 cursor-pointer border border-amber-500/30 transition-colors"
-                      title="เพิ่มเครื่องเคียง เช่น พริกน้ำปลา, แตงกวาเคียง, ข้าวสวย, ไข่ดาว"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ เครื่องเคียง</span>
                     </button>
                   </div>
                 </div>
@@ -1039,39 +1109,53 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                                     </option>
                                   ))}
                                 </select>
-                              ) : item.type === 'PREPARED_ITEM' ? (
-                                <select
-                                  value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
-                                  className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[220px] cursor-pointer"
-                                >
-                                  <optgroup label="เครื่องเคียงมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
-                                    {SIDE_DISH_PRESETS.map((sd) => (
-                                      <option key={sd.id} value={sd.id}>
-                                        {sd.name} (฿{sd.unitCost})
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                  <optgroup label="วัตถุดิบเสริมในคลัง" className="bg-[#1a1a1a]">
-                                    {ingredients.map((ing) => (
-                                      <option key={ing.id} value={ing.id}>
-                                        {ing.name} ({ing.usageUnit})
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                </select>
                               ) : (
-                                <select
-                                  value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
-                                  className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[200px] cursor-pointer"
-                                >
-                                  {ingredients.map((ing) => (
-                                    <option key={ing.id} value={ing.id} className="bg-[#1a1a1a]">
-                                      {ing.name} ({ing.usageUnit})
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5">
+                                  {/* Step 1: Select Category first */}
+                                  <select
+                                    value={baseItemCategoryOverrides[item.id] || ingredientsMap.get(item.ingredientId)?.category || 'ALL'}
+                                    onChange={(e) => {
+                                      const newCat = e.target.value;
+                                      setBaseItemCategoryOverrides((prev) => ({ ...prev, [item.id]: newCat }));
+                                      const matching = newCat === 'ALL' ? ingredients : ingredients.filter((i) => i.category === newCat);
+                                      if (matching.length > 0 && !matching.some((i) => i.id === item.ingredientId)) {
+                                        handleUpdateBaseItemSourceById(item.id, matching[0].id);
+                                      }
+                                    }}
+                                    className="bg-black/60 border border-white/20 rounded-lg px-2 py-1 text-[11px] text-[#F27D26] font-bold cursor-pointer shrink-0 max-w-[130px]"
+                                    title="1. เลือกหมวดหมู่วัตถุดิบก่อน"
+                                  >
+                                    <option value="ALL">📁 ทุกหมวด</option>
+                                    {uniqueCategories.map((cat) => (
+                                      <option key={cat} value={cat} className="bg-[#1a1a1a] text-white">
+                                        {getCategoryIcon(cat)} {cat}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  {/* Step 2: Select Sub-ingredient */}
+                                  {(() => {
+                                    const selectedCat = baseItemCategoryOverrides[item.id] || ingredientsMap.get(item.ingredientId)?.category || 'ALL';
+                                    const categoryIngs = selectedCat === 'ALL'
+                                      ? ingredients
+                                      : ingredients.filter((i) => i.category === selectedCat);
+
+                                    return (
+                                      <select
+                                        value={item.ingredientId}
+                                        onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
+                                        className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white max-w-[190px] cursor-pointer"
+                                        title="2. เลือกวัตถุดิบย่อย"
+                                      >
+                                        {categoryIngs.map((ing) => (
+                                          <option key={ing.id} value={ing.id} className="bg-[#1a1a1a]">
+                                            {ing.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    );
+                                  })()}
+                                </div>
                               )}
                             </td>
 
@@ -1118,7 +1202,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 2: Dedicated Packaging Items Card (ต้นทุนกล่อง & บรรจุภัณฑ์) */}
+              {/* Card 2: Dedicated Packaging & Side Dish Items Card (ต้นทุนกล่อง & บรรจุภัณฑ์) */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/10 gap-2">
                   <div className="flex items-center gap-2">
@@ -1127,35 +1211,46 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     </div>
                     <div>
                       <h3 className="font-bold text-white text-base">
-                        ต้นทุนกล่อง & บรรจุภัณฑ์ (Packaging Items) ({packagingItems.length} รายการ)
+                        ต้นทุนกล่อง & บรรจุภัณฑ์ (Packaging Items) ({packagingAndSideItems.length} รายการ)
                       </h3>
                       <p className="text-[11px] text-white/50">
-                        กำหนดกล่องอาหารและบรรจุภัณฑ์สำหรับสูตรนี้ ใช้ร่วมกันทุกตัวเลือกเนื้อสัตว์
+                        กำหนดกล่องอาหาร บรรจุภัณฑ์ และเครื่องเคียงสำหรับสูตรนี้ ใช้ร่วมกันทุกตัวเลือกเนื้อสัตว์
                       </p>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleAddPackaging}
-                    className="px-3 py-1.5 rounded-xl bg-[#00B1FF]/20 hover:bg-[#00B1FF]/30 text-[#00B1FF] border border-[#00B1FF]/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
-                    title="เพิ่มบรรจุภัณฑ์ เช่น กล่องกระดาษคราฟท์, ช้อนส้อม, ถ้วยน้ำจิ้ม, ถุงหูหิ้ว"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ แพ็คเกจจิ้ง</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleAddSideDish}
+                      className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1 cursor-pointer border border-amber-500/30 transition-colors"
+                      title="เพิ่มเครื่องเคียง เช่น พริกน้ำปลา, แตงกวาเคียง, ข้าวสวย, ไข่ดาว"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ เครื่องเคียง</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddPackaging}
+                      className="px-3 py-1.5 rounded-xl bg-[#00B1FF]/20 hover:bg-[#00B1FF]/30 text-[#00B1FF] border border-[#00B1FF]/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                      title="เพิ่มบรรจุภัณฑ์ เช่น กล่องกระดาษคราฟท์, ช้อนส้อม, ถ้วยน้ำจิ้ม, ถุงหูหิ้ว"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ แพ็คเกจจิ้ง</span>
+                    </button>
+                  </div>
                 </div>
 
-                {packagingItems.length === 0 ? (
+                {packagingAndSideItems.length === 0 ? (
                   <div className="p-4 text-center text-white/40 text-xs border border-dashed border-white/10 rounded-2xl">
-                    ยังไม่มีรายการแพ็กเกจจิ้งสำหรับเมนูนี้ (กดปุ่ม "+ แพ็คเกจจิ้ง" ด้านบนเพื่อเพิ่มกล่อง, ถุง, ช้อนส้อม)
+                    ยังไม่มีรายการกล่องหรือเครื่องเคียงสำหรับเมนูนี้ (กดปุ่ม "+ เครื่องเคียง" หรือ "+ แพ็คเกจจิ้ง" ด้านบนเพื่อเพิ่ม)
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
-                          <th className="py-2.5 px-3">รายการบรรจุภัณฑ์</th>
+                          <th className="py-2.5 px-3">รายการบรรจุภัณฑ์ / เครื่องเคียง</th>
                           <th className="py-2.5 px-3 text-right">จำนวน</th>
                           <th className="py-2.5 px-3">หน่วย</th>
                           <th className="py-2.5 px-3 text-right">ต้นทุน/หน่วย</th>
@@ -1164,34 +1259,57 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-mono">
-                        {packagingItems.map((item, index) => {
+                        {packagingAndSideItems.map((item, index) => {
                           const costInfo = getItemCost(item);
 
                           return (
                             <tr key={`${item.id || 'pkg'}-${index}`} className="hover:bg-white/5 transition-colors">
                               <td className="py-2.5 px-3 font-sans font-medium text-white">
-                                <select
-                                  value={item.ingredientId}
-                                  onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
-                                  className="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1 text-xs text-white max-w-[260px] cursor-pointer"
-                                >
-                                  <optgroup label="รายการมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
-                                    {PACKAGING_PRESETS.map((pkg) => (
-                                      <option key={pkg.id} value={pkg.id}>
-                                        {pkg.name} (฿{pkg.unitCost})
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                  <optgroup label="วัตถุดิบบรรจุภัณฑ์ในคลัง" className="bg-[#1a1a1a]">
-                                    {ingredients
-                                      .filter((i) => i.category === 'บรรจุภัณฑ์')
-                                      .map((ing) => (
-                                        <option key={ing.id} value={ing.id}>
-                                          {ing.name} (฿{ing.costPerBaseUnit})
+                                {item.type === 'PREPARED_ITEM' ? (
+                                  <select
+                                    value={item.ingredientId}
+                                    onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
+                                    className="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1 text-xs text-white max-w-[260px] cursor-pointer"
+                                  >
+                                    <optgroup label="เครื่องเคียงมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
+                                      {SIDE_DISH_PRESETS.map((sd) => (
+                                        <option key={sd.id} value={sd.id}>
+                                          {sd.name}
                                         </option>
                                       ))}
-                                  </optgroup>
-                                </select>
+                                    </optgroup>
+                                    <optgroup label="วัตถุดิบเสริมในคลัง" className="bg-[#1a1a1a]">
+                                      {ingredients.map((ing) => (
+                                        <option key={ing.id} value={ing.id}>
+                                          {ing.name}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  </select>
+                                ) : (
+                                  <select
+                                    value={item.ingredientId}
+                                    onChange={(e) => handleUpdateBaseItemSourceById(item.id, e.target.value)}
+                                    className="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1 text-xs text-white max-w-[260px] cursor-pointer"
+                                  >
+                                    <optgroup label="รายการมาตรฐาน (Presets)" className="bg-[#1a1a1a]">
+                                      {PACKAGING_PRESETS.map((pkg) => (
+                                        <option key={pkg.id} value={pkg.id}>
+                                          {pkg.name}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                    <optgroup label="วัตถุดิบบรรจุภัณฑ์ในคลัง" className="bg-[#1a1a1a]">
+                                      {ingredients
+                                        .filter((i) => i.category === 'บรรจุภัณฑ์')
+                                        .map((ing) => (
+                                          <option key={ing.id} value={ing.id}>
+                                            {ing.name}
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                  </select>
+                                )}
                               </td>
 
                               <td className="py-2.5 px-3 text-right">
@@ -1238,10 +1356,10 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                     <div className="flex justify-between items-center px-4 py-2.5 bg-[#00B1FF]/10 border border-[#00B1FF]/20 rounded-xl text-xs font-mono mt-3">
                       <span className="font-sans text-white/70 font-semibold flex items-center gap-1.5">
                         <Package className="w-3.5 h-3.5 text-[#00B1FF]" />
-                        <span>โสหุ้ยแพ็กเกจจิ้งรวม (Total Packaging Cost):</span>
+                        <span>รวมต้นทุนกล่อง บรรจุภัณฑ์ และเครื่องเคียง:</span>
                       </span>
                       <span className="font-bold text-[#00B1FF] text-sm">
-                        ฿{totalPackagingCost.toFixed(2)}
+                        ฿{(totalPackagingCost + totalSideDishCost).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -1563,46 +1681,6 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-white/70 mb-1 font-semibold">
-                    ปริมาณผลิตต่อสูตร (g)
-                  </label>
-                  <NumericInput
-                    type="number"
-                    min="1"
-                    required
-                    value={editingSauce.productionQuantity || 1000}
-                    onChange={(e) =>
-                      setEditingSauce({
-                        ...editingSauce,
-                        productionQuantity: parseFloat(e.target.value) || 1,
-                        actualQuantity: parseFloat(e.target.value) || 1,
-                      })
-                    }
-                    className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white/70 mb-1 font-semibold">Yield % ของซอส</label>
-                  <NumericInput
-                    type="number"
-                    min="1"
-                    max="100"
-                    required
-                    value={editingSauce.yieldPercent || 100}
-                    onChange={(e) =>
-                      setEditingSauce({
-                        ...editingSauce,
-                        yieldPercent: parseFloat(e.target.value) || 100,
-                      })
-                    }
-                    className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white font-mono font-bold"
-                  />
-                </div>
-              </div>
-
               {/* Items in Sauce */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -1612,19 +1690,22 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const firstIng = ingredients[0];
-                      if (!firstIng) return;
+                      const seasoningIng =
+                        ingredients.find((i) => i.category === 'เครื่องปรุงและซอส') ||
+                        ingredients[0];
+                      if (!seasoningIng) return;
                       const newItem: SauceRecipeItem = {
-                        ingredientId: firstIng.id,
-                        ingredientName: firstIng.name,
+                        ingredientId: seasoningIng.id,
+                        ingredientName: seasoningIng.name,
                         quantity: 100,
-                        unit: 'g',
-                        unitCost: firstIng.costPerBaseUnit,
-                        lineCost: 100 * firstIng.costPerBaseUnit,
+                        unit: seasoningIng.usageUnit || 'g',
+                        unitCost: seasoningIng.costPerBaseUnit,
+                        lineCost: 100 * seasoningIng.costPerBaseUnit,
                       };
+                      const newItems = [...(editingSauce.items || []), newItem];
                       setEditingSauce({
                         ...editingSauce,
-                        items: [...(editingSauce.items || []), newItem],
+                        items: newItems,
                       });
                     }}
                     className="text-[10px] text-[#F27D26] hover:underline font-bold"
@@ -1634,81 +1715,83 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                 </div>
 
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {(editingSauce.items || []).map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 p-2 bg-black/30 border border-white/10 rounded-xl"
-                    >
-                      <select
-                        value={item.ingredientId}
-                        onChange={(e) => {
-                          const ing = ingredientsMap.get(e.target.value);
-                          const updated = [...(editingSauce.items || [])];
-                          if (ing) {
+                  {(editingSauce.items || []).map((item, idx) => {
+                    const seasoningOptions = ingredients.filter((i) => i.category === 'เครื่องปรุงและซอส');
+                    const currentIng = ingredientsMap.get(item.ingredientId);
+                    const displayOptions =
+                      currentIng && !seasoningOptions.some((i) => i.id === currentIng.id)
+                        ? [currentIng, ...seasoningOptions]
+                        : seasoningOptions.length > 0
+                        ? seasoningOptions
+                        : ingredients;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 p-2 bg-black/30 border border-white/10 rounded-xl"
+                      >
+                        {/* Ingredient selector - only เครื่องปรุงและซอส, displaying name only */}
+                        <select
+                          value={item.ingredientId}
+                          onChange={(e) => {
+                            const ing = ingredientsMap.get(e.target.value);
+                            const updated = [...(editingSauce.items || [])];
+                            if (ing) {
+                              updated[idx] = {
+                                ...updated[idx],
+                                ingredientId: ing.id,
+                                ingredientName: ing.name,
+                                unit: ing.usageUnit,
+                                unitCost: ing.costPerBaseUnit,
+                                lineCost: (updated[idx].quantity || 0) * ing.costPerBaseUnit,
+                              };
+                              setEditingSauce({ ...editingSauce, items: updated });
+                            }
+                          }}
+                          className="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white flex-1 cursor-pointer"
+                        >
+                          {displayOptions.map((ing) => (
+                            <option key={ing.id} value={ing.id} className="bg-[#1a1a1a]">
+                              {ing.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <NumericInput
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={item.quantity ?? 0}
+                          onChange={(e) => {
+                            const q = parseFloat(e.target.value) || 0;
+                            const updated = [...(editingSauce.items || [])];
                             updated[idx] = {
                               ...updated[idx],
-                              ingredientId: ing.id,
-                              ingredientName: ing.name,
-                              unitCost: ing.costPerBaseUnit,
-                              lineCost: (updated[idx].quantity || 0) * ing.costPerBaseUnit,
+                              quantity: q,
+                              lineCost: q * (updated[idx].unitCost || 0),
                             };
                             setEditingSauce({ ...editingSauce, items: updated });
-                          }
-                        }}
-                        className="bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-xs text-white flex-1"
-                      >
-                        {ingredients.map((ing) => (
-                          <option key={ing.id} value={ing.id} className="bg-[#1a1a1a]">
-                            {ing.name}
-                          </option>
-                        ))}
-                      </select>
+                          }}
+                          className="w-16 p-1 bg-black/40 border border-white/20 rounded-lg text-right text-white font-mono font-bold"
+                        />
 
-                      <NumericInput
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={item.quantity ?? 0}
-                        onChange={(e) => {
-                          const q = parseFloat(e.target.value) || 0;
-                          const updated = [...(editingSauce.items || [])];
-                          updated[idx] = {
-                            ...updated[idx],
-                            quantity: q,
-                            lineCost: q * (updated[idx].unitCost || 0),
-                          };
-                          setEditingSauce({ ...editingSauce, items: updated });
-                        }}
-                        className="w-16 p-1 bg-black/40 border border-white/20 rounded-lg text-right text-white font-mono font-bold"
-                      />
+                        <span className="text-[11px] text-white/50">{item.unit}</span>
 
-                      <span className="text-[11px] text-white/50">{item.unit}</span>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...(editingSauce.items || [])];
-                          updated.splice(idx, 1);
-                          setEditingSauce({ ...editingSauce, items: updated });
-                        }}
-                        className="p-1 text-white/40 hover:text-rose-400 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = [...(editingSauce.items || [])];
+                            updated.splice(idx, 1);
+                            setEditingSauce({ ...editingSauce, items: updated });
+                          }}
+                          className="p-1 text-white/40 hover:text-rose-400 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-white/70 mb-1 font-semibold">หมายเหตุ / วิธีเคี่ยว</label>
-                <input
-                  type="text"
-                  placeholder="เช่น เคี่ยวไฟอ่อน 15 นาที, กวนจนละลาย"
-                  value={editingSauce.notes || ''}
-                  onChange={(e) => setEditingSauce({ ...editingSauce, notes: e.target.value })}
-                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#F27D26]"
-                />
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
@@ -1724,6 +1807,132 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                   className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl shadow-lg shadow-[#F27D26]/20 cursor-pointer"
                 >
                   บันทึกสูตรซอส
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD BASE INGREDIENT MODAL (2-step Category & Sub-ingredient) */}
+      {isAddBaseIngModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/20 text-white">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-bold text-white text-base">
+                + เพิ่มวัตถุดิบในสูตรอาหารกลาง (Base Recipe)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddBaseIngModalOpen(false)}
+                className="p-1 rounded-xl text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAddBaseIngredient} className="space-y-4 mt-4 text-xs">
+              {/* Step 1: Select Category first */}
+              <div>
+                <label className="block text-white/80 font-bold mb-1">
+                  1. เลือกหมวดหมู่วัตถุดิบก่อน <span className="text-[#F27D26]">*</span>
+                </label>
+                <select
+                  value={newBaseIngCategory}
+                  onChange={(e) => {
+                    const newCat = e.target.value;
+                    setNewBaseIngCategory(newCat);
+                    const matching = newCat === 'ALL' ? ingredients : ingredients.filter((i) => i.category === newCat);
+                    if (matching.length > 0) {
+                      setNewBaseIngId(matching[0].id);
+                      setNewBaseIngQty(matching[0].usageUnit === 'g' ? 10 : 1);
+                    } else {
+                      setNewBaseIngId('');
+                    }
+                  }}
+                  className="w-full p-2.5 bg-black/50 border border-white/20 rounded-xl font-bold text-white cursor-pointer focus:border-[#F27D26]"
+                >
+                  <option value="ALL">📁 ทุกหมวดหมู่วัตถุดิบ</option>
+                  {uniqueCategories.map((cat) => (
+                    <option key={cat} value={cat} className="bg-[#1a1a1a] text-white">
+                      {getCategoryIcon(cat)} {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2: Select Sub-ingredient */}
+              <div>
+                <label className="block text-white/80 font-bold mb-1">
+                  2. เลือกวัตถุดิบย่อย <span className="text-[#F27D26]">*</span>
+                </label>
+                {(() => {
+                  const matching = newBaseIngCategory === 'ALL'
+                    ? ingredients
+                    : ingredients.filter((i) => i.category === newBaseIngCategory);
+
+                  return (
+                    <select
+                      value={newBaseIngId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setNewBaseIngId(id);
+                        const ing = ingredientsMap.get(id);
+                        if (ing) {
+                          setNewBaseIngQty(ing.usageUnit === 'g' ? 10 : 1);
+                        }
+                      }}
+                      required
+                      className="w-full p-2.5 bg-black/50 border border-white/20 rounded-xl font-bold text-white cursor-pointer focus:border-[#F27D26]"
+                    >
+                      <option value="">-- เลือกวัตถุดิบย่อย ({matching.length} รายการ) --</option>
+                      {matching.map((ing) => (
+                        <option key={ing.id} value={ing.id} className="bg-[#1a1a1a]">
+                          {ing.name}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
+              </div>
+
+              {/* Step 3: Quantity */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-white/80 font-bold">
+                    ปริมาณที่ใช้ในสูตรกลาง (Quantity) <span className="text-[#F27D26]">*</span>
+                  </label>
+                  {newBaseIngId && ingredientsMap.get(newBaseIngId) && (
+                    <span className="text-[11px] text-[#F27D26] font-mono font-bold">
+                      หน่วย: {ingredientsMap.get(newBaseIngId)?.usageUnit}
+                    </span>
+                  )}
+                </div>
+                <NumericInput
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  required
+                  value={newBaseIngQty}
+                  onChange={(e) => setNewBaseIngQty(parseFloat(e.target.value) || 0)}
+                  className="w-full p-2.5 bg-black/50 border border-white/20 rounded-xl font-mono font-bold text-white focus:border-[#F27D26]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setIsAddBaseIngModalOpen(false)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-xl text-white font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newBaseIngId}
+                  className="px-5 py-2 bg-[#F27D26] hover:bg-[#d96817] text-black font-bold rounded-xl shadow-lg shadow-[#F27D26]/20 cursor-pointer disabled:opacity-50"
+                >
+                  + เพิ่มลงสูตรอาหารกลาง
                 </button>
               </div>
             </form>

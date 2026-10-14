@@ -61,20 +61,77 @@ export const SaucesView: React.FC<SaucesViewProps> = ({
     setIsEditModalOpen(true);
   };
 
+  const [sauceItemCategoryOverrides, setSauceItemCategoryOverrides] = useState<Record<number, string>>({});
+
+  const uniqueCategories = React.useMemo(() => {
+    const defaultOrder = [
+      'เนื้อสัตว์และอาหารทะเล',
+      'ผักและสมุนไพร',
+      'เครื่องปรุงและซอส',
+      'ข้าวและเส้น',
+      'ไข่และเต้าหู้',
+      'ของแห้งและเบ็ดเตล็ด',
+      'บรรจุภัณฑ์',
+    ];
+    const set = new Set<string>();
+    ingredients.forEach((ing) => {
+      if (ing.category) set.add(ing.category);
+    });
+    const ordered: string[] = [];
+    defaultOrder.forEach((cat) => {
+      if (set.has(cat)) {
+        ordered.push(cat);
+        set.delete(cat);
+      }
+    });
+    set.forEach((cat) => ordered.push(cat));
+    return ordered;
+  }, [ingredients]);
+
+  const getCategoryIcon = (category?: string) => {
+    switch (category) {
+      case 'เนื้อสัตว์และอาหารทะเล':
+        return '🥩';
+      case 'ผักและสมุนไพร':
+        return '🥬';
+      case 'เครื่องปรุงและซอส':
+        return '🧂';
+      case 'ข้าวและเส้น':
+        return '🍚';
+      case 'ไข่และเต้าหู้':
+        return '🥚';
+      case 'บรรจุภัณฑ์':
+        return '🥡';
+      case 'ของแห้งและเบ็ดเตล็ด':
+        return '📦';
+      default:
+        return '📁';
+    }
+  };
+
   const handleAddItemToEditing = () => {
     if (!editingSauce) return;
-    const firstIng = ingredients[0];
+    const seasoningIng =
+      ingredients.find((i) => i.category === 'เครื่องปรุงและซอส') || ingredients[0];
     const newItem: SauceRecipeItem = {
-      ingredientId: firstIng ? firstIng.id : '',
-      ingredientName: firstIng ? firstIng.name : '',
+      ingredientId: seasoningIng ? seasoningIng.id : '',
+      ingredientName: seasoningIng ? seasoningIng.name : '',
       quantity: 100,
-      unit: 'g',
-      unitCost: firstIng ? firstIng.costPerBaseUnit : 0,
-      lineCost: firstIng ? 100 * firstIng.costPerBaseUnit : 0,
+      unit: seasoningIng?.usageUnit || 'g',
+      unitCost: seasoningIng ? seasoningIng.costPerBaseUnit : 0,
+      lineCost: seasoningIng ? 100 * seasoningIng.costPerBaseUnit : 0,
     };
+    const newItems = [...(editingSauce.items || []), newItem];
+    const newIdx = newItems.length - 1;
+    if (seasoningIng?.category) {
+      setSauceItemCategoryOverrides((prev) => ({
+        ...prev,
+        [newIdx]: seasoningIng.category!,
+      }));
+    }
     setEditingSauce({
       ...editingSauce,
-      items: [...(editingSauce.items || []), newItem],
+      items: newItems,
     });
   };
 
@@ -388,54 +445,6 @@ export const SaucesView: React.FC<SaucesViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3 p-3.5 bg-white/5 rounded-2xl border border-white/10">
-                <div>
-                  <label className="block text-white/60 font-medium mb-1">ปริมาณผลิต (g)</label>
-                  <input
-                    type="number"
-                    required
-                    value={editingSauce.productionQuantity || ''}
-                    onChange={(e) =>
-                      setEditingSauce({
-                        ...editingSauce,
-                        productionQuantity: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-white/60 font-medium mb-1">Yield (%)</label>
-                  <input
-                    type="number"
-                    required
-                    value={editingSauce.yieldPercent || ''}
-                    onChange={(e) =>
-                      setEditingSauce({
-                        ...editingSauce,
-                        yieldPercent: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-white/60 font-medium mb-1">ปริมาณสุทธิ (g)</label>
-                  <input
-                    type="number"
-                    required
-                    value={editingSauce.actualQuantity || ''}
-                    onChange={(e) =>
-                      setEditingSauce({
-                        ...editingSauce,
-                        actualQuantity: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full p-2 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white"
-                  />
-                </div>
-              </div>
-
               {/* Items in recipe */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -450,61 +459,62 @@ export const SaucesView: React.FC<SaucesViewProps> = ({
                 </div>
 
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {(editingSauce.items || []).map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 bg-black/30 p-2.5 rounded-xl border border-white/10"
-                    >
-                      <select
-                        value={item.ingredientId}
-                        onChange={(e) => handleUpdateItemIngredient(idx, e.target.value)}
-                        className="flex-1 p-1.5 bg-[#1a1a1a] border border-white/15 rounded-lg text-xs font-medium text-white"
+                  {(editingSauce.items || []).map((item, idx) => {
+                    const seasoningOptions = ingredients.filter((i) => i.category === 'เครื่องปรุงและซอส');
+                    const currentIng = ingredientsMap.get(item.ingredientId);
+                    const displayOptions =
+                      currentIng && !seasoningOptions.some((i) => i.id === currentIng.id)
+                        ? [currentIng, ...seasoningOptions]
+                        : seasoningOptions.length > 0
+                        ? seasoningOptions
+                        : ingredients;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 bg-black/30 p-2.5 rounded-xl border border-white/10"
                       >
-                        {ingredients.map((ing) => (
-                          <option key={ing.id} value={ing.id}>
-                            {ing.name} (฿{ing.costPerBaseUnit.toFixed(4)}/{ing.usageUnit})
-                          </option>
-                        ))}
-                      </select>
+                        {/* Ingredient selector - only เครื่องปรุงและซอส, displaying name only */}
+                        <select
+                          value={item.ingredientId}
+                          onChange={(e) => handleUpdateItemIngredient(idx, e.target.value)}
+                          className="flex-1 p-1.5 bg-[#1a1a1a] border border-white/15 rounded-lg text-xs font-medium text-white cursor-pointer"
+                        >
+                          {displayOptions.map((ing) => (
+                            <option key={ing.id} value={ing.id}>
+                              {ing.name}
+                            </option>
+                          ))}
+                        </select>
 
-                      <div className="flex items-center gap-1 w-28">
-                        <input
-                          type="number"
-                          step="any"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleUpdateItemQuantity(idx, parseFloat(e.target.value) || 0)
-                          }
-                          className="w-16 p-1.5 bg-[#1a1a1a] border border-white/15 rounded-lg text-xs font-mono font-bold text-right text-white"
-                        />
-                        <span className="text-white/40 text-[11px]">{item.unit}</span>
+                        <div className="flex items-center gap-1 w-28">
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleUpdateItemQuantity(idx, parseFloat(e.target.value) || 0)
+                            }
+                            className="w-16 p-1.5 bg-[#1a1a1a] border border-white/15 rounded-lg text-xs font-mono font-bold text-right text-white"
+                          />
+                          <span className="text-white/40 text-[11px]">{item.unit}</span>
+                        </div>
+
+                        <div className="w-20 text-right font-mono font-bold text-[#FFC107] text-xs">
+                          ฿{item.lineCost.toFixed(2)}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="p-1 text-white/40 hover:text-red-400 rounded cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-
-                      <div className="w-20 text-right font-mono font-bold text-[#FFC107] text-xs">
-                        ฿{item.lineCost.toFixed(2)}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="p-1 text-white/40 hover:text-red-400 rounded cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-white/80 mb-1">หมายเหตุ / ขั้นตอนทำ</label>
-                <textarea
-                  rows={2}
-                  value={editingSauce.notes || ''}
-                  onChange={(e) => setEditingSauce({ ...editingSauce, notes: e.target.value })}
-                  className="w-full p-2 bg-black/40 border border-white/15 rounded-xl text-white"
-                  placeholder="เช่น เคี่ยวไฟอ่อน 30 นาที..."
-                />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">

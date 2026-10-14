@@ -148,6 +148,8 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
         </button>
       </div>
 
+
+
       {/* Tabs Switcher */}
       <div className="flex items-center gap-2 border-b border-white/10">
         <button

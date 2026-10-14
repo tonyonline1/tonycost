@@ -91,6 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             <h2 className="text-base font-bold text-white">ข้อมูลร้านและเป้าหมายต้นทุน</h2>
           </div>
 
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             <div>
               <label className="block font-bold text-white/80 mb-1">ชื่อร้านอาหาร</label>

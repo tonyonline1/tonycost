@@ -369,7 +369,7 @@ export const SubRecipeSauceView: React.FC<SubRecipeSauceViewProps> = ({
                       >
                         {ingredients.map((ing) => (
                           <option key={ing.id} value={ing.id}>
-                            {ing.thaiName} (฿{ing.costPerBaseUnit.toFixed(4)}/{ing.baseUnit})
+                            {ing.thaiName}
                           </option>
                         ))}
                       </select>
