@@ -16,6 +16,9 @@ import {
   GripVertical,
   ChevronUp,
   ChevronDown,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   Ingredient,
@@ -62,6 +65,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Partial<Ingredient> | null>(null);
+  const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
 
   // Price Simulation Modal state
   const [isImpactModalOpen, setIsImpactModalOpen] = useState(false);
@@ -128,11 +132,25 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     return matchesSearch && matchesCategory;
   });
 
+  // Sorted ingredients (Ascending / Descending by name, supporting Thai locale)
+  const displayedIngredients = React.useMemo(() => {
+    if (sortOrder === 'default') {
+      return filteredIngredients;
+    }
+    return [...filteredIngredients].sort((a, b) => {
+      const cmp = a.name.localeCompare(b.name, 'th', { sensitivity: 'base', numeric: true });
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredIngredients, sortOrder]);
+
   // Drag & drop and reorder state
   const [draggedIngredientId, setDraggedIngredientId] = useState<string | null>(null);
   const [dragOverIngredientId, setDragOverIngredientId] = useState<string | null>(null);
 
   const handleMoveIngredient = (fromId: string, direction: 'up' | 'down') => {
+    if (sortOrder !== 'default') {
+      setSortOrder('default');
+    }
     const fromIndex = ingredients.findIndex((i) => i.id === fromId);
     if (fromIndex === -1) return;
     const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
@@ -167,6 +185,9 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     setDragOverIngredientId(null);
 
     if (!sourceId || sourceId === targetId) return;
+    if (sortOrder !== 'default') {
+      setSortOrder('default');
+    }
     const fromIndex = ingredients.findIndex((i) => i.id === sourceId);
     const toIndex = ingredients.findIndex((i) => i.id === targetId);
     if (fromIndex === -1 || toIndex === -1) return;
@@ -428,7 +449,63 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
             <thead className="sticky top-0 z-20 bg-[#161618] border-b border-white/15 shadow-sm">
               <tr className="text-white/70 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-3 w-12 text-center">ลำดับ</th>
-                <th className="py-3 px-4">วัตถุดิบ</th>
+                <th className="py-3 px-4 select-none">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortOrder((prev) => (prev === 'default' ? 'asc' : prev === 'asc' ? 'desc' : 'default'));
+                      }}
+                      className="flex items-center gap-1 font-bold uppercase tracking-wider text-[10px] text-white/70 hover:text-white transition-colors cursor-pointer group"
+                      title="คลิกเพื่อสลับ: ลำดับปกติ -> น้อยไปมาก (ก-ฮ) -> มากไปน้อย (ฮ-ก)"
+                    >
+                      <span>วัตถุดิบ</span>
+                      {sortOrder === 'asc' ? (
+                        <ArrowUp className="w-2.5 h-2.5 text-[#F27D26]" />
+                      ) : sortOrder === 'desc' ? (
+                        <ArrowDown className="w-2.5 h-2.5 text-[#F27D26]" />
+                      ) : (
+                        <ArrowUpDown className="w-2.5 h-2.5 text-white/40 group-hover:text-white" />
+                      )}
+                    </button>
+
+                    <div className="inline-flex items-center bg-black/40 p-0.5 rounded border border-white/10 gap-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSortOrder((prev) => (prev === 'asc' ? 'default' : 'asc'));
+                        }}
+                        className={`h-4.5 px-1.5 rounded text-[9px] font-medium flex items-center gap-0.5 transition-all cursor-pointer ${
+                          sortOrder === 'asc'
+                            ? 'bg-[#F27D26] text-black font-bold shadow-xs'
+                            : 'text-white/60 hover:text-white hover:bg-white/10'
+                        }`}
+                        title="เรียงลำดับจากน้อยไปมาก (ก-ฮ)"
+                      >
+                        <ArrowUp className="w-2.5 h-2.5" />
+                        <span>ก-ฮ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSortOrder((prev) => (prev === 'desc' ? 'default' : 'desc'));
+                        }}
+                        className={`h-4.5 px-1.5 rounded text-[9px] font-medium flex items-center gap-0.5 transition-all cursor-pointer ${
+                          sortOrder === 'desc'
+                            ? 'bg-[#F27D26] text-black font-bold shadow-xs'
+                            : 'text-white/60 hover:text-white hover:bg-white/10'
+                        }`}
+                        title="เรียงลำดับจากมากไปน้อย (ฮ-ก)"
+                      >
+                        <ArrowDown className="w-2.5 h-2.5" />
+                        <span>ฮ-ก</span>
+                      </button>
+                    </div>
+                  </div>
+                </th>
                 <th className="py-3 px-3">ปริมาณที่ซื้อ</th>
                 <th className="py-3 px-3">ราคาซื้อ</th>
                 <th className="py-3 px-3">Yield (%)</th>
@@ -439,7 +516,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredIngredients.map((ing) => {
+              {displayedIngredients.map((ing) => {
                 const isShrimp = ing.usageUnit === 'ตัว';
                 const isDragged = draggedIngredientId === ing.id;
                 const isDragOver = dragOverIngredientId === ing.id;
@@ -581,6 +658,13 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   </tr>
                 );
               })}
+              {displayedIngredients.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="py-12 text-center text-white/40 text-xs">
+                    ไม่พบรายการวัตถุดิบ
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
