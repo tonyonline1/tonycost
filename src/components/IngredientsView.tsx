@@ -16,6 +16,8 @@ import {
   GripVertical,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -85,6 +87,19 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     }
   });
 
+  // Category order state with localStorage persistence
+  const [categoryOrder, setCategoryOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('cost_ingredient_category_order');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
+
   const defaultCategories = [
     'เนื้อสัตว์และอาหารทะเล',
     'ผักและสมุนไพร',
@@ -95,7 +110,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     'บรรจุภัณฑ์',
   ];
 
-  const allCategories = Array.from(
+  const rawCategories = Array.from(
     new Set([
       ...defaultCategories,
       ...customCategories,
@@ -103,7 +118,93 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     ])
   );
 
+  // Sorted categories based on saved categoryOrder
+  const allCategories = React.useMemo(() => {
+    if (categoryOrder.length === 0) return rawCategories;
+    const orderMap = new Map<string, number>();
+    categoryOrder.forEach((cat, idx) => orderMap.set(cat, idx));
+
+    return [...rawCategories].sort((a, b) => {
+      const posA = orderMap.has(a) ? orderMap.get(a)! : 9999;
+      const posB = orderMap.has(b) ? orderMap.get(b)! : 9999;
+      if (posA !== posB) return posA - posB;
+      return a.localeCompare(b, 'th');
+    });
+  }, [rawCategories, categoryOrder]);
+
   const categories: string[] = ['ALL', ...allCategories];
+
+  const handleMoveCategory = (catName: string, direction: 'left' | 'right') => {
+    const currentIndex = allCategories.indexOf(catName);
+    if (currentIndex === -1) return;
+    const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= allCategories.length) return;
+
+    const newOrder = [...allCategories];
+    const [moved] = newOrder.splice(currentIndex, 1);
+    newOrder.splice(targetIndex, 0, moved);
+
+    setCategoryOrder(newOrder);
+    try {
+      localStorage.setItem('cost_ingredient_category_order', JSON.stringify(newOrder));
+    } catch (err) {
+      console.error('Failed to save category order', err);
+    }
+  };
+
+  const handleCategoryDragStart = (e: React.DragEvent, catName: string) => {
+    setDraggedCategory(catName);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', catName);
+    } catch {}
+  };
+
+  const handleCategoryDragOver = (e: React.DragEvent, catName: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverCategory !== catName) {
+      setDragOverCategory(catName);
+    }
+  };
+
+  const handleCategoryDrop = (e: React.DragEvent, targetCatName: string) => {
+    e.preventDefault();
+    const sourceCat = draggedCategory || e.dataTransfer.getData('text/plain');
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+
+    if (!sourceCat) return;
+
+    const fromIndex = allCategories.indexOf(sourceCat);
+    if (fromIndex === -1) return;
+
+    const newOrder = [...allCategories];
+    const [moved] = newOrder.splice(fromIndex, 1);
+
+    if (targetCatName === 'ALL') {
+      newOrder.unshift(moved);
+    } else {
+      const toIndex = newOrder.indexOf(targetCatName);
+      if (toIndex === -1) {
+        newOrder.push(moved);
+      } else {
+        newOrder.splice(toIndex, 0, moved);
+      }
+    }
+
+    setCategoryOrder(newOrder);
+    try {
+      localStorage.setItem('cost_ingredient_category_order', JSON.stringify(newOrder));
+    } catch (err) {
+      console.error('Failed to save category order', err);
+    }
+  };
+
+  const handleCategoryDragEnd = () => {
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+  };
 
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +217,13 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         localStorage.setItem('cost_custom_ingredient_categories', JSON.stringify(updated));
       } catch (err) {
         console.error('Failed to save category', err);
+      }
+      const updatedOrder = [...allCategories, trimmed];
+      setCategoryOrder(updatedOrder);
+      try {
+        localStorage.setItem('cost_ingredient_category_order', JSON.stringify(updatedOrder));
+      } catch (err) {
+        console.error('Failed to save category order', err);
       }
     }
     setSelectedCategory(trimmed);
@@ -422,22 +530,107 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
           <Filter className="w-4 h-4 text-white/40 shrink-0 hidden sm:block mr-0.5" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
-                  : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5'
-              }`}
-            >
-              {cat === 'ALL' ? 'ทั้งหมด' : cat}
-            </button>
-          ))}
+
+          {/* ALL tab */}
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('ALL')}
+            onDragOver={(e) => handleCategoryDragOver(e, 'ALL')}
+            onDrop={(e) => handleCategoryDrop(e, 'ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              selectedCategory === 'ALL'
+                ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
+                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5'
+            } ${dragOverCategory === 'ALL' ? 'ring-2 ring-[#F27D26] bg-[#F27D26]/20 border-[#F27D26]' : ''}`}
+            title="แสดงวัตถุดิบทั้งหมด (หรือลากหมวดหมู่อื่นมาวางที่นี่เพื่อย้ายไปอันดับแรก)"
+          >
+            ทั้งหมด
+          </button>
+
+          {/* Reorderable Categories */}
+          {allCategories.map((cat, index) => {
+            const isSelected = selectedCategory === cat;
+            const isDragged = draggedCategory === cat;
+            const isDragOver = dragOverCategory === cat;
+            const isFirst = index === 0;
+            const isLast = index === allCategories.length - 1;
+
+            return (
+              <div
+                key={cat}
+                draggable
+                onDragStart={(e) => handleCategoryDragStart(e, cat)}
+                onDragOver={(e) => handleCategoryDragOver(e, cat)}
+                onDrop={(e) => handleCategoryDrop(e, cat)}
+                onDragEnd={handleCategoryDragEnd}
+                className={`group relative inline-flex items-center rounded-xl text-xs font-semibold whitespace-nowrap transition-all select-none shrink-0 ${
+                  isSelected
+                    ? 'bg-[#F27D26] text-black font-bold shadow-md shadow-[#F27D26]/20'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/10'
+                } ${isDragged ? 'opacity-40 scale-95 ring-2 ring-[#F27D26]' : ''} ${
+                  isDragOver ? 'ring-2 ring-[#F27D26] bg-[#F27D26]/20 border-[#F27D26]' : ''
+                }`}
+                title={`คลิกเลือก | กดค้างแล้วลากวาง หรือใช้ปุ่มลูกศร ซ้าย-ขวา เพื่อย้ายตำแหน่ง`}
+              >
+                {/* Move Left Button */}
+                <button
+                  type="button"
+                  disabled={isFirst}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveCategory(cat, 'left');
+                  }}
+                  className={`p-1 pl-1.5 transition-all rounded-l-xl ${
+                    isFirst
+                      ? 'opacity-20 cursor-not-allowed'
+                      : isSelected
+                      ? 'hover:bg-black/15 text-black/70 hover:text-black cursor-pointer'
+                      : 'text-white/40 hover:text-white hover:bg-white/10 cursor-pointer'
+                  }`}
+                  title={`ย้ายหมวดหมู่ "${cat}" ไปทางซ้าย`}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Category Label with Drag Grip */}
+                <div
+                  onClick={() => setSelectedCategory(cat)}
+                  className="flex items-center gap-1.5 px-1 py-1.5 cursor-grab active:cursor-grabbing"
+                >
+                  <GripVertical
+                    className={`w-3 h-3 shrink-0 ${
+                      isSelected
+                        ? 'text-black/50 group-hover:text-black'
+                        : 'text-white/30 group-hover:text-white/70'
+                    }`}
+                  />
+                  <span>{cat}</span>
+                </div>
+
+                {/* Move Right Button */}
+                <button
+                  type="button"
+                  disabled={isLast}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveCategory(cat, 'right');
+                  }}
+                  className={`p-1 pr-1.5 transition-all rounded-r-xl ${
+                    isLast
+                      ? 'opacity-20 cursor-not-allowed'
+                      : isSelected
+                      ? 'hover:bg-black/15 text-black/70 hover:text-black cursor-pointer'
+                      : 'text-white/40 hover:text-white hover:bg-white/10 cursor-pointer'
+                  }`}
+                  title={`ย้ายหมวดหมู่ "${cat}" ไปทางขวา`}
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
       </div>
