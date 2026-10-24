@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Plus, Receipt, Trash2, Calendar, DollarSign, Filter } from 'lucide-react';
-import { ExpenseRecord, ExpenseCategory } from '../../types/domain';
+import { Plus, Receipt, Trash2, Calendar, DollarSign, Filter, EyeOff, Eye, Check } from 'lucide-react';
+import { ExpenseRecord, ExpenseCategory, ExpenseFrequency } from '../../types/domain';
 import { NumericInput } from '../common/NumericInput';
+import { convertExpenseToMonthly, calculateTotalMonthlyExpenses, validateExpenseInput } from '../../engine/calculations';
 
 interface ExpensesViewProps {
   expenses: ExpenseRecord[];
   onAddExpense: (expense: ExpenseRecord) => void;
   onDeleteExpense: (id: string) => void;
+  onUpdateExpense?: (expense: ExpenseRecord) => void;
+  operatingDays?: number;
   activeLanguage: 'th' | 'en';
 }
 
@@ -14,6 +17,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   expenses,
   onAddExpense,
   onDeleteExpense,
+  onUpdateExpense,
+  operatingDays = 26,
   activeLanguage,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,18 +29,33 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     category: ExpenseCategory;
     description: string;
     amount: number;
+    frequency: ExpenseFrequency;
     isFixed: boolean;
-    paymentMethod: 'Cash' | 'Bank Transfer' | 'Credit Card' | 'PromptPay';
+    isExcluded: boolean;
+    paymentMethod: 'Cash' | 'Bank Transfer' | 'Credit Card' | 'PromptPay' | string;
+    isAsset: boolean;
+    isInstallment: boolean;
+    monthlyInstallment: number;
+    assetCost: number;
+    usefulLifeYears: number;
     notes: string;
   }>({
     date: new Date().toISOString().split('T')[0],
     category: 'Electricity',
     description: '',
     amount: 1000,
+    frequency: 'monthly',
     isFixed: true,
+    isExcluded: false,
     paymentMethod: 'Bank Transfer',
+    isAsset: false,
+    isInstallment: false,
+    monthlyInstallment: 0,
+    assetCost: 0,
+    usefulLifeYears: 5,
     notes: '',
   });
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const categories: ExpenseCategory[] = [
     'Rent',
@@ -43,28 +63,59 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     'Water',
     'Gas (LPG)',
     'Internet & Telephone',
+    'Labor (Salary & Wages)',
     'Marketing & Ads',
     'Cleaning & Sanitation',
     'Repair & Maintenance',
     'POS & Software Subscriptions',
     'Licenses & Permits',
     'Insurance',
+    'Depreciation',
     'Other Operating Expenses',
   ];
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
     if (!formData.description.trim()) return;
+
+    const validation = validateExpenseInput({
+      amount: formData.amount,
+      assetCost: formData.assetCost,
+      usefulLifeYears: formData.usefulLifeYears,
+      isAsset: formData.isAsset,
+      isInstallment: formData.isInstallment,
+    });
+    if (!validation.isValid) {
+      setValidationError(validation.errorMessageTh || 'ข้อมูลไม่ถูกต้อง');
+      return;
+    }
+
+    let finalAmount = formData.amount;
+    if (formData.isAsset) {
+      if (formData.isInstallment) {
+        finalAmount = formData.monthlyInstallment;
+      } else if (formData.assetCost > 0 && formData.usefulLifeYears > 0) {
+        finalAmount = formData.assetCost / (formData.usefulLifeYears * 12);
+      }
+    }
 
     const newExpense: ExpenseRecord = {
       id: `exp-${Date.now()}`,
       date: formData.date,
       category: formData.category,
       description: formData.description,
-      amount: formData.amount,
+      amount: finalAmount,
+      frequency: formData.isAsset ? 'monthly' : formData.frequency,
       isFixed: formData.isFixed,
+      isExcluded: formData.isExcluded,
       paymentMethod: formData.paymentMethod,
       recurring: formData.isFixed,
+      isInstallment: formData.isAsset ? formData.isInstallment : undefined,
+      monthlyInstallment: formData.isAsset && formData.isInstallment ? formData.monthlyInstallment : undefined,
+      assetCost: formData.isAsset && !formData.isInstallment ? formData.assetCost : undefined,
+      usefulLifeYears: formData.isAsset && !formData.isInstallment ? formData.usefulLifeYears : undefined,
+      operatingDaysPerMonth: operatingDays,
       notes: formData.notes,
     };
 
@@ -72,9 +123,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setIsModalOpen(false);
   };
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const fixedTotal = expenses.filter((e) => e.isFixed).reduce((sum, e) => sum + e.amount, 0);
-  const variableTotal = expenses.filter((e) => !e.isFixed).reduce((sum, e) => sum + e.amount, 0);
+  const handleToggleExclude = (exp: ExpenseRecord) => {
+    if (onUpdateExpense) {
+      onUpdateExpense({ ...exp, isExcluded: !exp.isExcluded });
+    }
+  };
+
+  const monthlyTotals = calculateTotalMonthlyExpenses(expenses, operatingDays);
 
   const filteredExpenses = selectedCategory === 'ALL'
     ? expenses
@@ -89,45 +144,53 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {activeLanguage === 'th'
-              ? 'แยกประเภทต้นทุนคงที่ (Fixed Costs) และต้นทุนผันแปร (Variable Costs) เพื่อคำนวณจุดคุ้มทุนและงบ P&L'
-              : 'Categorize fixed overheads vs variable operational expenses for break-even modeling.'}
+              ? 'แยกประเภทต้นทุนคงที่ (Fixed Costs) และต้นทุนผันแปร (Variable Costs) พร้อมคำนวณแปลงรายเดือน ค่าเสื่อมราคา และจัดการรายการยกเว้น'
+              : 'Categorize fixed overheads vs variable operational expenses, normalized monthly with depreciation and exclusions.'}
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           <span>{activeLanguage === 'th' ? 'เพิ่มค่าใช้จ่าย' : 'Add Expense'}</span>
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* KPI Cards (Normalized Monthly) */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-          <div className="text-slate-500 text-xs font-medium">ค่าใช้จ่ายรวมทั้งสิ้น</div>
+          <div className="text-slate-500 text-xs font-medium">ค่าใช้จ่ายรายเดือนรวม (Monthly)</div>
           <div className="mt-1 text-2xl font-bold text-slate-900 font-mono">
-            ฿{totalExpenses.toLocaleString()}
+            ฿{Math.round(monthlyTotals.totalMonthly).toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">{expenses.length} รายการ</div>
+          <div className="text-[11px] text-slate-400 mt-1">{expenses.filter(e => !e.isExcluded).length} รายการ (นับคำนวณ)</div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-          <div className="text-slate-500 text-xs font-medium">ต้นทุนคงที่ (Fixed Costs)</div>
+          <div className="text-slate-500 text-xs font-medium">ต้นทุนคงที่รายเดือน (Fixed)</div>
           <div className="mt-1 text-2xl font-bold text-slate-800 font-mono">
-            ฿{fixedTotal.toLocaleString()}
+            ฿{Math.round(monthlyTotals.fixedMonthly).toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">ค่าเช่า, ค่าซอฟต์แวร์ POS</div>
+          <div className="text-[11px] text-slate-400 mt-1">ค่าเช่า, ซอฟต์แวร์, ค่าเสื่อม</div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-          <div className="text-slate-500 text-xs font-medium">ต้นทุนผันแปร (Variable Costs)</div>
+          <div className="text-slate-500 text-xs font-medium">ต้นทุนผันแปรรายเดือน (Variable)</div>
           <div className="mt-1 text-2xl font-bold text-slate-800 font-mono">
-            ฿{variableTotal.toLocaleString()}
+            ฿{Math.round(monthlyTotals.variableMonthly).toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">ค่าน้ำ, ค่าไฟ, ค่าแก๊ส</div>
+          <div className="text-[11px] text-slate-400 mt-1">ค่าน้ำ, ค่าไฟ, แก๊ส</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="text-slate-500 text-xs font-medium">รายการที่ยกเว้น (Excluded)</div>
+          <div className="mt-1 text-2xl font-bold text-slate-400 font-mono">
+            ฿{Math.round(monthlyTotals.excludedMonthly).toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">{expenses.filter(e => e.isExcluded).length} รายการ (ไม่นำมาคิดต้นทุน)</div>
         </div>
       </div>
 
@@ -160,38 +223,89 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <th className="py-2.5 px-3">วันที่</th>
                 <th className="py-2.5 px-3">หมวดหมู่</th>
                 <th className="py-2.5 px-3">รายการ</th>
+                <th className="py-2.5 px-3 text-center">ความถี่</th>
                 <th className="py-2.5 px-3 text-center">ประเภท</th>
-                <th className="py-2.5 px-3 text-right">จำนวนเงิน (฿)</th>
+                <th className="py-2.5 px-3 text-right">จำนวนเดิม (฿)</th>
+                <th className="py-2.5 px-3 text-right">แปลงรายเดือน (฿/เดือน)</th>
+                <th className="py-2.5 px-3 text-center">สถานะ</th>
                 <th className="py-2.5 px-3 text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredExpenses.map((exp) => (
-                <tr key={exp.id} className="hover:bg-slate-50/60">
-                  <td className="py-2.5 px-3 font-mono font-medium">{exp.date}</td>
-                  <td className="py-2.5 px-3 text-slate-600">{exp.category}</td>
-                  <td className="py-2.5 px-3 font-semibold text-slate-900">{exp.description}</td>
-                  <td className="py-2.5 px-3 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                      exp.isFixed ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-800'
-                    }`}>
-                      {exp.isFixed ? 'Fixed Cost' : 'Variable Cost'}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                    ฿{exp.amount.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onDeleteExpense(exp.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredExpenses.map((exp) => {
+                const monthlyAmt = convertExpenseToMonthly(exp, operatingDays);
+                const isExcluded = Boolean(exp.isExcluded);
+
+                return (
+                  <tr key={exp.id} className={`hover:bg-slate-50/60 ${isExcluded ? 'opacity-60 bg-slate-50/40' : ''}`}>
+                    <td className="py-2.5 px-3 font-mono font-medium">{exp.date}</td>
+                    <td className="py-2.5 px-3 text-slate-600">{exp.category}</td>
+                    <td className="py-2.5 px-3 font-semibold text-slate-900">
+                      <span className={isExcluded ? 'line-through text-slate-400' : ''}>{exp.description}</span>
+                      {exp.isInstallment && (
+                        <span className="ml-1.5 text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-medium">ผ่อนชำระ</span>
+                      )}
+                      {exp.assetCost && !exp.isInstallment && (
+                        <span className="ml-1.5 text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-medium">ค่าเสื่อม {exp.usefulLifeYears}ปี</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="text-[11px] font-mono text-slate-600">
+                        {exp.frequency || 'monthly'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                        exp.isFixed ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-800'
+                      }`}>
+                        {exp.isFixed ? 'Fixed Cost' : 'Variable Cost'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                      ฿{Number(exp.amount).toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                      {isExcluded ? (
+                        <span className="text-slate-400 line-through">฿{Math.round(convertExpenseToMonthly({ ...exp, isExcluded: false }, operatingDays)).toLocaleString()}</span>
+                      ) : (
+                        `฿${Math.round(monthlyAmt).toLocaleString()}`
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      {onUpdateExpense ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExclude(exp)}
+                          title={isExcluded ? 'คลิกเพื่อรวมในต้นทุน' : 'คลิกเพื่อยกเว้นจากต้นทุน'}
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                            isExcluded
+                              ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          }`}
+                        >
+                          {isExcluded ? 'ยกเว้น (Excluded)' : 'ใช้งาน (Included)'}
+                        </button>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          isExcluded ? 'bg-rose-100 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          {isExcluded ? 'ยกเว้น' : 'ใช้งาน'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onDeleteExpense(exp.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                        title="ลบรายการ"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -200,19 +314,24 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <h2 className="text-base font-bold text-slate-900">เพิ่มค่าใช้จ่าย</h2>
+              <h2 className="text-base font-bold text-slate-900">เพิ่มค่าใช้จ่ายดำเนินงาน</h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-3.5">
+              {validationError && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
+                  {validationError}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">วันที่</label>
@@ -245,26 +364,130 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="เช่น ค่าเช่าพื้นที่ประจำเดือน"
+                  placeholder="เช่น ค่าเช่าพื้นที่ประจำเดือน หรือ เครื่องชงกาแฟ"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">จำนวนเงิน (฿) *</label>
-                  <NumericInput
-                    type="number"
-                    step="any"
-                    required
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-mono font-bold"
+              {/* Asset Toggle */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isAsset}
+                    onChange={(e) => setFormData({ ...formData, isAsset: e.target.checked })}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   />
+                  <span className="text-xs font-semibold text-slate-800">
+                    เป็นสินทรัพย์ถาวร / เครื่องจักร (Asset Depreciation or Installment)
+                  </span>
+                </label>
+
+                {formData.isAsset && (
+                  <div className="pt-2 border-t border-slate-200 space-y-3">
+                    <div className="flex gap-4 text-xs">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="assetPaymentType"
+                          checked={!formData.isInstallment}
+                          onChange={() => setFormData({ ...formData, isInstallment: false })}
+                        />
+                        <span>คิดค่าเสื่อมราคาเส้นตรง (Straight-Line)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="assetPaymentType"
+                          checked={formData.isInstallment}
+                          onChange={() => setFormData({ ...formData, isInstallment: true })}
+                        />
+                        <span>ผ่อนชำระรายงวด (Monthly Installment)</span>
+                      </label>
+                    </div>
+
+                    {formData.isInstallment ? (
+                      <div>
+                        <label className="block text-xs text-slate-700 mb-1">ค่างวดผ่อนต่อเดือน (฿/เดือน)</label>
+                        <NumericInput
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={formData.monthlyInstallment}
+                          onChange={(e) => setFormData({ ...formData, monthlyInstallment: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-mono font-bold"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-0.5">ใช้ค่างวดแทนค่าเสื่อมราคา (ไม่คิดซ้ำซ้อน)</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-slate-700 mb-1">มูลค่าทรัพย์สิน (฿)</label>
+                          <NumericInput
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={formData.assetCost}
+                            onChange={(e) => setFormData({ ...formData, assetCost: parseFloat(e.target.value) || 0 })}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-700 mb-1">อายุการใช้งาน (ปี)</label>
+                          <NumericInput
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={formData.usefulLifeYears}
+                            onChange={(e) => setFormData({ ...formData, usefulLifeYears: parseInt(e.target.value) || 1 })}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-mono"
+                          />
+                        </div>
+                        {formData.assetCost > 0 && formData.usefulLifeYears > 0 && (
+                          <div className="col-span-2 text-xs text-emerald-700 font-medium">
+                            ค่าเสื่อมราคาต่อเดือน: ฿{(formData.assetCost / (formData.usefulLifeYears * 12)).toFixed(2)} / เดือน
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {!formData.isAsset && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">จำนวนเงิน (฿) *</label>
+                    <NumericInput
+                      type="number"
+                      step="any"
+                      required
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">ความถี่ (Frequency)</label>
+                    <select
+                      value={formData.frequency}
+                      onChange={(e) => setFormData({ ...formData, frequency: e.target.value as ExpenseFrequency })}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white"
+                    >
+                      <option value="monthly">รายเดือน (Monthly)</option>
+                      <option value="weekly">รายสัปดาห์ (Weekly: x 52 ÷ 12)</option>
+                      <option value="daily">รายวัน (Daily: x {operatingDays} วัน)</option>
+                      <option value="quarterly">รายไตรมาส (Quarterly: ÷ 3)</option>
+                      <option value="yearly">รายปี (Yearly: ÷ 12)</option>
+                    </select>
+                  </div>
                 </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">ลักษณะต้นทุน</label>
                   <select
@@ -276,19 +499,30 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     <option value="variable">Variable Cost (ผันแปร)</option>
                   </select>
                 </div>
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isExcluded}
+                      onChange={(e) => setFormData({ ...formData, isExcluded: e.target.checked })}
+                      className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    <span className="text-xs text-slate-700 font-medium">ยกเว้นไม่นำมาคิดต้นทุน</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2 text-xs font-bold text-white"
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2 text-xs font-bold text-white cursor-pointer"
                 >
                   บันทึกค่าใช้จ่าย
                 </button>

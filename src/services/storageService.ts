@@ -49,6 +49,7 @@ const STORAGE_KEYS = {
   YIELD_TESTS: 'tonys_yield_tests_v1',
   EMPLOYEES: 'tonys_employees_v1',
   PACKAGING: 'tonys_packaging_v1',
+  LAST_BACKUP: 'tonys_last_backup_time',
 };
 
 function safeLoad<T>(key: string, fallback: T): T {
@@ -557,6 +558,46 @@ export const StorageService = {
   },
 
   /**
+   * Gets the last backup ISO timestamp or null if never backed up.
+   */
+  getLastBackupTime(): string | null {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      return localStorage.getItem(STORAGE_KEYS.LAST_BACKUP);
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Records current timestamp as the last backup time.
+   */
+  recordBackupCompleted(): void {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(STORAGE_KEYS.LAST_BACKUP, new Date().toISOString());
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  /**
+   * Checks if backup is overdue (default > 7 days or never backed up).
+   */
+  isBackupOverdue(daysThreshold: number = 7): { isOverdue: boolean; lastBackupTime: string | null } {
+    const lastBackup = this.getLastBackupTime();
+    if (!lastBackup) {
+      return { isOverdue: true, lastBackupTime: null };
+    }
+    const lastTime = new Date(lastBackup).getTime();
+    if (isNaN(lastTime)) {
+      return { isOverdue: true, lastBackupTime: null };
+    }
+    const diffDays = (Date.now() - lastTime) / (1000 * 60 * 60 * 24);
+    return { isOverdue: diffDays >= daysThreshold, lastBackupTime: lastBackup };
+  },
+
+  /**
    * Triggers a client-side download of the full database backup in JSON format.
    */
   downloadBackupFile(): void {
@@ -572,6 +613,7 @@ export const StorageService = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    this.recordBackupCompleted();
   },
 
   /**
@@ -686,6 +728,7 @@ export const StorageService = {
       counts.packagingItems = p.packagingItems.length;
     }
 
+    this.recordBackupCompleted();
     return {
       success: true,
       message: 'กู้คืนข้อมูลสำรองสำเร็จเรียบร้อย',

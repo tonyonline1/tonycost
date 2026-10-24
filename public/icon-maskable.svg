@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EA580C"/>
+      <stop offset="50%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="hatGradMask" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
+    </linearGradient>
+    <linearGradient id="goldGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <filter id="shadowMask" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#7C2D12" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background for maskable adaptive icon (no rounded corners so OS can mask safely) -->
+  <rect width="512" height="512" fill="url(#bgGradMask)"/>
+
+  <!-- Centered Scaled Content (80% safe zone) -->
+  <g transform="translate(51, 51) scale(0.8)">
+    <!-- Inner Ambient Glow Circle -->
+    <circle cx="256" cy="256" r="210" fill="#FFFFFF" opacity="0.08"/>
+
+    <!-- Main Chef Toque (Hat) -->
+    <g filter="url(#shadowMask)">
+      <path d="M 256 100 C 215 100 185 125 175 160 C 145 160 120 190 125 225 C 130 255 155 275 185 275 L 327 275 C 357 275 382 255 387 225 C 392 190 367 160 337 160 C 327 125 297 100 256 100 Z" fill="url(#hatGradMask)"/>
+      <path d="M 215 165 C 220 235 225 265 228 275" stroke="#CBD5E1" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <path d="M 256 145 C 256 220 256 260 256 275" stroke="#E2E8F0" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <path d="M 297 165 C 292 235 287 265 284 275" stroke="#CBD5E1" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+      <rect x="180" y="270" width="152" height="42" rx="8" fill="#FFFFFF"/>
+      <rect x="180" y="296" width="152" height="8" rx="2" fill="url(#goldGradMask)"/>
+    </g>
+
+    <!-- Calculator & Food Cost Symbol Badge -->
+    <g filter="url(#shadowMask)" transform="translate(146, 305)">
+      <rect width="220" height="135" rx="24" fill="#0F172A" stroke="#FBBF24" stroke-width="4"/>
+      
+      <rect x="18" y="16" width="184" height="34" rx="8" fill="#1E293B"/>
+      <text x="30" y="39" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="19" fill="#10B981" letter-spacing="1">฿ COST %</text>
+      <text x="188" y="39" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="19" fill="#38BDF8">32.5%</text>
+
+      <rect x="18" y="60" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="37" y="78" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">7</text>
+      <rect x="66" y="60" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="85" y="78" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">8</text>
+      <rect x="114" y="60" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="133" y="78" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">9</text>
+      <rect x="162" y="60" width="40" height="26" rx="6" fill="#F97316"/>
+      <text x="182" y="79" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="17" fill="#FFFFFF">÷</text>
+
+      <rect x="18" y="94" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="37" y="112" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">4</text>
+      <rect x="66" y="94" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="85" y="112" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">5</text>
+      <rect x="114" y="94" width="38" height="26" rx="6" fill="#334155"/>
+      <text x="133" y="112" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#F8FAFC">6</text>
+      <rect x="162" y="94" width="40" height="26" rx="6" fill="#EAB308"/>
+      <text x="182" y="113" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="17" fill="#0F172A">=</text>
+    </g>
+
+    <!-- Left: Fork Accent -->
+    <path d="M 82 280 C 82 250 96 230 110 230 C 113 230 115 250 115 280 L 118 380 C 118 395 106 405 98 405 C 90 405 78 395 78 380 Z" fill="#FFFFFF" opacity="0.35"/>
+
+    <!-- Right: Spoon Accent -->
+    <path d="M 430 280 C 430 240 414 230 402 230 C 390 230 374 240 374 280 C 374 310 392 325 398 335 L 398 385 C 398 398 404 405 408 405 C 412 405 418 398 418 385 L 418 335 C 424 325 430 310 430 280 Z" fill="#FFFFFF" opacity="0.35"/>
+  </g>
+</svg>

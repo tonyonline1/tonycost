@@ -5,16 +5,22 @@ import {
   Package,
   Store,
   CheckCircle2,
+  Smartphone,
+  Image as ImageIcon,
+  Sparkles,
 } from 'lucide-react';
 import { RestaurantSettings } from '../types';
 import { NumericInput } from './common/NumericInput';
+import { PWAInstallButton } from './common/PWAInstallButton';
+import { AppIconService } from '../services/appIconService';
 
 interface SettingsViewProps {
   settings: RestaurantSettings;
   onSaveSettings: (settings: RestaurantSettings) => void;
+  onOpenIconModal?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings, onOpenIconModal }) => {
   const [localSettings, setLocalSettings] = useState<RestaurantSettings>(() => ({
     ...settings,
     restaurantName: settings.restaurantName || '',
@@ -172,12 +178,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-medium text-white focus:outline-none focus:border-[#F27D26]"
               >
                 <option value="SELLING_PRICE" className="bg-[#1a1a1a] text-white">
-                  ราคาขาย / Selling price (DEFAULT)
+                  ราคาขายสุทธิ / Selling price ex-VAT (มาตรฐานสากล - DEFAULT)
                 </option>
                 <option value="FOOD_COST" className="bg-[#1a1a1a] text-white">
-                  ต้นทุนวัตถุดิบ (Food Cost) / Raw material cost
+                  ต้นทุนวัตถุดิบ / Food Cost (ไม่แนะนำ)
                 </option>
               </select>
+              <p className="text-[10px] text-white/40 mt-1">
+                มาตรฐานบัญชีร้านอาหารสากลกำหนดให้คำนวณโสหุ้ยเป็น % ของราคาขายสุทธิ (ex-VAT)
+              </p>
             </div>
           </div>
         </div>
@@ -326,6 +335,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 บันทึกยอดขายหน้าร้าน และตรวจดูสูตรตวงชั่ง (ไม่แสดงระบบสต็อก)
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Mobile & Tablet App Installation & Custom Icon */}
+        <div className="bg-white/5 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#F27D26] text-white flex items-center justify-center font-bold shadow-xs">
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white">
+                  แอปมือถือ & แท็บเล็ต และไอคอนแอป (Mobile PWA & App Icon)
+                </h2>
+                <p className="text-[11px] text-white/60">
+                  ดาวน์โหลดติดตั้งแอปไว้บนหน้าจอโฮมของมือถือ/แท็บเล็ต และปรับแต่งรูปไอคอนแอปตามต้องการ
+                </p>
+              </div>
+            </div>
+
+            <PWAInstallButton onOpenIconModal={onOpenIconModal} />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 gap-4">
+            <div className="flex items-center gap-3">
+              <img
+                src={AppIconService.getCurrentIcon()}
+                alt="Current App Icon"
+                className="w-14 h-14 rounded-2xl shadow-lg ring-2 ring-[#F27D26]/40 object-cover bg-white shrink-0"
+              />
+              <div>
+                <div className="text-xs font-bold text-white">รูปไอคอนแอปปัจจุบัน (Active Icon)</div>
+                <div className="text-[11px] text-white/60 mt-0.5">
+                  ไอคอนที่แสดงบนแท็บเบราว์เซอร์ และหน้าจอโฮมเมื่อติดตั้งลงบนมือถือ/แท็บเล็ต
+                </div>
+              </div>
+            </div>
+
+            {onOpenIconModal && (
+              <button
+                type="button"
+                onClick={onOpenIconModal}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/20 transition-all flex items-center gap-2 cursor-pointer shrink-0 shadow-xs"
+              >
+                <ImageIcon className="w-4 h-4 text-[#F27D26]" />
+                <span>เปลี่ยนรูปไอคอนแอป...</span>
+              </button>
+            )}
           </div>
         </div>
       </form>

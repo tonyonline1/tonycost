@@ -212,6 +212,8 @@ export type ExpenseCategory =
   | 'Depreciation'
   | 'Other Operating Expenses';
 
+export type ExpenseFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+
 export interface ExpenseRecord {
   id: string;
   date: string;
@@ -219,12 +221,20 @@ export interface ExpenseRecord {
   description: string;
   amount: number;
   isFixed: boolean; // Fixed vs Variable
-  paymentMethod: 'Cash' | 'Bank Transfer' | 'Credit Card' | 'PromptPay';
+  paymentMethod: 'Cash' | 'Bank Transfer' | 'Credit Card' | 'PromptPay' | string;
   recurring: boolean;
+  frequency?: ExpenseFrequency;
+  operatingDaysPerMonth?: number;
+  isExcluded?: boolean;
+  isInstallment?: boolean;
+  monthlyInstallment?: number;
+  assetCost?: number;
+  usefulLifeYears?: number;
   supplierName?: string;
   taxAmount?: number;
   receiptNumber?: string;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface Employee {
@@ -258,6 +268,8 @@ export interface DailySalesRecord {
   discounts: number;
   refunds: number;
   netSales: number;
+  isVatInclusive?: boolean;
+  vatRatePercent?: number;
   platformFees: number;
   actualPayout: number;
   itemSales?: {

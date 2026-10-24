@@ -239,9 +239,10 @@ export interface RestaurantSettings {
   takeawayPackagingCost: number;
   packagingCostTakeaway?: number;
   deliveryPackagingCost: number;
-  deliveryCommissionPercent?: number;
   grabFoodCommissionPercent?: number;
+  grabFoodCommissionHasVat?: boolean; // C-01: delivery GP must include 7% VAT: effective GP = GP% * 1.07 (defaults to true)
   lineManCommissionPercent?: number;
+  lineManCommissionHasVat?: boolean; // C-01: delivery GP must include 7% VAT (defaults to true)
   channels: ChannelSettings[];
   userRole: UserRole;
 }
@@ -351,6 +352,8 @@ export type ExpenseCategory =
   | 'เบ็ดเตล็ด'
   | 'อื่น ๆ';
 
+export type ExpenseFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+
 export interface ExpenseRecord {
   id: string;
   date: string;
@@ -358,7 +361,15 @@ export interface ExpenseRecord {
   name?: string;
   description: string;
   amount: number;
+  isFixed?: boolean;
   paymentMethod: 'เงินสด' | 'โอนเงิน' | 'บัตรเครดิต' | 'CASH' | 'TRANSFER' | 'CREDIT' | string;
+  frequency?: ExpenseFrequency;
+  operatingDaysPerMonth?: number;
+  isExcluded?: boolean;
+  isInstallment?: boolean;
+  monthlyInstallment?: number;
+  assetCost?: number;
+  usefulLifeYears?: number;
   notes?: string;
   createdAt?: string;
 }

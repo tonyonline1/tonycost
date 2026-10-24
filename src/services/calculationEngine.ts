@@ -184,7 +184,8 @@ export function calculateSauceCost(
     };
   });
 
-  const actualCost = productionCost * (100 / yieldPercent);
+  // H-03: sub-recipe batch cost = total ingredient cost; cost per unit = batch cost ÷ actual output quantity; NEVER multiply by 100/yield
+  const actualCost = productionCost;
   const costPerGram = actualQuantity > 0 ? productionCost / actualQuantity : 0;
 
   return {
@@ -346,9 +347,12 @@ export function calculateVariantCostBreakdown(
   let overheadCost = 0;
   if (typeof settings.overheadRatePercent === 'number' && Number.isFinite(settings.overheadRatePercent)) {
     const rate = Math.max(0, settings.overheadRatePercent) / 100;
+    const taxRate = typeof settings.taxRatePercent === 'number' ? settings.taxRatePercent : 0;
+    const isVatInclusive = variant.taxType === 'INCLUSIVE';
+    const sellingPriceExVat = isVatInclusive && taxRate > 0 ? sellingPrice / (1 + taxRate / 100) : sellingPrice;
     const baseAmount = settings.overheadCalculationBase === 'FOOD_COST'
       ? totalIngredientCost
-      : sellingPrice;
+      : sellingPriceExVat;
     overheadCost = rate * baseAmount;
   } else {
     overheadCost =
@@ -367,32 +371,45 @@ export function calculateVariantCostBreakdown(
   // All three (Food Cost + Overhead% + Packaging) sum into ต้นทุนรวม (total cost):
   const totalCost = totalIngredientCost + overheadCost + packagingCost;
 
+  // C-02: If price includes VAT, net price = price ÷ 1.07 before computing Food Cost %, overhead, and profit
+  const taxRate = typeof settings.taxRatePercent === 'number' && settings.taxRatePercent > 0 ? settings.taxRatePercent : 7;
+  const isVatInclusive = variant.taxType === 'INCLUSIVE';
+  const netDineInSellingPrice = isVatInclusive && taxRate > 0 ? sellingPrice / (1 + taxRate / 100) : sellingPrice;
+  const netTakeawaySellingPrice = isVatInclusive && taxRate > 0 ? takeawayPrice / (1 + taxRate / 100) : takeawayPrice;
+
   // 1. Restaurant / Dine-in Profitability
-  // Food Cost % is ingredient cost only. Overhead, packaging, and profit are tracked deterministically.
-  const restaurantProfit = sellingPrice - totalCost;
-  const restaurantFoodCostPercent = sellingPrice > 0 ? (totalIngredientCost / sellingPrice) * 100 : 0;
-  const restaurantMarginPercent = sellingPrice > 0 ? (restaurantProfit / sellingPrice) * 100 : 0;
+  // Food Cost % is ingredient cost / net price. Overhead, packaging, and profit are tracked deterministically.
+  const restaurantProfit = netDineInSellingPrice - totalCost;
+  const restaurantFoodCostPercent = netDineInSellingPrice > 0 ? (totalIngredientCost / netDineInSellingPrice) * 100 : 0;
+  const restaurantMarginPercent = netDineInSellingPrice > 0 ? (restaurantProfit / netDineInSellingPrice) * 100 : 0;
 
   // 2. Takeaway Profitability
   const takeawayPackagingCost = Number.isFinite(settings.takeawayPackagingCost)
     ? Math.max(0, settings.takeawayPackagingCost)
     : 0;
   const takeawayTotalCost = totalIngredientCost + overheadCost + (takeawayPackagingCost > 0 ? takeawayPackagingCost : packagingCost);
-  const takeawayProfit = takeawayPrice - takeawayTotalCost;
-  const takeawayFoodCostPercent = takeawayPrice > 0 ? (totalIngredientCost / takeawayPrice) * 100 : 0;
+  const takeawayProfit = netTakeawaySellingPrice - takeawayTotalCost;
+  const takeawayFoodCostPercent = netTakeawaySellingPrice > 0 ? (totalIngredientCost / netTakeawaySellingPrice) * 100 : 0;
 
-  // 3. Delivery Platform Profitability. Sourced from sub-item packaging cost (fallback to channel setting if 0)
-  const deliveryCommissionPercent = getDeliveryCommissionPercent(settings, deliveryChannel);
-  const deliveryCommissionAmount = deliveryPrice * (deliveryCommissionPercent / 100);
+  // 3. Delivery Platform Profitability (C-01: effective GP = GP% * 1.07 when GP has VAT, defaults to true)
+  const baseGpPercent = getDeliveryCommissionPercent(settings, deliveryChannel);
+  const hasGpVat = deliveryChannel === 'grab'
+    ? (settings.grabFoodCommissionHasVat ?? true)
+    : (settings.lineManCommissionHasVat ?? true);
+  const effectiveGpPercent = hasGpVat ? baseGpPercent * 1.07 : baseGpPercent;
+  const deliveryCommissionPercent = effectiveGpPercent;
+  const deliveryCommissionAmount = deliveryPrice * (effectiveGpPercent / 100);
   const deliveryPackagingCost = packagingCost > 0 ? packagingCost : getDeliveryPackagingCost(settings, deliveryChannel);
-  const deliveryProfit = deliveryPrice - deliveryCommissionAmount - (totalIngredientCost + overheadCost + deliveryPackagingCost);
+  const netDeliveryRevenue = deliveryPrice - deliveryCommissionAmount;
+  const deliveryProfit = netDeliveryRevenue - (totalIngredientCost + overheadCost + deliveryPackagingCost);
   const deliveryFoodCostPercent =
-    deliveryPrice > 0 ? (totalIngredientCost / deliveryPrice) * 100 : 0;
+    netDeliveryRevenue > 0 ? (totalIngredientCost / netDeliveryRevenue) * 100 : 0;
 
-  // Suggested Selling Prices
+  // Suggested Selling Prices (H-02: always rounds UP)
   const targetFoodCost = settings.targetFoodCostPercent > 0 ? settings.targetFoodCostPercent : 40;
-  const suggestedPriceByTargetFoodCost = totalIngredientCost / (targetFoodCost / 100);
-  const suggestedPriceByTargetProfit = totalCost + (settings.targetProfitAmount || 25);
+  const rawSuggestedPrice = totalIngredientCost / (targetFoodCost / 100);
+  const suggestedPriceByTargetFoodCost = Math.ceil(rawSuggestedPrice);
+  const suggestedPriceByTargetProfit = Math.ceil(totalCost + (settings.targetProfitAmount || 25));
   const deliveryMarginPercent = deliveryPrice > 0 ? (deliveryProfit / deliveryPrice) * 100 : 0;
   const isLowMargin = restaurantFoodCostPercent > 45 || restaurantMarginPercent < 20;
 

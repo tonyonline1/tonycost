@@ -2,23 +2,58 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
-  // Dynamic base path determination:
-  // - If VITE_BASE_PATH is provided, use it
-  // - If built in GitHub Actions (GITHUB_REPOSITORY is set e.g. "owner/repo"):
-  //   - If repo is "owner.github.io", base is "/"
-  //   - If repo is project page, base is "/repo/" to prevent 404 on assets
-  // - Otherwise fallback to "./" (relative path for local, Vercel, Netlify, custom domains)
-  const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1];
-  const isUserPage = repoName?.toLowerCase().endsWith('.github.io');
-  const basePath =
-    process.env.VITE_BASE_PATH ||
-    (repoName ? (isUserPage ? '/' : `/${repoName}/`) : './');
-
   return {
-    base: basePath,
-    plugins: [react(), tailwindcss()],
+    base: './',
+    plugins: [
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        injectRegister: 'auto',
+        includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png', 'manifest.json'],
+        manifest: {
+          id: './',
+          name: "Tony's Kitchen – Food Cost Calculator",
+          short_name: 'TonyKitchen',
+          description: 'ระบบคำนวณและควบคุมต้นทุนอาหารสำหรับร้านอาหาร (Food Cost Calculator & Management)',
+          theme_color: '#F27D26',
+          background_color: '#FAF8F5',
+          display: 'standalone',
+          start_url: './',
+          scope: './',
+          icons: [
+            {
+              src: 'pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+        },
+      }),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

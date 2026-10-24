@@ -52,7 +52,7 @@ export function convertUnit(
   quantity: number,
   fromUnit: UnitType,
   toUnit: UnitType,
-  density: number = 1.0,
+  density?: number,
   customMultiplier: number = 1.0
 ): ConversionResult {
   if (quantity < 0 || isNaN(quantity)) {
@@ -94,6 +94,14 @@ export function convertUnit(
 
   // Mass to Volume (using density: g / density = ml)
   if (MASS_TO_GRAM[fromUnit] && VOLUME_TO_ML[toUnit]) {
+    if (density === undefined || density === null || density <= 0) {
+      return {
+        success: false,
+        convertedQuantity: 0,
+        errorMessageTh: `ต้องระบุความหนาแน่นเพื่อแปลง ${fromUnit} เป็น ${toUnit}`,
+        errorMessageEn: `Density is required to convert from ${fromUnit} to ${toUnit}`,
+      };
+    }
     const inGrams = quantity * MASS_TO_GRAM[fromUnit];
     const inMl = inGrams / density;
     const target = inMl / VOLUME_TO_ML[toUnit];
@@ -105,6 +113,14 @@ export function convertUnit(
 
   // Volume to Mass (using density: ml * density = g)
   if (VOLUME_TO_ML[fromUnit] && MASS_TO_GRAM[toUnit]) {
+    if (density === undefined || density === null || density <= 0) {
+      return {
+        success: false,
+        convertedQuantity: 0,
+        errorMessageTh: `ต้องระบุความหนาแน่นเพื่อแปลง ${fromUnit} เป็น ${toUnit}`,
+        errorMessageEn: `Density is required to convert from ${fromUnit} to ${toUnit}`,
+      };
+    }
     const inMl = quantity * VOLUME_TO_ML[fromUnit];
     const inGrams = inMl * density;
     const target = inGrams / MASS_TO_GRAM[toUnit];

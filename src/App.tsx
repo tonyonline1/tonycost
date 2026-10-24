@@ -10,6 +10,14 @@ import { MenuCostingView } from './components/MenuCostingView';
 import { RecipeBuilderView } from './components/RecipeBuilderView';
 import { QuickCostCalculatorView } from './components/QuickCostCalculatorView';
 import { SettingsView } from './components/SettingsView';
+import { BreakEvenView } from './components/Financials/BreakEvenView';
+import { AlertTriangle } from 'lucide-react';
+import { ExpensesView } from './components/Financials/ExpensesView';
+import { SalesEntryView } from './components/Financials/SalesEntryView';
+import { DailySalesRecord, SalesChannel, Employee as DomainEmployee } from './types/domain';
+import { upsertDailySalesRecord } from './engine/calculations';
+import { AppIconModal } from './components/common/AppIconModal';
+import { AppIconService } from './services/appIconService';
 
 import {
   RestaurantSettings,
@@ -64,10 +72,61 @@ export default function App() {
     StorageService.getWasteLog()
   );
 
+  const defaultSalesChannels: SalesChannel[] = [
+    { id: 'dine-in', code: 'DINE_IN', name: 'หน้าร้าน (Dine-in)', commissionPercent: 0, paymentFeePercent: 0, fixedFeePerOrder: 0, packagingFeeSurcharge: 0, taxOnCommissionPercent: 7, active: true },
+    { id: 'takeaway', code: 'TAKEAWAY', name: 'สั่งกลับบ้าน (Takeaway)', commissionPercent: 0, paymentFeePercent: 0, fixedFeePerOrder: 0, packagingFeeSurcharge: 0, taxOnCommissionPercent: 7, active: true },
+    { id: 'grab', code: 'GRAB', name: 'GrabFood', commissionPercent: 30, paymentFeePercent: 0, fixedFeePerOrder: 0, packagingFeeSurcharge: 0, taxOnCommissionPercent: 7, active: true },
+    { id: 'lineman', code: 'LINEMAN', name: 'LINE MAN', commissionPercent: 25, paymentFeePercent: 0, fixedFeePerOrder: 0, packagingFeeSurcharge: 0, taxOnCommissionPercent: 7, active: true },
+  ];
+
+  const [dailySales, setDailySales] = useState<DailySalesRecord[]>(() => [
+    {
+      id: 'sales-init-1',
+      date: new Date().toISOString().split('T')[0],
+      channelId: 'dine-in',
+      channelName: 'หน้าร้าน (Dine-in)',
+      orderCount: 45,
+      grossSales: 16000,
+      discounts: 500,
+      refunds: 0,
+      netSales: 15500,
+      platformFees: 0,
+      actualPayout: 15500,
+    },
+    {
+      id: 'sales-init-2',
+      date: new Date().toISOString().split('T')[0],
+      channelId: 'grab',
+      channelName: 'GrabFood',
+      orderCount: 20,
+      grossSales: 8500,
+      discounts: 300,
+      refunds: 0,
+      netSales: 8200,
+      platformFees: 2632,
+      actualPayout: 5568,
+    },
+  ]);
+
   // Navigation & UI state: focused purely on Food Cost System
   const [currentTab, setCurrentTab] = useState<string>('food_cost');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [targetRecipeVariantId, setTargetRecipeVariantId] = useState<string>('');
+  const [backupStatus, setBackupStatus] = useState(() => StorageService.isBackupOverdue(7));
+  const [isIconModalOpen, setIsIconModalOpen] = useState<boolean>(false);
+
+  // Sync active custom icon to document head on load
+  useEffect(() => {
+    AppIconService.applyIconToDocument(
+      AppIconService.getCurrentIcon(),
+      AppIconService.getCurrentThemeColor()
+    );
+  }, []);
+
+  const handleDownloadBackup = () => {
+    StorageService.downloadBackupFile();
+    setBackupStatus(StorageService.isBackupOverdue(7));
+  };
 
   // 2. State persistence effects
   useEffect(() => {
@@ -388,7 +447,36 @@ export default function App() {
         lowStockCount={0}
         onOpenMobileNav={() => setIsMobileNavOpen(true)}
         onNavigateToTab={(tabId) => setCurrentTab(tabId)}
+        onOpenIconModal={() => setIsIconModalOpen(true)}
       />
+
+      {/* E6: Yellow banner when last backup is older than 7 days or never */}
+      {backupStatus.isOverdue && (
+        <div className="bg-amber-100 border-b border-amber-300 px-4 sm:px-6 py-2.5 text-amber-900 text-xs sm:text-sm flex flex-wrap items-center justify-between gap-3 shadow-xs relative z-20">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {backupStatus.lastBackupTime
+                ? `คำเตือน: ยังไม่ได้สำรองข้อมูลเกิน 7 วัน (สำรองล่าสุดเมื่อ: ${new Date(backupStatus.lastBackupTime).toLocaleDateString('th-TH')}) แนะนำให้ดาวน์โหลดไฟล์สำรองข้อมูลเพื่อความปลอดภัย`
+                : 'คำเตือน: ยังไม่เคยสำรองข้อมูลระบบ แนะนำให้ดาวน์โหลดไฟล์สำรองข้อมูล (JSON) เพื่อป้องกันข้อมูลสูญหาย'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadBackup}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-xs cursor-pointer transition-colors shadow-xs"
+            >
+              สำรองข้อมูลเดี๋ยวนี้ (Backup Now)
+            </button>
+            <button
+              onClick={() => setBackupStatus({ isOverdue: false, lastBackupTime: backupStatus.lastBackupTime })}
+              className="text-amber-800 hover:text-amber-950 text-xs underline cursor-pointer ml-1"
+            >
+              ซ่อน
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Full-width application content. Desktop navigation is now in the top bar; the legacy Sidebar remains available only as the mobile drawer. */}
       <div className="relative z-10 flex-1 w-full mx-auto">
@@ -400,6 +488,7 @@ export default function App() {
           reviewCount={reviewRequiredCount}
           lowStockCount={0}
           onReloadData={handleReloadAllData}
+          onOpenIconModal={() => setIsIconModalOpen(true)}
         />
 
         <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 sm:py-6 lg:py-8 min-w-0 overflow-x-hidden">
@@ -477,15 +566,69 @@ export default function App() {
             />
           )}
 
+          {/* TAB 4.5: OVERHEAD & BREAK-EVEN ANALYSIS */}
+          {currentTab === 'overhead_breakeven' && (
+            <BreakEvenView
+              expenses={expenses as any}
+              employees={StorageService.getEmployees() as any}
+              sales={dailySales}
+              settings={settings as any}
+              activeLanguage="th"
+            />
+          )}
+
+          {/* TAB 4.6: OPERATING EXPENSES */}
+          {currentTab === 'expenses' && (
+            <ExpensesView
+              expenses={expenses as any}
+              onAddExpense={(newExp) => {
+                const next = [newExp, ...expenses];
+                setExpenses(next);
+                StorageService.saveExpenses(next);
+              }}
+              onDeleteExpense={(id) => {
+                const next = expenses.filter((e) => e.id !== id);
+                setExpenses(next);
+                StorageService.saveExpenses(next);
+              }}
+              onUpdateExpense={(updatedExp) => {
+                const next = expenses.map((e) => (e.id === updatedExp.id ? updatedExp : e));
+                setExpenses(next);
+                StorageService.saveExpenses(next);
+              }}
+              operatingDays={settings.operatingDaysPerMonth || 26}
+              activeLanguage="th"
+            />
+          )}
+
+          {/* TAB 4.7: DAILY SALES ENTRY */}
+          {currentTab === 'sales_entry' && (
+            <SalesEntryView
+              sales={dailySales}
+              channels={defaultSalesChannels}
+              onAddSalesRecord={(rec) => setDailySales((prev) => upsertDailySalesRecord(prev, rec))}
+              onDeleteSalesRecord={(id) => setDailySales((prev) => prev.filter((s) => s.id !== id))}
+              defaultVatRate={settings.taxRatePercent || 7}
+              activeLanguage="th"
+            />
+          )}
+
           {/* TAB 5: FOOD COST BENCHMARKS & SETTINGS */}
           {currentTab === 'settings' && (
             <SettingsView
               settings={settings}
               onSaveSettings={(newSettings) => setSettings(newSettings)}
+              onOpenIconModal={() => setIsIconModalOpen(true)}
             />
           )}
         </main>
       </div>
+
+      {/* App Icon Customizer Modal */}
+      <AppIconModal
+        isOpen={isIconModalOpen}
+        onClose={() => setIsIconModalOpen(false)}
+      />
 
       {/* Light Theme Footer */}
       <footer className="relative z-10 px-6 sm:px-8 py-3.5 bg-white/90 backdrop-blur-md border-t border-[#EAE4D9] text-xs text-stone-500 flex flex-col sm:flex-row justify-between items-center gap-2 shadow-xs">

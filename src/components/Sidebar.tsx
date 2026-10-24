@@ -22,7 +22,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Smartphone,
+  Image as ImageIcon,
 } from 'lucide-react';
+import { PWAInstallButton } from './common/PWAInstallButton';
 import { StorageService } from '../services/storageService';
 
 export interface NavItem {
@@ -50,6 +53,7 @@ interface SidebarProps {
   reviewCount: number;
   lowStockCount?: number;
   onReloadData?: () => void;
+  onOpenIconModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -59,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   reviewCount,
   onReloadData,
+  onOpenIconModal,
 }) => {
   // Backup & Restore states
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -154,6 +159,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: reviewCount > 0 ? reviewCount : undefined,
           badgeColor: 'bg-rose-500 text-white',
         },
+        { id: 'overhead_breakeven', name: 'โสหุ้ย & จุดคุ้มทุน (Break-Even)', icon: TrendingUp },
+        { id: 'expenses', name: 'บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Receipt },
+        { id: 'sales_entry', name: 'บันทึกยอดขาย (Sales)', icon: BarChart3 },
         { id: 'settings', name: 'เกณฑ์ต้นทุน & ตั้งค่าระบบ', icon: Settings },
       ],
     },
@@ -246,6 +254,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
 
+
+        {/* Mobile & Tablet App Installation */}
+        <section className="pt-3 border-t border-[#EAE4D9] space-y-2">
+          <div className="px-2 flex items-center justify-between text-[11px] font-bold tracking-wide uppercase text-stone-500">
+            <span className="flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-[#F27D26]" />
+              <span>แอปมือถือ & แท็บเล็ต (PWA)</span>
+            </span>
+          </div>
+          <div className="flex flex-col gap-2">
+            <PWAInstallButton
+              onOpenIconModal={onOpenIconModal}
+              className="w-full justify-center py-2.5"
+            />
+            {onOpenIconModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobile();
+                  onOpenIconModal();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-stone-700 border border-[#EAE4D9] shadow-2xs transition-all cursor-pointer"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-[#F27D26]" />
+                <span>เปลี่ยนรูปไอคอนแอป (Custom Icon)</span>
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* Data Management - Compact & Comfortable */}
         <section className="pt-3 border-t border-[#EAE4D9] space-y-2">

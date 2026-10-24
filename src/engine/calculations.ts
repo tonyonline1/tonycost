@@ -11,6 +11,9 @@ import {
   MenuItem,
   PortionVariant,
   SalesChannel,
+  DailySalesRecord,
+  ExpenseRecord,
+  ExpenseFrequency,
 } from '../types/domain';
 
 /**
@@ -335,44 +338,299 @@ export function calculateProfitAndLoss(
 }
 
 /**
- * 16. Calculate Break-Even Analysis
- * Formula: Break-Even Sales = Fixed Costs / (Weighted Contribution Margin % / 100)
+ * 15.1 Calculate Asset Monthly Expense (Depreciation vs Installment Exclusivity)
+ * Rule: Straight-line depreciation = price ÷ life in years ÷ 12.
+ * If an asset is on installment, use the monthly installment INSTEAD (never both).
  */
-export function calculateBreakEven(
-  fixedCosts: number,
-  contributionMarginPercent: number,
-  averageSellingPrice: number = 100,
-  operatingDaysPerMonth: number = 30
+export function calculateAssetMonthlyExpense(asset: {
+  isInstallment?: boolean;
+  monthlyInstallment?: number;
+  assetCost?: number;
+  usefulLifeYears?: number;
+}): number {
+  if (asset.isInstallment || (asset.monthlyInstallment && asset.monthlyInstallment > 0)) {
+    return Math.max(0, asset.monthlyInstallment || 0);
+  }
+  if (asset.assetCost && asset.assetCost > 0 && asset.usefulLifeYears && asset.usefulLifeYears > 0) {
+    return asset.assetCost / (asset.usefulLifeYears * 12);
+  }
+  return 0;
+}
+
+/**
+ * 15.2 Convert Expense Record to Monthly Amount
+ * Standard conversion rules:
+ * - monthly: amount * 1
+ * - weekly: weekly * 52 / 12
+ * - daily: daily * operatingDays
+ * - quarterly: quarterly / 3
+ * - yearly: yearly / 12
+ * - Excluded expenses return 0
+ * - Asset depreciation / installment takes precedence if configured
+ */
+export function convertExpenseToMonthly(
+  expense: {
+    amount: number;
+    frequency?: ExpenseFrequency;
+    operatingDaysPerMonth?: number;
+    isExcluded?: boolean;
+    isInstallment?: boolean;
+    monthlyInstallment?: number;
+    assetCost?: number;
+    usefulLifeYears?: number;
+  },
+  defaultOperatingDays: number = 30
+): number {
+  if (expense.isExcluded) {
+    return 0;
+  }
+
+  // Check for asset installment vs depreciation
+  if (
+    expense.isInstallment ||
+    (expense.monthlyInstallment && expense.monthlyInstallment > 0) ||
+    (expense.assetCost && expense.assetCost > 0 && expense.usefulLifeYears && expense.usefulLifeYears > 0)
+  ) {
+    return calculateAssetMonthlyExpense(expense);
+  }
+
+  const baseAmount = Number(expense.amount) || 0;
+  const frequency = expense.frequency || 'monthly';
+  const opDays = expense.operatingDaysPerMonth && expense.operatingDaysPerMonth > 0
+    ? expense.operatingDaysPerMonth
+    : defaultOperatingDays;
+
+  switch (frequency) {
+    case 'weekly':
+      return (baseAmount * 52) / 12;
+    case 'daily':
+      return baseAmount * opDays;
+    case 'quarterly':
+      return baseAmount / 3;
+    case 'yearly':
+      return baseAmount / 12;
+    case 'monthly':
+    default:
+      return baseAmount;
+  }
+}
+
+/**
+ * 15.3 Calculate Total Monthly Expenses (Fixed vs Variable)
+ * Automatically ignores expenses flagged as excluded
+ */
+export function calculateTotalMonthlyExpenses(
+  expenses: ExpenseRecord[],
+  defaultOperatingDays: number = 30
 ): {
+  totalMonthly: number;
+  fixedMonthly: number;
+  variableMonthly: number;
+  excludedMonthly: number;
+} {
+  let fixedMonthly = 0;
+  let variableMonthly = 0;
+  let excludedMonthly = 0;
+
+  for (const exp of expenses) {
+    if (exp.isExcluded) {
+      // Calculate what it would be for auditing/reporting
+      const unexcluded = convertExpenseToMonthly({ ...exp, isExcluded: false }, defaultOperatingDays);
+      excludedMonthly += unexcluded;
+      continue;
+    }
+
+    const monthlyAmount = convertExpenseToMonthly(exp, defaultOperatingDays);
+    if (exp.isFixed) {
+      fixedMonthly += monthlyAmount;
+    } else {
+      variableMonthly += monthlyAmount;
+    }
+  }
+
+  return {
+    totalMonthly: fixedMonthly + variableMonthly,
+    fixedMonthly,
+    variableMonthly,
+    excludedMonthly,
+  };
+}
+
+/**
+ * 15.4 Normalize Sales to Ex-VAT
+ * If input is VAT-inclusive, divide by (1 + vatRate / 100)
+ */
+export function calculateNormalizedNetSales(
+  grossSales: number,
+  discounts: number = 0,
+  refunds: number = 0,
+  isVatInclusive: boolean = false,
+  vatRatePercent: number = 7
+): number {
+  const gross = Math.max(0, Number(grossSales) || 0);
+  const disc = Math.max(0, Number(discounts) || 0);
+  const ref = Math.max(0, Number(refunds) || 0);
+  const nominalNet = Math.max(0, gross - disc - ref);
+
+  if (isVatInclusive) {
+    const vatFactor = 1 + (Math.max(0, vatRatePercent) / 100);
+    return nominalNet / vatFactor;
+  }
+  return nominalNet;
+}
+
+/**
+ * 15.5 Calculate Overhead % of Selling Price
+ * Formula: (Total monthly fixed costs ÷ monthly net sales ex-VAT × 100) + sum of variable costs expressed as % of sales
+ */
+export function calculateOverheadRatePercent(
+  monthlyFixedCosts: number,
+  monthlyNetSalesExVat: number,
+  variablePercentOfSales: number = 0
+): number {
+  if (monthlyNetSalesExVat <= 0) {
+    return Math.max(0, variablePercentOfSales);
+  }
+  const fixedRatio = (monthlyFixedCosts / monthlyNetSalesExVat) * 100;
+  return fixedRatio + Math.max(0, variablePercentOfSales);
+}
+
+/**
+ * 15.6 Calculate Overhead Cost Per Dish
+ * Overhead per plate = net selling price (ex-VAT) × overhead %
+ */
+export function calculateOverheadCostPerDish(
+  sellingPriceExVat: number,
+  overheadRatePercent: number
+): number {
+  if (sellingPriceExVat <= 0 || overheadRatePercent <= 0) return 0;
+  return sellingPriceExVat * (overheadRatePercent / 100);
+}
+
+export interface BreakEvenAnalysisResult {
+  isValid: boolean;
+  errorMessageTh?: string;
   breakEvenSales: number;
   breakEvenDailySales: number;
   breakEvenOrders: number;
   breakEvenDailyOrders: number;
+  safetyMarginRevenue: number;
   safetyMarginPercent: number;
-} {
-  if (contributionMarginPercent <= 0 || fixedCosts <= 0) {
+  isProfitable: boolean;
+  // Target profit extension
+  targetProfitSales: number;
+  targetProfitDailySales: number;
+  targetProfitOrders: number;
+  targetProfitDailyOrders: number;
+  targetProfitValid: boolean;
+  targetProfitErrorMessageTh?: string;
+}
+
+/**
+ * 16. Calculate Break-Even & Target Profit Analysis
+ * Standard definitions:
+ * - Break-even monthly sales = fixed costs ÷ (1 − food cost % − variable %)
+ * - Target-profit sales = fixed costs ÷ (1 − food cost % − variable % − target profit %)
+ * - If denominator ≤ 0: show Thai message, never a negative or infinite number!
+ */
+export function calculateBreakEven(
+  fixedCosts: number,
+  contributionMarginPercent: number, // (1 - food cost % - variable %) * 100
+  averageSellingPrice: number = 100,
+  operatingDaysPerMonth: number = 30,
+  targetProfitPercent: number = 0,
+  actualNetSales: number = 0
+): BreakEvenAnalysisResult {
+  const opDays = operatingDaysPerMonth > 0 ? operatingDaysPerMonth : 30;
+  const ticket = averageSellingPrice > 0 ? averageSellingPrice : 100;
+
+  // Validate denominator for break-even
+  if (contributionMarginPercent <= 0) {
     return {
+      isValid: false,
+      errorMessageTh: 'ไม่สามารถคุ้มทุนได้เนื่องจากต้นทุนผันแปรรวมเกินหรือเท่ากับ 100% ของราคาขาย',
       breakEvenSales: 0,
       breakEvenDailySales: 0,
       breakEvenOrders: 0,
       breakEvenDailyOrders: 0,
+      safetyMarginRevenue: 0,
       safetyMarginPercent: 0,
+      isProfitable: false,
+      targetProfitSales: 0,
+      targetProfitDailySales: 0,
+      targetProfitOrders: 0,
+      targetProfitDailyOrders: 0,
+      targetProfitValid: false,
+      targetProfitErrorMessageTh: 'ไม่สามารถทำกำไรตามเป้าหมายได้เนื่องจากต้นทุนผันแปรรวมเกินหรือเท่ากับ 100% ของราคาขาย',
+    };
+  }
+
+  if (fixedCosts < 0) {
+    return {
+      isValid: false,
+      errorMessageTh: 'ต้นทุนคงที่ไม่ถูกต้อง (ต้องไม่ติดลบ)',
+      breakEvenSales: 0,
+      breakEvenDailySales: 0,
+      breakEvenOrders: 0,
+      breakEvenDailyOrders: 0,
+      safetyMarginRevenue: 0,
+      safetyMarginPercent: 0,
+      isProfitable: false,
+      targetProfitSales: 0,
+      targetProfitDailySales: 0,
+      targetProfitOrders: 0,
+      targetProfitDailyOrders: 0,
+      targetProfitValid: false,
     };
   }
 
   const cmRatio = contributionMarginPercent / 100;
   const breakEvenSales = fixedCosts / cmRatio;
-  const breakEvenDailySales = breakEvenSales / operatingDaysPerMonth;
+  const breakEvenDailySales = breakEvenSales / opDays;
+  const breakEvenOrders = ticket > 0 ? Math.ceil(breakEvenSales / ticket) : 0;
+  const breakEvenDailyOrders = opDays > 0 ? Math.ceil(breakEvenOrders / opDays) : 0;
 
-  const breakEvenOrders = averageSellingPrice > 0 ? Math.ceil(breakEvenSales / averageSellingPrice) : 0;
-  const breakEvenDailyOrders = operatingDaysPerMonth > 0 ? Math.ceil(breakEvenOrders / operatingDaysPerMonth) : 0;
+  const safetyMarginRevenue = actualNetSales > 0 ? actualNetSales - breakEvenSales : 0;
+  const safetyMarginPercent = actualNetSales > 0 ? (safetyMarginRevenue / actualNetSales) * 100 : 0;
+  const isProfitable = actualNetSales > 0 && actualNetSales >= breakEvenSales;
+
+  // Target profit calculation
+  let targetProfitSales = 0;
+  let targetProfitDailySales = 0;
+  let targetProfitOrders = 0;
+  let targetProfitDailyOrders = 0;
+  let targetProfitValid = true;
+  let targetProfitErrorMessageTh: string | undefined = undefined;
+
+  if (targetProfitPercent > 0) {
+    const tpDenominator = (contributionMarginPercent - targetProfitPercent) / 100;
+    if (tpDenominator <= 0) {
+      targetProfitValid = false;
+      targetProfitErrorMessageTh = 'ไม่สามารถทำกำไรตามเป้าหมายได้เนื่องจากต้นทุนผันแปรรวมและเป้าหมายกำไรเกินหรือเท่ากับ 100% ของราคาขาย';
+      targetProfitSales = 0;
+    } else {
+      targetProfitSales = fixedCosts / tpDenominator;
+      targetProfitDailySales = targetProfitSales / opDays;
+      targetProfitOrders = ticket > 0 ? Math.ceil(targetProfitSales / ticket) : 0;
+      targetProfitDailyOrders = opDays > 0 ? Math.ceil(targetProfitOrders / opDays) : 0;
+    }
+  }
 
   return {
+    isValid: true,
     breakEvenSales,
     breakEvenDailySales,
     breakEvenOrders,
     breakEvenDailyOrders,
-    safetyMarginPercent: 0,
+    safetyMarginRevenue,
+    safetyMarginPercent,
+    isProfitable,
+    targetProfitSales,
+    targetProfitDailySales,
+    targetProfitOrders,
+    targetProfitDailyOrders,
+    targetProfitValid,
+    targetProfitErrorMessageTh,
   };
 }
 
@@ -678,3 +936,560 @@ export function calculateIngredientPriceImpact(
     menuImpacts,
   };
 }
+
+/**
+ * 25. Calculate Food Cost & Profitability Metrics (F7, F9, F13, C-02)
+ * If price includes VAT, net price = price / 1.07 before computing Food Cost %, overhead, and profit.
+ * If price is 0, Food Cost % and profit % return null / '-' (no NaN / Infinity).
+ */
+export interface FoodCostMetricsResult {
+  ingredientCost: number;
+  extraCosts: number;
+  sellingPrice: number;
+  netSellingPrice: number;
+  vatAmount: number;
+  overheadPercent: number;
+  overheadCost: number;
+  totalCost: number;
+  foodCostPercent: number | null;
+  totalCostPercent: number | null;
+  profit: number;
+  profitAmount: number;
+  profitPercent: number | null;
+  foodCostPercentDisplay: string;
+  profitPercentDisplay: string;
+}
+
+export function calculateFoodCostMetrics(
+  ingredientCost: number,
+  extraCosts: number = 0,
+  sellingPrice: number = 0,
+  overheadPercent: number = 0,
+  isVatInclusive: boolean = false,
+  vatRatePercent: number = 7
+): FoodCostMetricsResult {
+  const netSellingPrice = isVatInclusive && vatRatePercent > 0
+    ? Number((sellingPrice / (1 + vatRatePercent / 100)).toFixed(2))
+    : sellingPrice;
+  const vatAmount = isVatInclusive ? Number((sellingPrice - netSellingPrice).toFixed(2)) : 0;
+  const overheadCost = Number((netSellingPrice * (overheadPercent / 100)).toFixed(2));
+  const totalCost = Number((ingredientCost + extraCosts + overheadCost).toFixed(2));
+  const profit = Number((netSellingPrice - totalCost).toFixed(2));
+
+  if (netSellingPrice <= 0) {
+    return {
+      ingredientCost,
+      extraCosts,
+      sellingPrice,
+      netSellingPrice,
+      vatAmount,
+      overheadPercent,
+      overheadCost,
+      totalCost,
+      foodCostPercent: null,
+      totalCostPercent: null,
+      profit,
+      profitAmount: profit,
+      profitPercent: null,
+      foodCostPercentDisplay: '-',
+      profitPercentDisplay: '-',
+    };
+  }
+
+  const foodCostPercent = Number(((ingredientCost / netSellingPrice) * 100).toFixed(1));
+  const totalCostPercent = Number(((totalCost / netSellingPrice) * 100).toFixed(1));
+  const profitPercent = Number(((profit / netSellingPrice) * 100).toFixed(1));
+
+  return {
+    ingredientCost,
+    extraCosts,
+    sellingPrice,
+    netSellingPrice,
+    vatAmount,
+    overheadPercent,
+    overheadCost,
+    totalCost,
+    foodCostPercent,
+    totalCostPercent,
+    profit,
+    profitAmount: profit,
+    profitPercent,
+    foodCostPercentDisplay: foodCostPercent.toFixed(1),
+    profitPercentDisplay: profitPercent.toFixed(1),
+  };
+}
+
+/**
+ * 26. Calculate Suggested Selling Price with Rounding UP (F8, F14, H-02)
+ * Suggested price always rounds UP to the chosen 1/5/10 THB step.
+ */
+export function calculateSuggestedPriceWithRounding(
+  cost: number,
+  targetFoodCostPercent: number,
+  roundingStep: 1 | 5 | 10 = 1
+): {
+  rawPrice: number;
+  roundedPrice: number;
+  roundedStep1: number;
+  roundedStep5: number;
+  roundedStep10: number;
+} {
+  if (cost <= 0 || targetFoodCostPercent <= 0) {
+    return { rawPrice: 0, roundedPrice: 0, roundedStep1: 0, roundedStep5: 0, roundedStep10: 0 };
+  }
+  const rawFloat = cost / (targetFoodCostPercent / 100);
+  const rawPrice = Number(rawFloat.toFixed(2));
+  const roundedStep1 = Math.ceil(rawFloat / 1) * 1;
+  const roundedStep5 = Math.ceil(rawFloat / 5) * 5;
+  const roundedStep10 = Math.ceil(rawFloat / 10) * 10;
+  const roundedPrice = Math.ceil(rawFloat / roundingStep) * roundingStep;
+  return { rawPrice, roundedPrice, roundedStep1, roundedStep5, roundedStep10 };
+}
+
+/**
+ * 27. Delivery Suggested Price & Commission with VAT Toggle (F11, C-01)
+ * Effective GP = GP% * 1.07 when GP has VAT.
+ */
+export function calculateDeliveryPricing(
+  cost: number,
+  targetFoodCostPercent: number,
+  gpPercent: number = 30,
+  gpHasVat: boolean = true,
+  vatRatePercent: number = 7
+): {
+  baseTargetPrice: number;
+  effectiveGpPercent: number;
+  deliverySuggestedPrice: number;
+  suggestedDeliveryPrice: number;
+} {
+  const baseTargetPrice = targetFoodCostPercent > 0 ? cost / (targetFoodCostPercent / 100) : cost;
+  const effectiveGpPercent = gpHasVat ? Number((gpPercent * (1 + vatRatePercent / 100)).toFixed(1)) : gpPercent;
+  const gpRatio = effectiveGpPercent / 100;
+  const deliverySuggestedPrice = gpRatio < 1 ? Number((baseTargetPrice / (1 - gpRatio)).toFixed(2)) : baseTargetPrice;
+
+  return {
+    baseTargetPrice,
+    effectiveGpPercent,
+    deliverySuggestedPrice,
+    suggestedDeliveryPrice: deliverySuggestedPrice,
+  };
+}
+
+/**
+ * 28. Delivery Profitability & Net Revenue (F12, C-01)
+ */
+export function calculateDeliveryProfitability(
+  deliveryPrice: number,
+  cost: number,
+  packagingCost: number = 0,
+  gpPercent: number = 30,
+  gpHasVat: boolean = true,
+  vatRatePercent: number = 7
+): {
+  gpFee: number;
+  netRevenue: number;
+  foodCostPercent: number;
+  profitBeforeOverhead: number;
+} {
+  const effectiveGp = gpHasVat ? gpPercent * (1 + vatRatePercent / 100) : gpPercent;
+  const gpFee = Number((deliveryPrice * (effectiveGp / 100)).toFixed(2));
+  const netRevenue = Number((deliveryPrice - gpFee).toFixed(2));
+  const foodCostPercent = netRevenue > 0 ? Number(((cost / netRevenue) * 100).toFixed(1)) : 0;
+  const profitBeforeOverhead = Number((netRevenue - cost - packagingCost).toFixed(2));
+
+  return {
+    gpFee,
+    netRevenue,
+    foodCostPercent,
+    profitBeforeOverhead,
+  };
+}
+
+/**
+ * 29. Calculate Customer Bill with Service Charge & VAT (F9, F10)
+ * Base 100, service charge 10%, VAT 7% on subtotal -> customer pays 117.70
+ */
+export function calculateBillTotal(
+  basePrice: number,
+  serviceChargePercent: number = 0,
+  vatRatePercent: number = 7,
+  isVatInclusive: boolean = false
+): {
+  basePrice: number;
+  basePriceExVat: number;
+  serviceChargeAmount: number;
+  vatAmount: number;
+  totalCustomerPays: number;
+  customerPay: number;
+} {
+  if (isVatInclusive) {
+    const basePriceExVat = Number((basePrice / (1 + vatRatePercent / 100)).toFixed(2));
+    const vatAmount = Number((basePrice - basePriceExVat).toFixed(2));
+    return {
+      basePrice,
+      basePriceExVat,
+      serviceChargeAmount: 0,
+      vatAmount,
+      totalCustomerPays: basePrice,
+      customerPay: basePrice,
+    };
+  }
+
+  const serviceChargeAmount = Number((basePrice * (serviceChargePercent / 100)).toFixed(2));
+  const subtotalWithService = basePrice + serviceChargeAmount;
+  const vatAmount = Number((subtotalWithService * (vatRatePercent / 100)).toFixed(2));
+  const totalCustomerPays = Number((subtotalWithService + vatAmount).toFixed(2));
+
+  return {
+    basePrice,
+    basePriceExVat: basePrice,
+    serviceChargeAmount,
+    vatAmount,
+    totalCustomerPays,
+    customerPay: totalCustomerPays,
+  };
+}
+
+/**
+ * 30. Calculate Sub-Recipe Cost (Pure F&B Standard) (F5, F6, F15, H-03)
+ * Rule: Sub-recipe batch cost = total ingredient cost;
+ * cost per unit = batch cost ÷ actual output quantity; NEVER multiply by 100/yield.
+ */
+export function calculateSubRecipeCostPure(
+  batchIngredientsCost: number,
+  finalOutputQuantity: number,
+  _rawInputQuantity?: number
+): {
+  batchCost: number;
+  costPerOutputUnit: number;
+  costPerUnit: number;
+} {
+  const batchCost = batchIngredientsCost;
+  const rawCostPerUnit = finalOutputQuantity > 0 ? batchCost / finalOutputQuantity : 0;
+  const costPerOutputUnit = Number(rawCostPerUnit.toFixed(4));
+  return {
+    batchCost,
+    costPerOutputUnit,
+    costPerUnit: costPerOutputUnit,
+  };
+}
+
+/**
+ * 31. Calculate Ingredient Usage Cost in Recipe (F1, F2, F3, F4, F14, M-01)
+ * Enforces unit compatibility; incompatible units return an error and cost 0.
+ */
+export function calculateIngredientItemCost(params: {
+  purchasePrice: number;
+  purchaseQuantity: number;
+  purchaseUnit: string;
+  usageQuantity: number;
+  usageUnit: string;
+  yieldPercent?: number; // Ingredient standard yield %
+  ingredientYield?: number; // Alias for yieldPercent
+  lineYieldOverride?: number; // Optional recipe line yield override %
+  piecesPerPurchaseUnit?: number; // e.g. 30 eggs per pack, 24 cans per case
+  density?: number;
+}): {
+  unitCost: number;
+  lineCost: number;
+  isValid: boolean;
+  errorMessageTh?: string;
+} {
+  const {
+    purchasePrice,
+    purchaseQuantity,
+    purchaseUnit,
+    usageQuantity,
+    usageUnit,
+    lineYieldOverride,
+    piecesPerPurchaseUnit,
+    density,
+  } = params;
+
+  if (purchasePrice <= 0 || purchaseQuantity <= 0 || usageQuantity < 0) {
+    return { unitCost: 0, lineCost: 0, isValid: false, errorMessageTh: 'ข้อมูลราคาหรือปริมาณไม่ถูกต้อง' };
+  }
+
+  const rawYield = params.yieldPercent ?? params.ingredientYield ?? 100;
+  // Effective yield %
+  const effectiveYield = (lineYieldOverride && lineYieldOverride > 0)
+    ? lineYieldOverride
+    : (rawYield > 0 ? rawYield : 100);
+
+  const pUnit = (purchaseUnit || '').toLowerCase();
+  const uUnit = (usageUnit || '').toLowerCase();
+
+  // Case A: Pieces / Pack / Egg count items
+  if (piecesPerPurchaseUnit && piecesPerPurchaseUnit > 0) {
+    const costPerPiece = purchasePrice / piecesPerPurchaseUnit;
+    const cost = usageQuantity * costPerPiece;
+    return {
+      unitCost: costPerPiece,
+      lineCost: cost,
+      isValid: true,
+    };
+  }
+
+  // Direct piece matching
+  if (
+    (pUnit === 'can' || pUnit === 'egg' || pUnit === 'piece' || pUnit === 'กระป๋อง' || pUnit === 'ฟอง' || pUnit === 'ชิ้น' || pUnit === 'ตัว') &&
+    (uUnit === pUnit || uUnit === 'can' || uUnit === 'egg' || uUnit === 'piece' || uUnit === 'กระป๋อง' || uUnit === 'ฟอง' || uUnit === 'ชิ้น' || uUnit === 'ตัว')
+  ) {
+    const costPerPiece = purchasePrice / purchaseQuantity;
+    const cost = usageQuantity * costPerPiece;
+    return {
+      unitCost: costPerPiece,
+      lineCost: cost,
+      isValid: true,
+    };
+  }
+
+  // Mass & Volume unit conversion
+  const conv = convertUnit(usageQuantity, uUnit as any, pUnit as any, density);
+  if (!conv.success) {
+    const isDensityNeeded = (conv.errorMessageTh || '').includes('ต้องระบุความหนาแน่น');
+    return {
+      unitCost: 0,
+      lineCost: 0,
+      isValid: false,
+      errorMessageTh: isDensityNeeded
+        ? `ต้องระบุความหนาแน่นเพื่อแปลง ${purchaseUnit} เป็น ${usageUnit}`
+        : conv.errorMessageTh || `หน่วยไม่ตรงกัน: "${usageUnit}" ไม่สามารถแปลงเป็น "${purchaseUnit}" ได้`,
+    };
+  }
+
+  // Cost per usable purchase unit
+  const costPerUsablePurchaseUnit = purchasePrice / (purchaseQuantity * (effectiveYield / 100));
+  const exactLineCost = conv.convertedQuantity * costPerUsablePurchaseUnit;
+  const lineCost = Number(exactLineCost.toFixed(2));
+  const unitCost = usageQuantity > 0 ? exactLineCost / usageQuantity : 0;
+
+  return {
+    unitCost,
+    lineCost,
+    isValid: true,
+  };
+}
+
+/**
+ * 32. Calculate Logged Sales Average & Projection (O11, E2)
+ * Averages over the last N logged days (N = 7/14/30).
+ * Warns if fewer than 7 days logged.
+ */
+export function calculateLoggedSalesProjection(
+  dailySalesRecords: Array<{ date: string; netSales: number }>,
+  daysToAverage: number = 14,
+  operatingDaysPerMonth: number = 30
+): {
+  uniqueLoggedDays: number;
+  averageDailySales: number;
+  projectedMonthlySales: number;
+  isDataSufficient: boolean;
+  warningMessageTh?: string;
+} {
+  const salesByDate = new Map<string, number>();
+  for (const r of dailySalesRecords) {
+    salesByDate.set(r.date, (salesByDate.get(r.date) || 0) + (r.netSales || 0));
+  }
+  const sortedDates = Array.from(salesByDate.keys()).sort().reverse();
+  const selectedDates = sortedDates.slice(0, daysToAverage);
+  const uniqueLoggedDays = selectedDates.length;
+
+  if (uniqueLoggedDays === 0) {
+    return {
+      uniqueLoggedDays: 0,
+      averageDailySales: 0,
+      projectedMonthlySales: 0,
+      isDataSufficient: false,
+      warningMessageTh: 'ยังไม่มีข้อมูลยอดขายที่บันทึก',
+    };
+  }
+
+  const totalSales = selectedDates.reduce((sum, d) => sum + (salesByDate.get(d) || 0), 0);
+  const averageDailySales = totalSales / uniqueLoggedDays;
+  const projectedMonthlySales = averageDailySales * operatingDaysPerMonth;
+  const isDataSufficient = uniqueLoggedDays >= 7;
+
+  return {
+    uniqueLoggedDays,
+    averageDailySales,
+    projectedMonthlySales,
+    isDataSufficient,
+    warningMessageTh: !isDataSufficient ? 'ข้อมูลยอดขายบันทึกไว้น้อยเกินไป (ต้องการอย่างน้อย 7 วัน)' : undefined,
+  };
+}
+
+/**
+ * 33. Seated Capacity Overhead Calculation (O5)
+ * seats × turns × spend × days = sales; warns if overhead > 50%.
+ */
+export function calculateSeatedOverhead(
+  seats: number,
+  turnsPerDay: number,
+  averageSpend: number,
+  daysPerMonth: number,
+  fixedCosts: number
+): {
+  monthlyCapacitySales: number;
+  overheadPercent: number;
+  hasHighOverheadWarning: boolean;
+  warningMessageTh?: string;
+} {
+  const monthlyCapacitySales = seats * turnsPerDay * averageSpend * daysPerMonth;
+  const overheadPercent = monthlyCapacitySales > 0 ? (fixedCosts / monthlyCapacitySales) * 100 : 0;
+  const hasHighOverheadWarning = overheadPercent > 50;
+
+  return {
+    monthlyCapacitySales,
+    overheadPercent,
+    hasHighOverheadWarning,
+    warningMessageTh: hasHighOverheadWarning
+      ? `คำเตือน: อัตราโสหุ้ยสูงเกิน 50% (${overheadPercent.toFixed(1)}%) ร้านมีความเสี่ยงสูงต่อผลขาดทุน`
+      : undefined,
+  };
+}
+
+/**
+ * 34. Overhead Sensitivity Analysis (O10)
+ */
+export function calculateOverheadSensitivity(
+  baseSalesExVat: number,
+  fixedCosts: number,
+  variablePercent: number = 0,
+  percentages: number[] = [70, 100, 130, 150]
+): Array<{
+  multiplierPercent: number;
+  salesVolume: number;
+  overheadPercent: number;
+}> {
+  return percentages.map((pct) => {
+    const salesVolume = baseSalesExVat * (pct / 100);
+    const overheadPercent = salesVolume > 0 ? (fixedCosts / salesVolume) * 100 + variablePercent : 0;
+    return {
+      multiplierPercent: pct,
+      salesVolume,
+      overheadPercent,
+    };
+  });
+}
+
+/**
+ * 35. Format Currency to Thai Baht with 2 Decimal Places (L-01)
+ */
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || isNaN(amount)) return '-';
+  return amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * 36. Circular Sub-recipe Reference Prevention (Integration Test)
+ * Detects self-reference (A->A) and cyclic chains (A->B->A).
+ */
+export function checkCircularSubRecipe(
+  targetSubRecipeId: string,
+  newDependencyId: string,
+  allSubRecipes: Array<{ id: string; items: Array<{ ingredientId: string }> }>
+): boolean {
+  if (targetSubRecipeId === newDependencyId) {
+    return true;
+  }
+  const visited = new Set<string>();
+  const queue = [newDependencyId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === targetSubRecipeId) {
+      return true;
+    }
+    if (!visited.has(current)) {
+      visited.add(current);
+      const sub = allSubRecipes.find((s) => s.id === current);
+      if (sub && sub.items) {
+        for (const it of sub.items) {
+          queue.push(it.ingredientId);
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * 37. Check Ingredient Usage in Menus & Sub-recipes (Integration Test)
+ * Blocks deletion if ingredient is used in any menu or sub-recipe.
+ */
+export function checkIngredientUsage(
+  ingredientId: string,
+  menus: Array<{ name: string; variants?: Array<{ name?: string; recipeItems: Array<{ ingredientId: string }> }> }>,
+  subRecipes: Array<{ name: string; items: Array<{ ingredientId: string }> }>
+): { isUsed: boolean; usedInNames: string[] } {
+  const usedInNames: string[] = [];
+  for (const m of menus) {
+    for (const v of m.variants || []) {
+      if (v.recipeItems?.some((it) => it.ingredientId === ingredientId)) {
+        usedInNames.push(`เมนู: ${m.name} (${v.name || ''})`);
+      }
+    }
+  }
+  for (const s of subRecipes) {
+    if (s.items?.some((it) => it.ingredientId === ingredientId)) {
+      usedInNames.push(`สูตรกลาง/ซอส: ${s.name}`);
+    }
+  }
+  return {
+    isUsed: usedInNames.length > 0,
+    usedInNames,
+  };
+}
+
+/**
+ * 38. Upsert Daily Sales Record (O14, E1)
+ * If same date and channel already exist, update the existing row instead of duplicating.
+ */
+export function upsertDailySalesRecord<T extends { id: string; date: string; channelId?: string; netSales?: number; grossSales?: number }>(
+  records: T[],
+  newRecord: T
+): T[] {
+  const index = records.findIndex(
+    (r) => r.date === newRecord.date && (r.channelId === newRecord.channelId || !r.channelId || !newRecord.channelId)
+  );
+  if (index >= 0) {
+    const updated = [...records];
+    updated[index] = { ...newRecord, id: records[index].id };
+    return updated;
+  }
+  return [newRecord, ...records];
+}
+
+/**
+ * 39. Validate Expense and Overhead Input (O13, E4)
+ * Rejects negative numbers, asset life years = 0, and percentage outside 0-100 with clear Thai messages.
+ */
+export function validateExpenseInput(input: {
+  amount?: number;
+  assetCost?: number;
+  usefulLifeYears?: number;
+  isAsset?: boolean;
+  isInstallment?: boolean;
+}): { isValid: boolean; errorMessageTh?: string } {
+  if (input.amount !== undefined && input.amount < 0) {
+    return { isValid: false, errorMessageTh: 'จำนวนเงินต้องไม่ติดลบ (ต้องมากกว่าหรือเท่ากับ 0)' };
+  }
+  if (input.isAsset && !input.isInstallment) {
+    if (input.assetCost !== undefined && input.assetCost < 0) {
+      return { isValid: false, errorMessageTh: 'มูลค่าสินทรัพย์ต้องไม่ติดลบ' };
+    }
+    if (input.usefulLifeYears !== undefined && input.usefulLifeYears <= 0) {
+      return { isValid: false, errorMessageTh: 'อายุการใช้งานสินทรัพย์ต้องมากกว่า 0 ปี' };
+    }
+  }
+  return { isValid: true };
+}
+
+export function validatePercentage(percent: number): { isValid: boolean; errorMessageTh?: string } {
+  if (percent < 0 || percent > 100) {
+    return { isValid: false, errorMessageTh: 'ค่าเปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100%' };
+  }
+  return { isValid: true };
+}
+

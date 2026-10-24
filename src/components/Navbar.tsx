@@ -12,6 +12,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { RestaurantSettings } from '../types';
+import { PWAInstallButton } from './common/PWAInstallButton';
 
 interface NavbarProps {
   settings: RestaurantSettings;
@@ -21,6 +22,7 @@ interface NavbarProps {
   lowStockCount: number;
   onOpenMobileNav: () => void;
   onNavigateToTab: (tabId: string) => void;
+  onOpenIconModal?: () => void;
 }
 
 interface MainNavItem {
@@ -36,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   reviewItemsCount,
   onOpenMobileNav,
   onNavigateToTab,
+  onOpenIconModal,
 }) => {
   const navigate = (tabId: string) => onNavigateToTab(tabId);
 
@@ -115,9 +118,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Target Food Cost Indicator Pill & Settings */}
+          {/* Target Food Cost Indicator Pill & Settings & PWA Install */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#FFFDF9] border border-[#EAE4D9] rounded-xl text-xs shadow-xs">
+            {/* PWA Mobile & Tablet Install Button */}
+            <PWAInstallButton onOpenIconModal={onOpenIconModal} />
+
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-[#FFFDF9] border border-[#EAE4D9] rounded-xl text-xs shadow-xs">
               <span className="text-[10px] uppercase font-bold text-stone-500">Target FC%:</span>
               <span className="font-mono font-bold text-[#F27D26] text-xs">
                 ≤ {settings.targetFoodCostPercent || 32}%
