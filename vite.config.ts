@@ -15,7 +15,7 @@ export default defineConfig(() => {
         injectRegister: 'auto',
         includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png', 'manifest.json'],
         manifest: {
-          id: './',
+          id: '/',
           name: "Tony's Kitchen – Food Cost Calculator",
           short_name: 'TonyKitchen',
           description: 'ระบบคำนวณและควบคุมต้นทุนอาหารสำหรับร้านอาหาร (Food Cost Calculator & Management)',

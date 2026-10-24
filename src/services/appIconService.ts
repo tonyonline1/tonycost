@@ -238,42 +238,7 @@ export const AppIconService = {
       themeMeta.setAttribute('content', themeColor);
     }
 
-    // Dynamic Manifest update with new icon
-    try {
-      const manifestLink = document.getElementById('app-manifest-link') as HTMLLinkElement | null;
-      if (manifestLink) {
-        const dynamicManifest = {
-          id: './',
-          name: "Tony's Kitchen – Food Cost Calculator",
-          short_name: 'TonyKitchen',
-          description: 'ระบบคำนวณและควบคุมต้นทุนอาหารสำหรับร้านอาหาร (Food Cost Calculator)',
-          start_url: './',
-          scope: './',
-          display: 'standalone',
-          orientation: 'any',
-          theme_color: themeColor,
-          background_color: '#FAF8F5',
-          icons: [
-            {
-              src: iconUrl,
-              sizes: '512x512',
-              type: iconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: iconUrl,
-              sizes: '192x192',
-              type: iconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : 'image/png',
-              purpose: 'any',
-            },
-          ],
-        };
-        const blob = new Blob([JSON.stringify(dynamicManifest, null, 2)], { type: 'application/manifest+json' });
-        const blobUrl = URL.createObjectURL(blob);
-        manifestLink.href = blobUrl;
-      }
-    } catch (e) {
-      console.warn('Could not update dynamic manifest blob:', e);
-    }
+    // Note: Web App Manifest must remain a static HTTPS URL with PNG icons for Android WebAPK validation.
+    // iOS Safari dynamically reads apple-touch-icon above upon 'Add to Home Screen'.
   },
 };
