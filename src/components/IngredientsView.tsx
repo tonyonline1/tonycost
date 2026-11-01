@@ -775,9 +775,15 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                       </div>
                     </td>
 
-                    <td className="py-3.5 px-4 font-semibold text-white">
+                    <td
+                      className="py-3.5 px-4 font-semibold text-white cursor-pointer select-none"
+                      onDoubleClick={() => handleOpenEdit(ing)}
+                      title="ดับเบิลคลิกเพื่อแก้ไขข้อมูลวัตถุดิบ"
+                    >
                       <div className="flex items-center gap-2">
-                        <span>{ing.name}</span>
+                        <span className="hover:text-[#F27D26] hover:underline transition-colors">
+                          {ing.name}
+                        </span>
                         {ing.isReviewRequired && (
                           <span
                             className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30"

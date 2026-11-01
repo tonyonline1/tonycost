@@ -54,6 +54,7 @@ const STORAGE_KEYS = {
 
 function safeLoad<T>(key: string, fallback: T): T {
   try {
+    if (typeof localStorage === 'undefined') return fallback;
     const item = localStorage.getItem(key);
     if (!item) return fallback;
     return JSON.parse(item);
@@ -65,6 +66,7 @@ function safeLoad<T>(key: string, fallback: T): T {
 
 function safeSave<T>(key: string, data: T): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(key, JSON.stringify(data));
   } catch (err) {
     console.error(`Error saving key ${key}:`, err);

@@ -327,7 +327,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   <tbody className="divide-y divide-white/5">
                     {reviewRequiredList.map((ing) => (
                       <tr key={ing.id} className="hover:bg-red-500/5">
-                        <td className="py-3.5 px-4 font-bold text-white">
+                        <td
+                          className="py-3.5 px-4 font-bold text-white cursor-pointer select-none hover:text-[#F27D26] hover:underline transition-colors"
+                          onDoubleClick={() => onEditIngredient(ing)}
+                          title="ดับเบิลคลิกเพื่อแก้ไขข้อมูลวัตถุดิบ"
+                        >
                           {ing.name}
                         </td>
                         <td className="py-3.5 px-3 text-white/60">{ing.category}</td>

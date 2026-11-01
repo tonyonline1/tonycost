@@ -286,8 +286,12 @@ export const IngredientMasterView: React.FC<IngredientMasterViewProps> = ({
                 const isExpansion = ing.yieldPercent > 100;
                 return (
                   <tr key={ing.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-3.5 font-sans">
-                      <div className="font-semibold text-white">{ing.thaiName}</div>
+                    <td
+                      className="py-3 px-3.5 font-sans cursor-pointer select-none"
+                      onDoubleClick={() => handleOpenEdit(ing)}
+                      title="ดับเบิลคลิกเพื่อแก้ไขข้อมูลวัตถุดิบ"
+                    >
+                      <div className="font-semibold text-white hover:text-[#F27D26] hover:underline transition-colors">{ing.thaiName}</div>
                       <div className="text-[11px] text-white/30 font-mono flex items-center gap-1.5">
                         <span>{ing.code}</span>
                         {ing.englishName && <span className="text-white/30">· {ing.englishName}</span>}
