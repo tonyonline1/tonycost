@@ -31,6 +31,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     defaultOverheadCostPerDish: settings.defaultOverheadCostPerDish ?? settings.defaultOverheadCost ?? 25,
     packagingCostTakeaway: settings.packagingCostTakeaway ?? settings.takeawayPackagingCost ?? 5,
     takeawayPackagingCost: settings.takeawayPackagingCost ?? settings.packagingCostTakeaway ?? 5,
+    vatRatePercent: settings.vatRatePercent ?? 7,
+    incomeTaxRatePercent: settings.incomeTaxRatePercent ?? 20,
     grabFoodCommissionPercent: settings.grabFoodCommissionPercent ?? 30,
     lineManCommissionPercent: settings.lineManCommissionPercent ?? 25,
   }));
@@ -47,6 +49,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       defaultOverheadCostPerDish: settings.defaultOverheadCostPerDish ?? settings.defaultOverheadCost ?? 25,
       packagingCostTakeaway: settings.packagingCostTakeaway ?? settings.takeawayPackagingCost ?? 5,
       takeawayPackagingCost: settings.takeawayPackagingCost ?? settings.packagingCostTakeaway ?? 5,
+      vatRatePercent: settings.vatRatePercent ?? 7,
+      incomeTaxRatePercent: settings.incomeTaxRatePercent ?? 20,
       grabFoodCommissionPercent: settings.grabFoodCommissionPercent ?? 30,
       lineManCommissionPercent: settings.lineManCommissionPercent ?? 25,
     });
@@ -186,6 +190,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               </select>
               <p className="text-[10px] text-white/40 mt-1">
                 มาตรฐานบัญชีร้านอาหารสากลกำหนดให้คำนวณโสหุ้ยเป็น % ของราคาขายสุทธิ (ex-VAT)
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-white/80 mb-1">
+                อัตรา VAT (%)
+              </label>
+              <div className="relative">
+                <NumericInput
+                  type="number"
+                  step="any"
+                  min="0"
+                  max="20"
+                  required
+                  value={localSettings.vatRatePercent ?? 7}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setLocalSettings({
+                      ...localSettings,
+                      vatRatePercent: Number.isFinite(val) ? val : 0,
+                    });
+                  }}
+                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white focus:outline-none focus:border-[#F27D26]"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">
+                  %
+                </span>
+              </div>
+              <p className="text-[10px] text-white/40 mt-1">
+                ใช้คำนวณราคาขายสุทธิ (ex-VAT) และค่า GP
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-white/80 mb-1">
+                อัตราภาษีเงินได้ (ประมาณการ) (%)
+              </label>
+              <div className="relative">
+                <NumericInput
+                  type="number"
+                  step="any"
+                  min="0"
+                  max="50"
+                  required
+                  value={localSettings.incomeTaxRatePercent ?? 20}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setLocalSettings({
+                      ...localSettings,
+                      incomeTaxRatePercent: Number.isFinite(val) ? val : 0,
+                    });
+                  }}
+                  className="w-full p-2.5 bg-black/40 border border-white/15 rounded-xl font-mono font-bold text-white focus:outline-none focus:border-[#F27D26]"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">
+                  %
+                </span>
+              </div>
+              <p className="text-[10px] text-white/40 mt-1">
+                ตัวเลขนี้เป็นการประมาณการเพื่อดูภาพรวม ไม่ใช่ตัวเลขสำหรับยื่นภาษี กรุณาปรึกษานักบัญชี
               </p>
             </div>
           </div>

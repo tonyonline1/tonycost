@@ -432,7 +432,10 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
         if (r.breakdown.deliveryProfit < 0) {
           reasons.push(`กำไรเดลิเวอรี่ติดลบ (${r.breakdown.deliveryProfit.toFixed(1)} ฿)`);
         }
-        if (r.breakdown.hasReviewIssue) {
+        if (r.breakdown.hasMissingPrice || r.breakdown.missingPrice) {
+          reasons.push('ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง');
+        }
+        if (r.breakdown.hasReviewIssue && !r.breakdown.hasMissingPrice) {
           reasons.push(r.breakdown.reviewMessage || 'ต้องทบทวนสูตรหรือวัตถุดิบ');
         }
         return {
@@ -1391,7 +1394,14 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                         return displayItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-stone-50">
                           <td className="py-2 px-3 font-sans text-stone-900 font-bold">
-                            {item.name}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{item.name}</span>
+                              {((item as any).missingPrice || !(item.calculatedUnitCost && item.calculatedUnitCost > 0)) && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-700 border border-amber-500/30">
+                                  ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 px-2 font-sans text-stone-600 text-[10px]">
                             {item.type === 'SAUCE' ? 'ซอส' : 'วัตถุดิบ'}

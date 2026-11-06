@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Scale, TrendingUp, DollarSign, Calendar, AlertCircle, CheckCircle2, Target } from 'lucide-react';
+import { Scale, TrendingUp, DollarSign, Calendar, AlertCircle, CheckCircle2, Target, AlertTriangle } from 'lucide-react';
 import { ExpenseRecord, Employee, DailySalesRecord, BusinessSettings } from '../../types/domain';
 import { calculateBreakEven, convertExpenseToMonthly, calculateOverheadRatePercent } from '../../engine/calculations';
 import { NumericInput } from '../common/NumericInput';
@@ -58,6 +58,17 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
   const safetyMarginRevenue = breakEven.safetyMarginRevenue;
   const safetyMarginPercent = breakEven.safetyMarginPercent;
 
+  const hasOwnerSalary = expenses.some((e) => {
+    if (e.isExcluded) return false;
+    const desc = (e.description || '').toLowerCase();
+    const isOwnerDesc = desc.includes('เจ้าของ') || desc.includes('owner') || desc.includes('ผู้จัดการ/เจ้าของ');
+    return isOwnerDesc && Number(e.amount) > 0;
+  }) || employees.some((emp) => {
+    const name = (emp.name || '').toLowerCase();
+    const role = (emp.roleCategory || '').toLowerCase();
+    return (name.includes('เจ้าของ') || name.includes('owner') || role.includes('owner')) && (emp.monthlyCost || 0) > 0;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -73,13 +84,39 @@ export const BreakEvenView: React.FC<BreakEvenViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-          <span className="text-slate-500">อัตราโสหุ้ยจริง (Overhead %):</span>
-          <span className="font-mono font-bold text-slate-900">
-            {monthlyNetSales > 0 ? `${calculatedOverheadRate.toFixed(1)}%` : 'รอข้อมูลยอดขาย'}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+            <span className="text-slate-500">อัตราโสหุ้ยจริง (Overhead %):</span>
+            <span className="font-mono font-bold text-slate-900">
+              {monthlyNetSales > 0 ? `${calculatedOverheadRate.toFixed(1)}%` : 'รอข้อมูลยอดขาย'}
+            </span>
+          </div>
+          {monthlyNetSales > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800">
+              <span className="text-emerald-700 font-medium">ตัวอย่างอาหาร 100 บาท:</span>
+              <span className="font-mono font-bold text-emerald-950">
+                โสหุ้ย {((100 * calculatedOverheadRate) / 100).toFixed(1)} บาท
+              </span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Warning: Owner Salary Check (O15) */}
+      {!hasOwnerSalary && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <div className="font-bold text-amber-950 flex items-center gap-1.5">
+              <span>คำเตือน: ยังไม่ได้ใส่อัตราเงินเดือนเจ้าของร้าน (Owner Salary)</span>
+              <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-semibold">แนะนำ</span>
+            </div>
+            <p className="text-amber-800 leading-relaxed">
+              ต้นทุนคงที่ (Fixed Costs) ยังไม่พบรายการเงินเดือนของเจ้าของร้าน หากไม่รวมค่าตอบแทนของตนเอง จุดคุ้มทุนและราคาขายจะต่ำกว่าความเป็นจริง
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Break-Even Key Metrics Banner */}
       {!breakEven.isValid ? (

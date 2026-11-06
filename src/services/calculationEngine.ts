@@ -21,6 +21,7 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
   actualCost: number;
   costPerBaseUnit: number;
   isValid: boolean;
+  missingPrice?: boolean;
   errorMessage?: string;
 } {
   const purchasePrice = Number(ingredient.purchasePrice);
@@ -34,7 +35,8 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
       actualCost: 0,
       costPerBaseUnit: 0,
       isValid: false,
-      errorMessage: 'ราคาซื้อไม่ถูกต้อง หรือยังไม่ได้ระบุ (DATA_REVIEW_REQUIRED)',
+      missingPrice: true,
+      errorMessage: 'ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง (DATA_REVIEW_REQUIRED)',
     };
   }
 
@@ -49,6 +51,7 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
       actualCost: purchasePrice,
       costPerBaseUnit: costPerPiece,
       isValid: true,
+      missingPrice: false,
     };
   }
 
@@ -57,6 +60,7 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
       actualCost: 0,
       costPerBaseUnit: 0,
       isValid: false,
+      missingPrice: false,
       errorMessage: 'ค่า Yield ไม่ถูกต้องหรือเป็น 0 (DATA_REVIEW_REQUIRED)',
     };
   }
@@ -102,6 +106,7 @@ export function calculateIngredientCost(ingredient: Partial<Ingredient>): {
     actualCost,
     costPerBaseUnit,
     isValid: true,
+    missingPrice: false,
   };
 }
 
@@ -128,8 +133,11 @@ export function calculateSauceCost(
     unitCost: number;
     lineCost: number;
     isValid: boolean;
+    missingPrice?: boolean;
   }>;
   isValid: boolean;
+  hasMissingPrice?: boolean;
+  missingPrice?: boolean;
   errorMessage?: string;
 } {
   const yieldPercent = Number(sauce.yieldPercent) || 100;
@@ -142,21 +150,29 @@ export function calculateSauceCost(
       costPerGram: 0,
       itemsWithCost: [],
       isValid: false,
+      hasMissingPrice: false,
+      missingPrice: false,
       errorMessage: 'Yield หรือปริมาณสุทธิของซอสไม่ถูกต้อง',
     };
   }
 
   let productionCost = 0;
   let allValid = true;
+  let hasMissingPrice = false;
   let errorMsg: string | undefined;
 
   const itemsWithCost = (sauce.items || []).map((item) => {
     const ing = ingredientsMap.get(item.ingredientId);
     let unitCost = item.unitCost || 0;
     let isValidItem = true;
+    let itemMissingPrice = false;
 
     if (ing) {
       const ingCalc = calculateIngredientCost(ing);
+      if (ingCalc.missingPrice) {
+        itemMissingPrice = true;
+        hasMissingPrice = true;
+      }
       if (ingCalc.isValid) {
         unitCost = ingCalc.costPerBaseUnit;
       } else {
@@ -165,12 +181,14 @@ export function calculateSauceCost(
         errorMsg = `วัตถุดิบ "${ing.name}" ข้อมูลไม่สมบูรณ์`;
       }
     } else if (!unitCost || unitCost <= 0) {
+      itemMissingPrice = true;
+      hasMissingPrice = true;
       isValidItem = false;
       allValid = false;
       errorMsg = `ไม่พบข้อมูลวัตถุดิบ ID: ${item.ingredientId}`;
     }
 
-    const lineCost = item.quantity * unitCost;
+    const lineCost = isValidItem ? item.quantity * unitCost : 0;
     productionCost += lineCost;
 
     return {
@@ -181,6 +199,7 @@ export function calculateSauceCost(
       unitCost,
       lineCost,
       isValid: isValidItem,
+      missingPrice: itemMissingPrice,
     };
   });
 
@@ -194,6 +213,8 @@ export function calculateSauceCost(
     costPerGram,
     itemsWithCost,
     isValid: allValid,
+    hasMissingPrice,
+    missingPrice: hasMissingPrice,
     errorMessage: errorMsg,
   };
 }
@@ -254,6 +275,7 @@ export function calculateVariantCostBreakdown(
   let sauceCost = 0;
   let centralIngredientCost = 0;
   let hasReviewIssue = false;
+  let hasMissingPrice = false;
   let reviewMessage = '';
 
   const processedItems: RecipeItem[] = [];
@@ -261,6 +283,7 @@ export function calculateVariantCostBreakdown(
   for (const item of variant.recipeItems || []) {
     let unitCost = 0;
     let itemValid = true;
+    let itemMissingPrice = false;
     let itemName = item.name;
 
     if (item.ingredientType === 'SAUCE') {
@@ -268,6 +291,10 @@ export function calculateVariantCostBreakdown(
       if (sauce) {
         itemName = sauce.name;
         const sauceCalc = calculateSauceCost(sauce, ingredientsMap);
+        if (sauceCalc.hasMissingPrice || sauceCalc.missingPrice) {
+          hasMissingPrice = true;
+          itemMissingPrice = true;
+        }
         if (sauceCalc.isValid) {
           unitCost = sauceCalc.costPerGram;
         } else {
@@ -286,6 +313,10 @@ export function calculateVariantCostBreakdown(
       if (ing) {
         itemName = ing.name;
         const ingCalc = calculateIngredientCost(ing);
+        if (ingCalc.missingPrice) {
+          hasMissingPrice = true;
+          itemMissingPrice = true;
+        }
         if (ingCalc.isValid) {
           unitCost = ingCalc.costPerBaseUnit;
         } else {
@@ -296,6 +327,8 @@ export function calculateVariantCostBreakdown(
       } else {
         itemValid = false;
         hasReviewIssue = true;
+        hasMissingPrice = true;
+        itemMissingPrice = true;
         reviewMessage = `ไม่พบข้อมูลวัตถุดิบ ID: ${item.ingredientId}`;
       }
     }
@@ -329,7 +362,8 @@ export function calculateVariantCostBreakdown(
       name: itemName,
       calculatedUnitCost: unitCost,
       calculatedLineCost,
-      isReviewRequired: !itemValid,
+      isReviewRequired: !itemValid || itemMissingPrice,
+      missingPrice: itemMissingPrice,
     });
   }
 
@@ -347,7 +381,9 @@ export function calculateVariantCostBreakdown(
   let overheadCost = 0;
   if (typeof settings.overheadRatePercent === 'number' && Number.isFinite(settings.overheadRatePercent)) {
     const rate = Math.max(0, settings.overheadRatePercent) / 100;
-    const taxRate = typeof settings.taxRatePercent === 'number' ? settings.taxRatePercent : 0;
+    const taxRate = typeof settings.vatRatePercent === 'number' && Number.isFinite(settings.vatRatePercent)
+      ? settings.vatRatePercent
+      : 7;
     const isVatInclusive = variant.taxType === 'INCLUSIVE';
     const sellingPriceExVat = isVatInclusive && taxRate > 0 ? sellingPrice / (1 + taxRate / 100) : sellingPrice;
     const baseAmount = settings.overheadCalculationBase === 'FOOD_COST'
@@ -371,8 +407,10 @@ export function calculateVariantCostBreakdown(
   // All three (Food Cost + Overhead% + Packaging) sum into ต้นทุนรวม (total cost):
   const totalCost = totalIngredientCost + overheadCost + packagingCost;
 
-  // C-02: If price includes VAT, net price = price ÷ 1.07 before computing Food Cost %, overhead, and profit
-  const taxRate = typeof settings.taxRatePercent === 'number' && settings.taxRatePercent > 0 ? settings.taxRatePercent : 7;
+  // C-02: If price includes VAT, net price = price ÷ (1 + vatRate/100) before computing Food Cost %, overhead, and profit
+  const taxRate = typeof settings.vatRatePercent === 'number' && Number.isFinite(settings.vatRatePercent)
+    ? settings.vatRatePercent
+    : 7;
   const isVatInclusive = variant.taxType === 'INCLUSIVE';
   const netDineInSellingPrice = isVatInclusive && taxRate > 0 ? sellingPrice / (1 + taxRate / 100) : sellingPrice;
   const netTakeawaySellingPrice = isVatInclusive && taxRate > 0 ? takeawayPrice / (1 + taxRate / 100) : takeawayPrice;
@@ -421,6 +459,8 @@ export function calculateVariantCostBreakdown(
     sellingPrice,
     takeawayPrice,
     deliveryPrice,
+    netDineInSellingPrice,
+    netTakeawaySellingPrice,
 
     shrimpCost,
     squidCost,
@@ -458,6 +498,8 @@ export function calculateVariantCostBreakdown(
 
     hasReviewIssue,
     reviewMessage: hasReviewIssue ? reviewMessage : undefined,
+    hasMissingPrice,
+    missingPrice: hasMissingPrice,
     items: processedItems,
   };
 }

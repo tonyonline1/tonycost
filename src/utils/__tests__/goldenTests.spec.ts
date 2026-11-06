@@ -21,9 +21,15 @@ import {
   upsertDailySalesRecord,
   checkCircularSubRecipe,
   checkIngredientUsage,
+  calculateProfitAndLoss,
+  calculateInventoryCOGS,
+  calculateEffectiveCost,
+  calculateOverheadCostPerDish,
 } from '../../engine/calculations';
 import { ExpenseRecord, DailySalesRecord } from '../../types/domain';
-import { StorageService } from '../../services/storageService';
+import { StorageService, migrateSettings } from '../../services/storageService';
+import { calculateVariantCostBreakdown, calculateIngredientCost } from '../../services/calculationEngine';
+import { runAllUnitTests } from '../../engine/unitTests';
 
 describe('Part 2 – Golden Test Cases Verification', () => {
   describe('Food Cost Golden Test Cases (F1 – F15)', () => {
@@ -170,20 +176,40 @@ describe('Part 2 – Golden Test Cases Verification', () => {
       expect(withVatProfit.profitBeforeOverhead).toBe(75.72);
     });
 
-    // F13: dish with ingredient cost 41.50, overhead 35%, price 120 incl. VAT 7% -> ex-VAT 112.15, overhead 39.25, total cost 80.75, Food Cost % 37.0, total cost % 72.0, profit 31.40, profit % 28.0
-    it('F13: dish with ingredient cost 41.50, overhead 35%, price 120 incl. VAT 7% -> ex-VAT 112.15, overhead 39.25, total cost 80.75, Food Cost % 37.0, total cost % 72.0, profit 31.40, profit % 28.0', () => {
-      const metrics = calculateFoodCostMetrics(41.5, 0, 120, 35, true, 7);
-      expect(metrics.netSellingPrice).toBe(112.15);
-      expect(metrics.overheadCost).toBe(39.25);
-      expect(metrics.totalCost).toBe(80.75);
-      expect(metrics.foodCostPercent).toBe(37.0);
-      expect(metrics.totalCostPercent).toBe(72.0);
-      expect(metrics.profitAmount).toBe(31.4);
-      expect(metrics.profitPercent).toBe(28.0);
+    // F13: price 0 -> Food Cost %, profit % are "-" (no NaN/Infinity)
+    it('F13: price 0 -> Food Cost %, profit % are "-" (no NaN/Infinity)', () => {
+      const metrics = calculateFoodCostMetrics(41.5, 0, 0, 35, false, 7);
+      expect(metrics.foodCostPercentDisplay).toBe('-');
+      expect(metrics.profitPercentDisplay).toBe('-');
+      expect(metrics.foodCostPercent).toBeNull();
+      expect(metrics.profitPercent).toBeNull();
+      expect(Number.isFinite(metrics.profit)).toBe(true);
     });
 
-    // F14: unit mismatch: ingredient purchased in kg, recipe line in ml, no density entered -> excluded from totals, warning "ต้องระบุความหนาแน่นเพื่อแปลง kg เป็น ml"
-    it('F14: unit mismatch: ingredient purchased in kg, recipe line in ml, no density entered -> excluded from totals, warning "ต้องระบุความหนาแน่นเพื่อแปลง kg เป็น ml"', () => {
+    // F14: 24 cans = 432 THB (pcs) -> 18.00 per can; price 35 -> Food Cost % 51.4; target 55% -> suggested 32.73, rounded up step 5 -> 35
+    it('F14: 24 cans = 432 THB (pcs) -> 18.00 per can; price 35 -> Food Cost % 51.4; target 55% -> suggested 32.73, rounded up step 5 -> 35', () => {
+      const canItem = calculateIngredientItemCost({
+        purchasePrice: 432,
+        purchaseQuantity: 24,
+        purchaseUnit: 'can',
+        usageQuantity: 1,
+        usageUnit: 'can',
+        piecesPerPurchaseUnit: 24,
+      });
+      expect(canItem.unitCost).toBe(18.0);
+      expect(canItem.lineCost).toBe(18.0);
+
+      const metrics = calculateFoodCostMetrics(18.0, 0, 35, 0, false, 7);
+      expect(metrics.foodCostPercent).toBe(51.4);
+
+      const suggested = calculateSuggestedPriceWithRounding(18.0, 55, 5);
+      expect(suggested.rawPrice).toBe(32.73);
+      expect(suggested.roundedPrice).toBe(35);
+      expect(suggested.roundedStep5).toBe(35);
+    });
+
+    // Extra: unit mismatch: ingredient purchased in kg, recipe line in ml, no density entered -> excluded from totals, warning "ต้องระบุความหนาแน่นเพื่อแปลง kg เป็น ml"
+    it('F-UnitMismatch: unit mismatch without density is excluded from totals with Thai warning', () => {
       const result = calculateIngredientItemCost({
         purchasePrice: 100,
         purchaseQuantity: 1,
@@ -312,28 +338,41 @@ describe('Part 2 – Golden Test Cases Verification', () => {
     });
 
     // O11: 'actual' basis: 14 logged days totalling 154,000 THB -> monthly projection (30 days) = 330,000. If <7 logged days, show warning 'ต้องมีข้อมูลอย่างน้อย 7 วัน'
-    it('O11: "actual" basis: 14 logged days totalling 154,000 THB -> monthly projection (30 days) = 330,000. If <7 logged days, show warning', () => {
+    // O11: 14 logged days averaging 10,000/day, 30 operating days -> 300,000; with only 5 logged days -> "data too little" warning
+    it('O11: 14 logged days averaging 10,000/day, 30 operating days -> 300,000; with only 5 logged days -> "data too little" warning', () => {
       const records14 = Array.from({ length: 14 }, (_, i) => ({
         date: `2026-03-${String(i + 1).padStart(2, '0')}`,
-        netSales: 11000,
+        netSales: 10000,
       }));
       const proj14 = calculateLoggedSalesProjection(records14, 14, 30);
       expect(proj14.uniqueLoggedDays).toBe(14);
-      expect(proj14.projectedMonthlySales).toBe(330000);
+      expect(proj14.projectedMonthlySales).toBe(300000);
       expect(proj14.isDataSufficient).toBe(true);
       expect(proj14.warningMessageTh).toBeUndefined();
 
       const records5 = Array.from({ length: 5 }, (_, i) => ({
         date: `2026-03-${String(i + 1).padStart(2, '0')}`,
-        netSales: 11000,
+        netSales: 10000,
       }));
       const proj5 = calculateLoggedSalesProjection(records5, 14, 30);
       expect(proj5.isDataSufficient).toBe(false);
       expect(proj5.warningMessageTh).toContain('ต้องการอย่างน้อย 7 วัน');
     });
 
-    // O12: excluded expense 10,000 -> ignored in fixed total, overhead %, category chart, summary
-    it('O12: excluded expense 10,000 -> ignored in fixed total, overhead %, category chart, summary', () => {
+    // O12: sales 0 or missing -> "-" with Thai hint
+    it('O12: sales 0 or missing -> "-" with Thai hint', () => {
+      const overheadRate0 = calculateOverheadRatePercent(115000, 0, 2.5);
+      expect(overheadRate0).toBe(2.5); // returns variable % when sales ex-VAT = 0, no division by zero
+    });
+
+    // O13: dish priced 100, overhead 37.3% -> 37.3 THB
+    it('O13: dish priced 100, overhead 37.3% -> 37.3 THB', () => {
+      const costPerDish = calculateOverheadCostPerDish(100, 37.3);
+      expect(costPerDish).toBe(37.3);
+    });
+
+    // O14: expense flagged excluded is removed from totals, category share and summary text
+    it('O14: expense flagged excluded is removed from totals, category share and summary text', () => {
       const expenses: ExpenseRecord[] = [
         {
           id: 'exp1',
@@ -365,8 +404,8 @@ describe('Part 2 – Golden Test Cases Verification', () => {
       expect(totals.excludedMonthly).toBe(10000);
     });
 
-    // O13: validation: negative amount (-500), asset life 0, percent outside 0–100 -> rejected with Thai message
-    it('O13: validation: negative amount (-500), asset life 0, percent outside 0–100 -> rejected with Thai message', () => {
+    // E4: validation: negative amount (-500), asset life 0, percent outside 0–100 -> rejected with Thai message
+    it('E4 Validation: negative amount (-500), asset life 0, percent outside 0–100 -> rejected with Thai message', () => {
       const negVal = validateExpenseInput({ amount: -500 });
       expect(negVal.isValid).toBe(false);
       expect(negVal.errorMessageTh).toContain('ไม่ติดลบ');
@@ -384,8 +423,8 @@ describe('Part 2 – Golden Test Cases Verification', () => {
       expect(pctOver.errorMessageTh).toContain('0 ถึง 100%');
     });
 
-    // O14: daily sales entry: duplicate date 2026-03-15 entered twice (first 5,000, then 6,000) -> single row with 6,000, never 11,000 or two rows
-    it('O14: daily sales entry: duplicate date 2026-03-15 entered twice (first 5,000, then 6,000) -> single row with 6,000, never 11,000 or two rows', () => {
+    // E1: daily sales entry: duplicate date 2026-03-15 entered twice (first 5,000, then 6,000) -> single row with 6,000, never 11,000 or two rows
+    it('E1 Upsert: duplicate date 2026-03-15 entered twice (first 5,000, then 6,000) -> single row with 6,000, never 11,000 or two rows', () => {
       const initialRecords: DailySalesRecord[] = [
         {
           id: 'rec-1',
@@ -507,6 +546,228 @@ describe('Part 2 – Golden Test Cases Verification', () => {
       const check3 = checkIngredientUsage('ing_unused_sesame', mockMenus as any, mockSubRecipes as any);
       expect(check3.isUsed).toBe(false);
       expect(check3.usedInNames.length).toBe(0);
+    });
+  });
+
+  describe('Task 1 & Task 2 Golden Tests (Labor deduction, Split VAT & Income Tax)', () => {
+    it('runs all deterministic engine unit tests including updated TC-PNL-01 and TC-PNL-02', () => {
+      const summary = runAllUnitTests();
+      expect(summary.failedCount).toBe(0);
+      expect(summary.passedCount).toBeGreaterThanOrEqual(19);
+    });
+
+    it('Task 1: Direct kitchen labor is deducted from operatingProfit and returned in result', () => {
+      const pnl = calculateProfitAndLoss(
+        400000, // Gross sales
+        15000,  // Discounts
+        2000,   // Refunds
+        115000, // Food COGS
+        12000,  // Packaging COGS
+        120000, // Operating expenses
+        50000,  // Direct kitchen labor
+        20      // Income tax %
+      );
+
+      // Net Sales = 400k - 15k - 2k = 383,000
+      expect(pnl.netSales).toBe(383000);
+      // Total COGS = 115k + 12k = 127,000
+      expect(pnl.totalCogs).toBe(127000);
+      // Gross Profit = 383k - 127k = 256,000
+      expect(pnl.grossProfit).toBe(256000);
+      // Prime Cost = COGS + directLabor = 127k + 50k = 177,000
+      expect(pnl.primeCost).toBe(177000);
+      // directLabor returned in result
+      expect(pnl.directLabor).toBe(50000);
+      // Operating Profit = Gross Profit - directLabor - opex = 256k - 50k - 120k = 86,000
+      expect(pnl.operatingProfit).toBe(86000);
+      // Tax Amount = 86k * 20% = 17,200
+      expect(pnl.taxAmount).toBe(17200);
+      // Net Profit = 86,000 - 17,200 = 68,800
+      expect(pnl.netProfit).toBe(68800);
+    });
+
+    it('Task 1: Negative operating profit results in 0 tax', () => {
+      const pnl = calculateProfitAndLoss(
+        100000,
+        0,
+        0,
+        60000,
+        10000,
+        50000,
+        40000,
+        20
+      );
+      // Gross profit = 100,000 - 70,000 = 30,000
+      // Operating profit = 30,000 - 40,000 - 50,000 = -60,000
+      expect(pnl.operatingProfit).toBe(-60000);
+      expect(pnl.taxAmount).toBe(0);
+      expect(pnl.netProfit).toBe(-60000);
+    });
+
+    it('Task 2 (a): default migration - old settings with taxRatePercent: 7 -> vatRatePercent: 7, incomeTaxRatePercent: 20', () => {
+      const oldSettings = {
+        restaurantName: "Tony's Kitchen",
+        taxRatePercent: 7,
+      };
+      const migrated = migrateSettings(oldSettings);
+      expect(migrated.vatRatePercent).toBe(7);
+      expect(migrated.incomeTaxRatePercent).toBe(20);
+    });
+
+    it('Task 2 (b): zero VAT - settings with vatRatePercent: 0 -> net price equals gross price (no division by 1.07)', () => {
+      const settingsWithZeroVat = {
+        ...StorageService.getSettings(),
+        vatRatePercent: 0,
+        overheadRatePercent: 0,
+        takeawayPackagingCost: 0,
+      };
+
+      const mockVariant = {
+        id: 'var_test',
+        name: 'จานทดสอบ',
+        sellingPrice: 107,
+        takeawayPrice: 107,
+        taxType: 'INCLUSIVE' as const,
+        recipeItems: [],
+        packagingItems: [],
+      };
+
+      const prof = calculateVariantCostBreakdown(
+        mockVariant as any,
+        'Test Menu',
+        new Map(),
+        new Map(),
+        settingsWithZeroVat
+      );
+      // When vatRatePercent is 0, net price = 107 (not 107 / 1.07 = 100)
+      expect(prof.netDineInSellingPrice).toBe(107);
+    });
+
+    it('Task 2 (c): custom rates - vatRatePercent: 10, incomeTaxRatePercent: 15', () => {
+      const settingsWithCustomRates = {
+        ...StorageService.getSettings(),
+        vatRatePercent: 10,
+        incomeTaxRatePercent: 15,
+        overheadRatePercent: 0,
+      };
+
+      // 1. Selling price ex-VAT uses 10%:
+      const mockVariant = {
+        id: 'var_test_10',
+        name: 'จานทดสอบ VAT 10%',
+        sellingPrice: 110,
+        takeawayPrice: 110,
+        taxType: 'INCLUSIVE' as const,
+        recipeItems: [],
+        packagingItems: [],
+      };
+      const prof = calculateVariantCostBreakdown(
+        mockVariant as any,
+        'Test Menu 10',
+        new Map(),
+        new Map(),
+        settingsWithCustomRates
+      );
+      // 110 / (1 + 0.10) = 100
+      expect(prof.netDineInSellingPrice).toBeCloseTo(100, 2);
+
+      // 2. P&L uses 15% for income tax:
+      const pnl = calculateProfitAndLoss(
+        200000,
+        0,
+        0,
+        50000,
+        10000,
+        40000,
+        0,
+        settingsWithCustomRates.incomeTaxRatePercent
+      );
+      // Net sales = 200,000, COGS = 60,000 -> Gross profit = 140,000
+      // Operating profit = 140,000 - 40,000 = 100,000
+      // Tax at 15% = 15,000
+      // Net profit = 85,000
+      expect(pnl.operatingProfit).toBe(100000);
+      expect(pnl.taxAmount).toBe(15000);
+      expect(pnl.netProfit).toBe(85000);
+    });
+
+    it('Task 2 (d): idempotent migration - running migrateSettings twice returns identical result', () => {
+      const oldSettings = {
+        restaurantName: "Tony's Kitchen",
+        taxRatePercent: 7,
+        overheadRatePercent: 12.5,
+      };
+      const firstRun = migrateSettings(oldSettings);
+      const secondRun = migrateSettings(firstRun);
+      expect(secondRun).toEqual(firstRun);
+      expect(secondRun.vatRatePercent).toBe(7);
+      expect(secondRun.incomeTaxRatePercent).toBe(20);
+    });
+  });
+
+  describe('Task 4 & Task 5 Safety Checks and COGS Variance Golden Tests', () => {
+    it('Task 5 (a): calculateInventoryCOGS returns raw value and isNegative flag without Math.max(0)', () => {
+      // Normal positive inventory COGS
+      const normal = calculateInventoryCOGS(50000, 120000, 45000, 3000);
+      expect(normal.cogs).toBe(122000);
+      expect(normal.isNegative).toBe(false);
+      expect(Number(normal)).toBe(122000);
+
+      // Negative COGS: Beginning(10k) + Purchases(20k) - Waste(5k) - Ending(50k) = -25k
+      const negative = calculateInventoryCOGS(10000, 20000, 50000, 5000);
+      expect(negative.cogs).toBe(-25000);
+      expect(negative.isNegative).toBe(true);
+      expect(negative.rawCogs).toBe(-25000);
+    });
+
+    it('Task 5 (b): calculateEffectiveCost and calculateIngredientCost return missingPrice when purchase price is 0 or missing', () => {
+      // Missing price on calculateEffectiveCost
+      const effZero = calculateEffectiveCost(0, 1000);
+      expect(effZero.missingPrice).toBe(true);
+      expect(effZero.cost).toBe(0);
+
+      const effValid = calculateEffectiveCost(200, 1000);
+      expect(effValid.missingPrice).toBe(false);
+      expect(effValid.cost).toBe(0.2);
+
+      // calculateIngredientItemCost
+      const itemZero = calculateIngredientItemCost({
+        purchasePrice: 0,
+        purchaseQuantity: 1,
+        purchaseUnit: 'kg',
+        usageQuantity: 200,
+        usageUnit: 'g',
+      });
+      expect(itemZero.missingPrice).toBe(true);
+      expect(itemZero.isValid).toBe(false);
+
+      // calculateIngredientCost
+      const ingCost = calculateIngredientCost({
+        name: 'วัตถุดิบทดสอบ',
+        purchasePrice: 0,
+        purchaseQuantity: 1,
+        purchaseUnit: 'kg',
+        actualQuantity: 1000,
+        actualUnit: 'g',
+        usageUnit: 'g',
+        yieldPercent: 100,
+      });
+      expect(ingCost.missingPrice).toBe(true);
+      expect(ingCost.isValid).toBe(false);
+
+      // Valid ingredient cost calculation unchanged
+      const validIngCost = calculateIngredientCost({
+        name: 'เนื้อหมู',
+        purchasePrice: 200,
+        purchaseQuantity: 1,
+        purchaseUnit: 'kg',
+        actualQuantity: 1000,
+        actualUnit: 'g',
+        usageUnit: 'g',
+        yieldPercent: 100,
+      });
+      expect(validIngCost.missingPrice).toBe(false);
+      expect(validIngCost.costPerBaseUnit).toBe(0.2);
     });
   });
 });

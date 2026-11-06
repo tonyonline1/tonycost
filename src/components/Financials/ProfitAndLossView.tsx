@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { DollarSign, Percent, TrendingUp, Layers, Calendar, ArrowDownRight, ArrowUpRight, Scale } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { DollarSign, Percent, TrendingUp, Layers, Calendar, ArrowDownRight, ArrowUpRight, Scale, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { ExpenseRecord, DailySalesRecord, Employee, BusinessSettings } from '../../types/domain';
-import { calculateProfitAndLoss } from '../../engine/calculations';
+import { calculateProfitAndLoss, calculateInventoryCOGS, calculateVariance } from '../../engine/calculations';
+import { StorageService } from '../../services/storageService';
 
 interface ProfitAndLossViewProps {
   sales: DailySalesRecord[];
@@ -24,8 +25,23 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
   const refunds = sales.reduce((sum, s) => sum + s.refunds, 0);
   const netSales = grossSales - discounts - refunds;
 
-  // Operating Expenses
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // Double-counting guard: exclude payroll expenses when employees exist
+  const isPayrollExpense = (e: ExpenseRecord) => {
+    const text = `${e.category || ''} ${(e as any).title || (e as any).name || (e as any).description || ''} ${e.notes || ''}`.toLowerCase();
+    const keywords = ['labor', 'salary', 'wage', 'ค่าแรง', 'เงินเดือน'];
+    return (
+      e.category === 'Labor (Salary & Wages)' ||
+      keywords.some((kw) => text.includes(kw))
+    );
+  };
+
+  const hasDuplicatePayroll = employees.length > 0 && expenses.some(isPayrollExpense);
+  const effectiveExpenses = employees.length > 0
+    ? expenses.filter((e) => !isPayrollExpense(e))
+    : expenses;
+
+  // Operating Expenses from general expenses
+  const totalExpenses = effectiveExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Direct Kitchen Labor vs FOH / Management Labor
   const directKitchenLabor = employees
@@ -35,16 +51,69 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
     .filter((e) => e.roleCategory !== 'direct_kitchen')
     .reduce((sum, e) => sum + (e.wageRate + (e.benefitsMonthly || 0)), 0);
 
-  // Estimated COGS based on restaurant operational weighted average (31.5% food + 3.5% packaging)
+  // Load Inventory, Purchases, Sales Orders, and Waste records for actual COGS & theoretical variance
+  const purchasesList = useMemo(() => StorageService.getPurchases(), []);
+  const inventoryList = useMemo(() => StorageService.getInventory(), []);
+  const salesOrdersList = useMemo(() => StorageService.getSalesOrders(), []);
+  const wasteList = useMemo(() => StorageService.getWasteLog(), []);
+
+  // Check if purchase and inventory records exist
+  const hasActualStockData = purchasesList.length > 0 && inventoryList.length > 0;
+
+  // Selector: "actual" vs "estimated"
+  const [cogsMode, setCogsMode] = useState<'actual' | 'estimated'>(() =>
+    hasActualStockData ? 'actual' : 'estimated'
+  );
+
+  // Effective mode falls back to estimated if actual stock data is missing
+  const effectiveCogsMode = cogsMode === 'actual' && !hasActualStockData ? 'estimated' : cogsMode;
+
+  // Actual Inventory COGS calculation: Beginning + Purchases - Waste - Ending
+  const totalPurchasesCost = purchasesList.reduce((sum, p) => sum + (p.totalPrice || p.price || 0), 0);
+  const totalEndingStockCost = inventoryList.reduce((sum, item) => sum + ((item.currentStock ?? 0) * (item.costPerUnit || 0)), 0);
+  const totalWasteCost = wasteList.reduce((sum, w) => sum + (w.totalCost || w.cost || 0), 0);
+  // Default beginning stock assumption if not explicitly logged (or base starting inventory)
+  const estimatedBeginningStockCost = totalEndingStockCost * 1.05; // 5% buffer if single stock point
+
+  const actualCogsResult = calculateInventoryCOGS(
+    estimatedBeginningStockCost,
+    totalPurchasesCost,
+    totalEndingStockCost,
+    totalWasteCost
+  );
+
+  // Theoretical COGS = sum of frozen cost snapshots (totalFoodCost) of sale orders
+  const theoreticalCOGS = salesOrdersList.reduce((sum, order) => sum + (order.totalFoodCost || 0), 0);
+
+  // Variance calculation (actual vs theoretical)
+  const varianceResult = calculateVariance(actualCogsResult.cogs, theoreticalCOGS);
+  const varianceThresholdPercent = typeof settings.cogsVarianceThresholdPercent === 'number' && Number.isFinite(settings.cogsVarianceThresholdPercent)
+    ? settings.cogsVarianceThresholdPercent
+    : 3.0; // default 3% of net sales
+  const variancePointsOfNetSales = netSales > 0 ? (Math.abs(varianceResult.varianceAmount) / netSales) * 100 : 0;
+  const isVarianceExceeded = variancePointsOfNetSales > varianceThresholdPercent;
+
+  // Estimated COGS slider rates
   const [foodCostRate, setFoodCostRate] = useState<number>(31.5);
   const [packagingRate, setPackagingRate] = useState<number>(3.5);
 
-  const foodCogs = netSales * (foodCostRate / 100);
-  const packagingCogs = netSales * (packagingRate / 100);
+  const estimatedFoodCogs = netSales * (foodCostRate / 100);
+  const estimatedPackagingCogs = netSales * (packagingRate / 100);
+
+  // Effective foodCogs and packagingCogs based on chosen mode
+  const foodCogs = effectiveCogsMode === 'actual' ? actualCogsResult.cogs : estimatedFoodCogs;
+  const packagingCogs = effectiveCogsMode === 'actual'
+    ? salesOrdersList.reduce((sum, o) => sum + (o.packagingCost || 0), 0) || estimatedPackagingCogs
+    : estimatedPackagingCogs;
+
   const operatingExpenses = totalExpenses + nonKitchenLabor;
   const foodCostPercent = netSales > 0 ? (foodCogs / netSales) * 100 : 0;
   const packagingCostPercent = netSales > 0 ? (packagingCogs / netSales) * 100 : 0;
   const operatingExpensePercent = netSales > 0 ? (operatingExpenses / netSales) * 100 : 0;
+
+  const incomeTaxRate = typeof settings.incomeTaxRatePercent === 'number' && Number.isFinite(settings.incomeTaxRatePercent)
+    ? settings.incomeTaxRatePercent
+    : 20;
 
   const pnl = calculateProfitAndLoss(
     grossSales,
@@ -54,7 +123,7 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
     packagingCogs,
     operatingExpenses,
     directKitchenLabor,
-    settings.taxRatePercent
+    incomeTaxRate
   );
 
 
@@ -78,6 +147,124 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Warning banner when stock calculation is negative */}
+      {effectiveCogsMode === 'actual' && actualCogsResult.isNegative && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+          <span className="font-semibold">ตัวเลขสต็อกผิดปกติ ตรวจสอบการนับสต็อก (ต้นทุนสต็อกติดลบ ฿{actualCogsResult.cogs.toLocaleString()})</span>
+        </div>
+      )}
+
+      {/* COGS Calculation Mode Selector Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-[#151518] border border-white/5">
+        <div className="flex items-center gap-2">
+          <Scale className="h-4 w-4 text-[#F27D26]" />
+          <span className="text-xs font-semibold text-white/80">วิธีคำนวณต้นทุนขาย (COGS Method):</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-lg bg-black/40 p-1 border border-white/10">
+            <button
+              type="button"
+              onClick={() => setCogsMode('actual')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                effectiveCogsMode === 'actual'
+                  ? 'bg-[#F27D26] text-white shadow-xs'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              ต้นทุนจริง (จากการซื้อ/สต็อก)
+            </button>
+            <button
+              type="button"
+              onClick={() => setCogsMode('estimated')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                effectiveCogsMode === 'estimated'
+                  ? 'bg-[#F27D26] text-white shadow-xs'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              ต้นทุนประมาณการ (% ของยอดขาย)
+            </button>
+          </div>
+          {effectiveCogsMode === 'estimated' && (
+            <span className="px-2 py-1 rounded text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              ใช้ค่าประมาณ
+            </span>
+          )}
+          {effectiveCogsMode === 'actual' && (
+            <span className="px-2 py-1 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              สต็อกจริง
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Variance Analysis Block (ต้นทุนจริง vs ต้นทุนตามสูตร) */}
+      <div className="rounded-xl border border-white/5 bg-[#151518] p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-sky-400" />
+            <span className="text-sm font-semibold text-white">ส่วนต่างต้นทุน (Variance)</span>
+            <span className="text-xs text-white/40 font-mono">(เปรียบเทียบต้นทุนจริง vs ต้นทุนสูตรมาตรฐาน)</span>
+          </div>
+          <span className="text-xs font-mono text-white/50">
+            เกณฑ์การเตือน: {varianceThresholdPercent.toFixed(1)}% ของยอดขายสุทธิ
+          </span>
+        </div>
+
+        {/* Warning banner when variance exceeds threshold */}
+        {isVarianceExceeded && (
+          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3.5 text-rose-300 text-xs flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+            <span>
+              แจ้งเตือน: ผลต่างต้นทุน {variancePointsOfNetSales.toFixed(1)}% ของยอดขายสุทธิ เกินเกณฑ์ควบคุม {varianceThresholdPercent.toFixed(1)}% กรุณาตรวจสอบการสูญเสีย การตักเกิน หรือของเสีย
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-white/5 p-3.5 rounded-xl border border-white/5">
+            <div className="text-white/40 text-[10px] uppercase font-bold tracking-wider">ต้นทุนจริงจากการนับสต็อก (Actual)</div>
+            <div className="mt-1.5 text-xl font-light text-white font-mono">
+              ฿{Math.round(actualCogsResult.cogs).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-white/30 font-mono mt-0.5">
+              {netSales > 0 ? ((actualCogsResult.cogs / netSales) * 100).toFixed(1) : '0.0'}% of Net Sales
+            </div>
+          </div>
+
+          <div className="bg-white/5 p-3.5 rounded-xl border border-white/5">
+            <div className="text-white/40 text-[10px] uppercase font-bold tracking-wider">ต้นทุนสูตรมาตรฐาน (Theoretical)</div>
+            <div className="mt-1.5 text-xl font-light text-white font-mono">
+              ฿{Math.round(theoreticalCOGS).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-white/30 font-mono mt-0.5">
+              {netSales > 0 ? ((theoreticalCOGS / netSales) * 100).toFixed(1) : '0.0'}% of Net Sales
+            </div>
+          </div>
+
+          <div className={`p-3.5 rounded-xl border ${
+            isVarianceExceeded ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+          }`}>
+            <div className="text-[10px] uppercase font-bold tracking-wider">ส่วนต่าง (Variance Amount & %)</div>
+            <div className="mt-1.5 text-xl font-light font-mono">
+              {varianceResult.varianceAmount > 0 ? `+฿${Math.round(varianceResult.varianceAmount).toLocaleString()}` : `-฿${Math.round(Math.abs(varianceResult.varianceAmount)).toLocaleString()}`}
+            </div>
+            <div className="text-[10px] font-mono mt-0.5">
+              {varianceResult.variancePercent > 0 ? `+${varianceResult.variancePercent.toFixed(1)}%` : `${varianceResult.variancePercent.toFixed(1)}%`} ({variancePointsOfNetSales.toFixed(1)} pp of Sales)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Warning banner when duplicate payroll expenses exist */}
+      {hasDuplicatePayroll && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+          <span>พบรายจ่ายหมวดเงินเดือน ระบบไม่นับซ้ำ เพราะใช้ข้อมูลจากหน้าพนักงาน</span>
+        </div>
+      )}
 
       {/* Top 4 Summary Margin Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -190,10 +377,19 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
             </div>
           </div>
 
+          {/* 3.1 DIRECT KITCHEN LABOR DEDUCTION */}
+          <div className="flex justify-between px-3 py-2 text-white/80 bg-white/[0.03] rounded-lg border border-white/5">
+            <span className="font-sans">หัก: ค่าแรงครัว (Direct Labor)</span>
+            <div className="flex items-center gap-4">
+              <span className="text-white/40 font-sans">{pnl.netSales > 0 ? ((directKitchenLabor / pnl.netSales) * 100).toFixed(1) : '0.0'}%</span>
+              <span className="text-purple-300 font-mono">-฿{Math.round(directKitchenLabor).toLocaleString()}</span>
+            </div>
+          </div>
+
           {/* 4. PRIME COST HIGHLIGHT */}
           <div className="space-y-1.5 pt-2">
             <div className="text-[11px] font-bold font-sans text-purple-300 uppercase tracking-wider bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20 flex justify-between">
-              <span>3. การวิเคราะห์ PRIME COST (COGS + Direct Kitchen Labor)</span>
+              <span>การวิเคราะห์ PRIME COST (COGS + Direct Kitchen Labor)</span>
               <span className="font-mono font-bold text-purple-300">{pnl.primeCostPercent.toFixed(1)}% of Net Sales</span>
             </div>
             <div className="flex justify-between px-3 py-1 text-white/70">
@@ -245,6 +441,15 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
             <div className="flex items-center gap-4">
               <span>{pnl.operatingMarginPercent.toFixed(1)}%</span>
               <span>฿{Math.round(pnl.operatingProfit).toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* 6.5 ESTIMATED INCOME TAX */}
+          <div className="flex justify-between px-3 py-2 text-white/80 bg-white/[0.03] rounded-lg border border-white/5">
+            <span className="font-sans">หัก: ประมาณการภาษีเงินได้ ({incomeTaxRate}%)</span>
+            <div className="flex items-center gap-4">
+              <span className="text-white/40 font-sans">{pnl.netSales > 0 ? ((pnl.taxAmount / pnl.netSales) * 100).toFixed(1) : '0.0'}%</span>
+              <span className="text-amber-400 font-mono">-฿{Math.round(pnl.taxAmount).toLocaleString()}</span>
             </div>
           </div>
 

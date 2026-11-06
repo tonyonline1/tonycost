@@ -140,30 +140,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-semibold text-white/60 mb-1">
-                อัตราภาษีเงินได้นิติบุคคล / ประมาณการภาษี (%)
+                อัตรา VAT (%)
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                max="20"
+                value={formData.vatRatePercent ?? 7}
+                onChange={(e) => setFormData({ ...formData, vatRatePercent: parseFloat(e.target.value) || 0 })}
+                className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-xs font-mono text-white focus:border-[#FF6321] focus:outline-none"
+              />
+              <p className="text-[10px] text-white/30 mt-1">ใช้คำนวณราคาขายสุทธิ (ex-VAT) และค่า GP</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1">
+                อัตราภาษีเงินได้ (ประมาณการ) (%)
               </label>
               <input
                 type="number"
                 step="any"
                 min="0"
                 max="50"
-                value={formData.taxRatePercent}
-                onChange={(e) => setFormData({ ...formData, taxRatePercent: parseFloat(e.target.value) || 20 })}
+                value={formData.incomeTaxRatePercent ?? 20}
+                onChange={(e) => setFormData({ ...formData, incomeTaxRatePercent: parseFloat(e.target.value) || 0 })}
                 className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-xs font-mono text-white focus:border-[#FF6321] focus:outline-none"
               />
+              <p className="text-[10px] text-white/30 mt-1">
+                ตัวเลขนี้เป็นการประมาณการเพื่อดูภาพรวม ไม่ใช่ตัวเลขสำหรับยื่นภาษี กรุณาปรึกษานักบัญชี
+              </p>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-white/60 mb-1">ภาษาหลักของระบบ (Language)</label>
-              <select
-                value={activeLanguage}
-                onChange={(e) => onLanguageChange(e.target.value as 'th' | 'en')}
-                className="w-full rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-xs font-medium text-white focus:border-[#FF6321] focus:outline-none"
-              >
-                <option value="th">ภาษาไทย (Thai - Primary)</option>
-                <option value="en">English (Secondary)</option>
-              </select>
-            </div>
+          <div className="pt-2">
+            <label className="block text-xs font-semibold text-white/60 mb-1">ภาษาหลักของระบบ (Language)</label>
+            <select
+              value={activeLanguage}
+              onChange={(e) => onLanguageChange(e.target.value as 'th' | 'en')}
+              className="w-full sm:w-1/2 rounded-lg border border-white/10 bg-[#0F0F11] px-3 py-2 text-xs font-medium text-white focus:border-[#FF6321] focus:outline-none"
+            >
+              <option value="th">ภาษาไทย (Thai - Primary)</option>
+              <option value="en">English (Secondary)</option>
+            </select>
           </div>
         </div>
 

@@ -28,10 +28,30 @@ export function calculateUsableQuantity(purchaseQuantity: number, yieldPercent: 
 /**
  * 2. Calculate Effective Cost per Usable Unit
  * Formula: Effective Cost = Purchase Price / Usable Quantity
+ * Returns cost with missingPrice flag; valueOf allows direct arithmetic operations.
  */
-export function calculateEffectiveCost(purchasePrice: number, usableQuantity: number): number {
-  if (usableQuantity <= 0 || purchasePrice <= 0) return 0;
-  return purchasePrice / usableQuantity;
+export interface EffectiveCostResult {
+  cost: number;
+  effectiveCost: number;
+  missingPrice: boolean;
+  valueOf(): number;
+}
+
+export function calculateEffectiveCost(
+  purchasePrice: number,
+  usableQuantity: number
+): EffectiveCostResult & number {
+  const missingPrice = !purchasePrice || purchasePrice <= 0 || isNaN(purchasePrice);
+  const cost = missingPrice || usableQuantity <= 0 ? 0 : purchasePrice / usableQuantity;
+  const result: any = {
+    cost,
+    effectiveCost: cost,
+    missingPrice,
+    valueOf() {
+      return cost;
+    },
+  };
+  return result;
 }
 
 /**
@@ -249,14 +269,31 @@ export function calculateContributionMetrics(
 /**
  * 13. Calculate Inventory COGS (Mode B: Accounting)
  * Formula: COGS = Beginning Inventory + Purchases - Waste - Ending Inventory
+ * Raw value is returned without clamping to 0; isNegative flag signals stock anomaly.
  */
+export interface InventoryCOGSResult {
+  cogs: number;
+  rawCogs: number;
+  isNegative: boolean;
+  valueOf(): number;
+}
+
 export function calculateInventoryCOGS(
   beginningInventory: number,
   purchases: number,
   endingInventory: number,
   waste: number = 0
-): number {
-  return Math.max(0, beginningInventory + purchases - waste - endingInventory);
+): InventoryCOGSResult {
+  const raw = beginningInventory + purchases - waste - endingInventory;
+  const isNegative = raw < 0;
+  return {
+    cogs: raw,
+    rawCogs: raw,
+    isNegative,
+    valueOf() {
+      return raw;
+    },
+  };
 }
 
 /**
@@ -292,12 +329,13 @@ export function calculateProfitAndLoss(
   packagingCogs: number,
   operatingExpenses: number,
   directLabor: number,
-  taxRatePercent: number = 7
+  taxRatePercent: number = 20
 ): {
   netSales: number;
   totalCogs: number;
   grossProfit: number;
   grossMarginPercent: number;
+  directLabor: number;
   primeCost: number;
   primeCostPercent: number;
   operatingProfit: number;
@@ -314,7 +352,7 @@ export function calculateProfitAndLoss(
   const primeCost = totalCogs + directLabor;
   const primeCostPercent = netSales > 0 ? (primeCost / netSales) * 100 : 0;
 
-  const operatingProfit = grossProfit - operatingExpenses;
+  const operatingProfit = grossProfit - directLabor - operatingExpenses;
   const operatingMarginPercent = netSales > 0 ? (operatingProfit / netSales) * 100 : 0;
 
   // Tax on positive operating profit
@@ -327,6 +365,7 @@ export function calculateProfitAndLoss(
     totalCogs,
     grossProfit,
     grossMarginPercent,
+    directLabor,
     primeCost,
     primeCostPercent,
     operatingProfit,
@@ -1193,6 +1232,7 @@ export function calculateIngredientItemCost(params: {
   unitCost: number;
   lineCost: number;
   isValid: boolean;
+  missingPrice?: boolean;
   errorMessageTh?: string;
 } {
   const {
@@ -1206,8 +1246,17 @@ export function calculateIngredientItemCost(params: {
     density,
   } = params;
 
-  if (purchasePrice <= 0 || purchaseQuantity <= 0 || usageQuantity < 0) {
-    return { unitCost: 0, lineCost: 0, isValid: false, errorMessageTh: 'ข้อมูลราคาหรือปริมาณไม่ถูกต้อง' };
+  const missingPrice = !purchasePrice || purchasePrice <= 0 || isNaN(purchasePrice);
+  if (missingPrice || purchaseQuantity <= 0 || usageQuantity < 0) {
+    return {
+      unitCost: 0,
+      lineCost: 0,
+      isValid: false,
+      missingPrice,
+      errorMessageTh: missingPrice
+        ? 'ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง'
+        : 'ข้อมูลราคาหรือปริมาณไม่ถูกต้อง',
+    };
   }
 
   const rawYield = params.yieldPercent ?? params.ingredientYield ?? 100;
@@ -1227,6 +1276,7 @@ export function calculateIngredientItemCost(params: {
       unitCost: costPerPiece,
       lineCost: cost,
       isValid: true,
+      missingPrice: false,
     };
   }
 
@@ -1241,6 +1291,7 @@ export function calculateIngredientItemCost(params: {
       unitCost: costPerPiece,
       lineCost: cost,
       isValid: true,
+      missingPrice: false,
     };
   }
 
@@ -1252,6 +1303,7 @@ export function calculateIngredientItemCost(params: {
       unitCost: 0,
       lineCost: 0,
       isValid: false,
+      missingPrice: false,
       errorMessageTh: isDensityNeeded
         ? `ต้องระบุความหนาแน่นเพื่อแปลง ${purchaseUnit} เป็น ${usageUnit}`
         : conv.errorMessageTh || `หน่วยไม่ตรงกัน: "${usageUnit}" ไม่สามารถแปลงเป็น "${purchaseUnit}" ได้`,
@@ -1268,6 +1320,7 @@ export function calculateIngredientItemCost(params: {
     unitCost,
     lineCost,
     isValid: true,
+    missingPrice: false,
   };
 }
 

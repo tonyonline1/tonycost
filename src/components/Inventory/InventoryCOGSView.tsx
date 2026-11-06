@@ -20,7 +20,8 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
   const [endingInventory, setEndingInventory] = useState<number>(42000);
   const [theoreticalCOGS, setTheoreticalCOGS] = useState<number>(106500);
 
-  const actualCOGS = calculateInventoryCOGS(beginningInventory, purchases, endingInventory);
+  const cogsResult = calculateInventoryCOGS(beginningInventory, purchases, endingInventory);
+  const actualCOGS = cogsResult.cogs;
   const varianceResult = calculateVariance(actualCOGS, theoreticalCOGS);
 
   const monthlyNetSales = sales.reduce((sum, s) => sum + s.netSales, 0);
@@ -48,6 +49,14 @@ export const InventoryCOGSView: React.FC<InventoryCOGSViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Warning banner when stock calculation is negative */}
+      {cogsResult.isNegative && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+          <span className="font-semibold">ตัวเลขสต็อกผิดปกติ ตรวจสอบการนับสต็อก (ต้นทุนคำนวณติดลบ ฿{actualCOGS.toLocaleString()})</span>
+        </div>
+      )}
 
       {/* Equation Visual Banner */}
       <div className="rounded-xl border border-white/5 bg-[#151518] p-6 text-white">

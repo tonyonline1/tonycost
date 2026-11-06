@@ -780,11 +780,19 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                       onDoubleClick={() => handleOpenEdit(ing)}
                       title="ดับเบิลคลิกเพื่อแก้ไขข้อมูลวัตถุดิบ"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="hover:text-[#F27D26] hover:underline transition-colors">
                           {ing.name}
                         </span>
-                        {ing.isReviewRequired && (
+                        {(!ing.purchasePrice || ing.purchasePrice <= 0) && (
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            title="ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง"
+                          >
+                            ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง
+                          </span>
+                        )}
+                        {ing.isReviewRequired && (!ing.purchasePrice || ing.purchasePrice > 0) && (
                           <span
                             className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30"
                             title={ing.reviewReason}

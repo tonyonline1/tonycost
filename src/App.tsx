@@ -608,7 +608,7 @@ export default function App() {
               channels={defaultSalesChannels}
               onAddSalesRecord={(rec) => setDailySales((prev) => upsertDailySalesRecord(prev, rec))}
               onDeleteSalesRecord={(id) => setDailySales((prev) => prev.filter((s) => s.id !== id))}
-              defaultVatRate={settings.taxRatePercent || 7}
+              defaultVatRate={typeof settings.vatRatePercent === 'number' && Number.isFinite(settings.vatRatePercent) ? settings.vatRatePercent : 7}
               activeLanguage="th"
             />
           )}

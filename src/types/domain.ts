@@ -326,9 +326,10 @@ export interface InventoryRecord {
 export interface BusinessSettings {
   restaurantName: string;
   currency: string; // '฿' or 'THB'
-  currencySymbol?: string;
-  taxRatePercent: number; // e.g. 7% VAT
-  serviceChargePercent: number; // e.g. 10%
+  vatRatePercent: number; // default 7% VAT
+  incomeTaxRatePercent: number; // default 20% estimated corporate income tax
+  /** @deprecated Do not read in calculations. Use vatRatePercent or incomeTaxRatePercent instead. */
+  taxRatePercent?: number;
   defaultTargetFoodCostPercent: number; // e.g. 30%
   defaultTargetGrossMarginPercent: number; // e.g. 70%
   targetFoodCostPercent?: number;
@@ -337,6 +338,7 @@ export interface BusinessSettings {
   laborTargetPercent: number; // e.g. 20%
   primeCostTargetPercent: number; // e.g. 55%
   operatingDaysPerMonth: number; // e.g. 26 or 30
+  cogsVarianceThresholdPercent?: number; // e.g. 3.0 percentage points of net sales
   primaryLanguage?: 'th' | 'en';
 }
 

@@ -289,28 +289,33 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
       const sauce = saucesMap.get(item.ingredientId || item.sauceId || '');
       if (sauce) {
         const c = calculateSauceCost(sauce, ingredientsMap);
-        return { unitCost: c.costPerGram, lineCost: item.quantity * c.costPerGram };
+        return {
+          unitCost: c.costPerGram,
+          lineCost: item.quantity * c.costPerGram,
+          missingPrice: !!c.hasMissingPrice || !!c.missingPrice,
+        };
       }
-      return { unitCost: item.calculatedUnitCost || 0.05, lineCost: item.quantity * (item.calculatedUnitCost || 0.05) };
+      return { unitCost: item.calculatedUnitCost || 0.05, lineCost: item.quantity * (item.calculatedUnitCost || 0.05), missingPrice: false };
     }
 
     if (item.type === 'PACKAGING') {
       const preset = PACKAGING_PRESETS.find((p) => p.id === item.ingredientId || p.name === item.name);
       const ing = ingredientsMap.get(item.ingredientId);
       const unitCost = preset?.unitCost ?? (ing?.costPerBaseUnit ?? (item.calculatedUnitCost || 2.50));
-      return { unitCost, lineCost: item.quantity * unitCost };
+      return { unitCost, lineCost: item.quantity * unitCost, missingPrice: false };
     }
 
     if (item.type === 'PREPARED_ITEM') {
       const preset = SIDE_DISH_PRESETS.find((p) => p.id === item.ingredientId || p.name === item.name);
       const ing = ingredientsMap.get(item.ingredientId);
       const unitCost = preset?.unitCost ?? (ing?.costPerBaseUnit ?? (item.calculatedUnitCost || 1.50));
-      return { unitCost, lineCost: item.quantity * unitCost };
+      return { unitCost, lineCost: item.quantity * unitCost, missingPrice: false };
     }
 
     const ing = ingredientsMap.get(item.ingredientId);
     const unitCost = ing ? ing.costPerBaseUnit : (item.calculatedUnitCost || 0);
-    return { unitCost, lineCost: item.quantity * unitCost };
+    const missingPrice = ing ? (!ing.purchasePrice || ing.purchasePrice <= 0) : (!unitCost || unitCost <= 0);
+    return { unitCost, lineCost: item.quantity * unitCost, missingPrice };
   };
 
   const totalBaseIngredientsCost = useMemo(() => {
@@ -1177,7 +1182,14 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
                             </td>
 
                             <td className="py-2.5 px-3 text-right text-white/60">
-                              ฿{costInfo.unitCost.toFixed(costInfo.unitCost < 1 ? 4 : 2)}
+                              <div className="flex flex-col items-end">
+                                <span>฿{costInfo.unitCost.toFixed(costInfo.unitCost < 1 ? 4 : 2)}</span>
+                                {costInfo.missingPrice && (
+                                  <span className="mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                    ยังไม่ได้ใส่ราคาวัตถุดิบ ต้นทุนอาจต่ำเกินจริง
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             <td className="py-2.5 px-3 text-right font-bold text-white">

@@ -18,6 +18,9 @@ export const INITIAL_SETTINGS: RestaurantSettings = {
   overheadCalculationBase: 'SELLING_PRICE', // คิดโสหุ้ยจาก: 'SELLING_PRICE' (DEFAULT) หรือ 'FOOD_COST'
   targetFoodCostPercent: 40.0, // 40% target food cost
   targetProfitAmount: 25.0, // Target 25 THB profit
+  vatRatePercent: 7.0, // 7% VAT
+  incomeTaxRatePercent: 20.0, // 20% estimated corporate income tax
+  cogsVarianceThresholdPercent: 3.0, // 3% variance threshold
   takeawayPackagingCost: 5.0,
   packagingCostTakeaway: 5.0,
   deliveryPackagingCost: 8.0,

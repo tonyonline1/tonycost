@@ -33,6 +33,8 @@ import { generateId, generateOrderNumber } from '../utils/id';
 
 export { generateId, generateOrderNumber };
 
+import { calculateTotalMonthlyExpenses, calculateNormalizedNetSales, calculateOverheadRatePercent } from '../engine/calculations';
+
 const STORAGE_KEYS = {
   SETTINGS: 'tonys_settings_v1',
   INGREDIENTS: 'tonys_ingredients_v1',
@@ -50,6 +52,7 @@ const STORAGE_KEYS = {
   EMPLOYEES: 'tonys_employees_v1',
   PACKAGING: 'tonys_packaging_v1',
   LAST_BACKUP: 'tonys_last_backup_time',
+  OVERHEAD_COMPAT: 'tonys-kitchen-overhead-v1',
 };
 
 function safeLoad<T>(key: string, fallback: T): T {
@@ -73,24 +76,50 @@ function safeSave<T>(key: string, data: T): void {
   }
 }
 
+export function migrateSettings(rawSettings: any): RestaurantSettings {
+  if (!rawSettings || typeof rawSettings !== 'object') {
+    return { ...INITIAL_SETTINGS };
+  }
+
+  const vatRate = typeof rawSettings.vatRatePercent === 'number' && Number.isFinite(rawSettings.vatRatePercent)
+    ? rawSettings.vatRatePercent
+    : (typeof rawSettings.taxRatePercent === 'number' && Number.isFinite(rawSettings.taxRatePercent) && rawSettings.taxRatePercent <= 15
+        ? rawSettings.taxRatePercent
+        : 7.0);
+
+  const incomeTaxRate = typeof rawSettings.incomeTaxRatePercent === 'number' && Number.isFinite(rawSettings.incomeTaxRatePercent)
+    ? rawSettings.incomeTaxRatePercent
+    : (typeof rawSettings.taxRatePercent === 'number' && Number.isFinite(rawSettings.taxRatePercent) && rawSettings.taxRatePercent > 15
+        ? rawSettings.taxRatePercent
+        : 20.0);
+
+  const grabPercent = rawSettings.grabFoodCommissionPercent ?? (rawSettings.channels?.find((c: any) => c.channelId === 'grab')?.commissionPercent ?? 30);
+  const linemanPercent = rawSettings.lineManCommissionPercent ?? (rawSettings.channels?.find((c: any) => c.channelId === 'lineman')?.commissionPercent ?? 25);
+
+  return {
+    ...INITIAL_SETTINGS,
+    ...rawSettings,
+    vatRatePercent: vatRate,
+    incomeTaxRatePercent: incomeTaxRate,
+    overheadRatePercent: typeof rawSettings.overheadRatePercent === 'number' && Number.isFinite(rawSettings.overheadRatePercent)
+      ? rawSettings.overheadRatePercent
+      : 10.0,
+    overheadCalculationBase: rawSettings.overheadCalculationBase || 'SELLING_PRICE',
+    cogsVarianceThresholdPercent: typeof rawSettings.cogsVarianceThresholdPercent === 'number' && Number.isFinite(rawSettings.cogsVarianceThresholdPercent)
+      ? rawSettings.cogsVarianceThresholdPercent
+      : 3.0,
+    grabFoodCommissionPercent: grabPercent,
+    lineManCommissionPercent: linemanPercent,
+  };
+}
+
 export const StorageService = {
   getSettings(): RestaurantSettings {
     const loaded = safeLoad(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
-    const grabPercent = loaded.grabFoodCommissionPercent ?? (loaded.channels?.find((c: any) => c.channelId === 'grab')?.commissionPercent ?? 30);
-    const linemanPercent = loaded.lineManCommissionPercent ?? (loaded.channels?.find((c: any) => c.channelId === 'lineman')?.commissionPercent ?? 25);
-    return {
-      ...INITIAL_SETTINGS,
-      ...loaded,
-      overheadRatePercent: typeof loaded.overheadRatePercent === 'number' && Number.isFinite(loaded.overheadRatePercent)
-        ? loaded.overheadRatePercent
-        : 10.0,
-      overheadCalculationBase: loaded.overheadCalculationBase || 'SELLING_PRICE',
-      grabFoodCommissionPercent: grabPercent,
-      lineManCommissionPercent: linemanPercent,
-    };
+    return migrateSettings(loaded);
   },
   saveSettings(settings: RestaurantSettings): void {
-    safeSave(STORAGE_KEYS.SETTINGS, settings);
+    safeSave(STORAGE_KEYS.SETTINGS, migrateSettings(settings));
   },
 
   getIngredients(): Ingredient[] {
@@ -533,13 +562,38 @@ export const StorageService = {
    * Completely offline and local-first.
    */
   exportBackup(): AppBackupPackage {
+    const settings = this.getSettings();
+    const expenses = this.getExpenses();
+    const monthlyExp = calculateTotalMonthlyExpenses(expenses, settings.operatingDaysPerMonth || 30);
+    const estimatedMonthlySales = settings.projectedMonthlySales || 330000;
+    const normalizedSales = calculateNormalizedNetSales(
+      estimatedMonthlySales,
+      0,
+      0,
+      settings.salesVatInclusive ?? false,
+      settings.vatRatePercent ?? 7
+    );
+    const calculatedOverhead = calculateOverheadRatePercent(monthlyExp.fixedMonthly, normalizedSales, 0);
+    const overheadPercent = typeof settings.overheadRatePercent === 'number' && settings.overheadRatePercent > 0
+      ? settings.overheadRatePercent
+      : Number(calculatedOverhead.toFixed(2));
+
+    // Keep compatibility snapshot key updated
+    safeSave(STORAGE_KEYS.OVERHEAD_COMPAT, {
+      overheadPercentOfSales: overheadPercent,
+      fixedMonthlyExpenses: monthlyExp.fixedMonthly,
+      variableMonthlyExpenses: monthlyExp.variableMonthly,
+      updatedAt: new Date().toISOString(),
+    });
+
     const backup: AppBackupPackage = {
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
       appId: 'TONYS_KITCHEN_POS',
       appName: "Tony's Kitchen POS & Cost Management",
       exportedAt: new Date().toISOString(),
+      overheadPercentOfSales: overheadPercent,
       payload: {
-        settings: this.getSettings(),
+        settings,
         ingredients: this.getIngredients(),
         sauces: this.getSauces(),
         menus: this.getMenus(),

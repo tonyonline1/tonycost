@@ -23,7 +23,8 @@ import {
   BusinessSettings,
   WhatShouldIDoAdvice,
 } from '../../types/domain';
-import { calculateProfitAndLoss, calculateBreakEven } from '../../engine/calculations';
+import { calculateProfitAndLoss, calculateBreakEven, calculateInventoryCOGS } from '../../engine/calculations';
+import { StorageService } from '../../services/storageService';
 import { INITIAL_SETTINGS } from '../../data/initialData';
 import { WhatShouldIDoSection } from './WhatShouldIDoSection';
 
@@ -48,6 +49,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   menuItems = [],
   channels = [],
   expenses = [],
+  employees = [],
   sales = [],
   waste = [],
   wasteRecords = [],
@@ -59,55 +61,35 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const currentSettings = settings || INITIAL_SETTINGS;
   const allWaste = waste && waste.length > 0 ? waste : wasteRecords || [];
 
-  // Generate dynamic actionable advices if not explicitly provided
-  const generatedAdvices: WhatShouldIDoAdvice[] = advices && advices.length > 0 ? advices : [
-    {
-      id: 'adv-1',
-      type: 'CRITICAL',
-      category: 'Food Cost',
-      titleTh: 'เมนู "ต้มยำกุ้งแม่น้ำ" มี % Food Cost สูงเกินเป้าหมาย (43.9% vs เป้า 30%)',
-      titleEn: 'Tom Yum Goong Food Cost % is Exceeding Target (43.9% vs 30% target)',
-      descriptionTh: 'สาเหตุหลักจากต้นทุนกุ้งแม่น้ำสดและการสูญเสียคั้นน้ำมะนาว แนะนำปรับราคาขายจาก 195฿ เป็น 225฿ หรือปรับพอร์ชั่นกุ้ง',
-      descriptionEn: 'Driven by jumbo prawn costs and fresh lime yield loss. Suggest repricing to ฿225 or standardizing prawn portion weight.',
-      actionRecommendationTh: 'ปรับราคาขายหรือเจรจาซัพพลายเออร์กุ้ง',
-      actionRecommendationEn: 'Reprice or renegotiate prawn supplier contract',
-      metricLabel: 'Food Cost',
-      metricValue: '43.9%',
-      relatedEntityType: 'menu',
-      relatedEntityId: 'menu-tom-yum-goong',
-    },
-    {
-      id: 'adv-2',
-      type: 'WARNING',
-      category: 'Delivery Loss',
-      titleTh: 'ช่องทาง Grab / LINE MAN โดนหัก GP รวม VAT สูงถึง 32.1%',
-      titleEn: 'Grab / LINE MAN Delivery Commission with VAT Reaches 32.1%',
-      descriptionTh: 'หากตั้งราคาขายเดลิเวอรีเท่ากับหน้าร้าน กำไรขั้นต้นจะหายไปกว่า 50% แนะนำใช้สูตรคำนวณราคา Delivery Markup อัตโนมัติ',
-      descriptionEn: 'Selling at dine-in prices on delivery erodes over 50% gross profit. Use the built-in Delivery Markup strategy engine.',
-      actionRecommendationTh: 'ปรับราคาเมนูเดลิเวอรีเพื่อรักษา Net Profit',
-      actionRecommendationEn: 'Optimize delivery selling prices',
-      metricLabel: 'GP + VAT',
-      metricValue: '32.1%',
-      relatedEntityType: 'channel',
-    },
-    {
-      id: 'adv-3',
-      type: 'OPPORTUNITY',
-      category: 'Break-Even',
-      titleTh: 'ยอดขายปัจจุบันผ่านจุดคุ้มทุนรายวัน (Break-Even) เกินเป้าหมาย 18%',
-      titleEn: 'Current Sales Exceed Daily Break-Even Target by 18%',
-      descriptionTh: 'จุดคุ้มทุนอยู่ที่ ฿6,158/วัน (ประมาณ 56 จาน) ยอดขายเฉลี่ยจริงทำได้ ฿7,260/วัน ยอดขายส่วนเพิ่มสร้างกำไรสุทธิเต็มเม็ดเต็มหน่วย',
-      descriptionEn: 'Daily break-even is ฿6,158/day (~56 orders). Average daily net sales of ฿7,260 yields pure marginal profit.',
-      actionRecommendationTh: 'เพิ่มโปรโมชัน Upselling ช่วง Peak Hours',
-      actionRecommendationEn: 'Deploy peak-hour upselling combos',
-      metricLabel: 'BE Margin',
-      metricValue: '+18.0%',
-      relatedEntityType: 'ingredient',
-    },
-  ];
+  // Double-counting guard: exclude payroll expenses when employees exist
+  const isPayrollExpense = (e: ExpenseRecord) => {
+    const text = `${e.category || ''} ${(e as any).title || (e as any).name || (e as any).description || ''} ${e.notes || ''}`.toLowerCase();
+    const keywords = ['labor', 'salary', 'wage', 'ค่าแรง', 'เงินเดือน'];
+    return (
+      e.category === 'Labor (Salary & Wages)' ||
+      keywords.some((kw) => text.includes(kw))
+    );
+  };
 
-  // Aggregate Sales
-  const todayDate = sales.length > 0 ? (sales[sales.length - 1]?.date || '2026-08-27') : '2026-08-27';
+  const hasDuplicatePayroll = employees.length > 0 && expenses.some(isPayrollExpense);
+  const effectiveExpenses = employees.length > 0
+    ? expenses.filter((e) => !isPayrollExpense(e))
+    : expenses;
+
+  // Real Labor from employees
+  const directKitchenLabor = employees
+    .filter((e) => e.roleCategory === 'direct_kitchen')
+    .reduce((sum, e) => sum + (e.wageRate + (e.benefitsMonthly || 0)), 0);
+
+  const nonKitchenLabor = employees
+    .filter((e) => e.roleCategory !== 'direct_kitchen')
+    .reduce((sum, e) => sum + (e.wageRate + (e.benefitsMonthly || 0)), 0);
+
+  // Dynamic date logic: use latest sales record date or today's date
+  const latestSalesDate = sales.length > 0
+    ? [...sales].sort((a, b) => b.date.localeCompare(a.date))[0]?.date
+    : null;
+  const todayDate = latestSalesDate || new Date().toISOString().split('T')[0];
   const todaySalesRecords = sales.filter((s) => s.date === todayDate);
   const todayNetSales = todaySalesRecords.reduce((sum, s) => sum + s.netSales, 0);
   const todayOrders = todaySalesRecords.reduce((sum, s) => sum + s.orderCount, 0);
@@ -117,12 +99,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const monthlyRefunds = sales.reduce((sum, s) => sum + s.refunds, 0);
   const monthlyNetSales = monthlyGrossSales - monthlyDiscounts - monthlyRefunds;
 
-  // Approximate Food Cost & COGS from monthly sold dishes or operational average
-  const totalOperatingExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const fixedExpenses = expenses.filter((e) => e.isFixed).reduce((sum, e) => sum + e.amount, 0);
+  // Operating Expenses (same definition as ProfitAndLossView)
+  const totalOperatingExpenses = effectiveExpenses.reduce((sum, e) => sum + e.amount, 0) + nonKitchenLabor;
+  const fixedExpenses = effectiveExpenses.filter((e) => e.isFixed).reduce((sum, e) => sum + e.amount, 0) + nonKitchenLabor;
 
-  // Direct labor estimate from kitchen staff
-  const directLaborEstimate = 58000; // Kitchen Head chef + Cook + Prep
+  // Check for actual purchases & inventory stock
+  const purchasesList = React.useMemo(() => StorageService.getPurchases(), []);
+  const inventoryList = React.useMemo(() => StorageService.getInventory(), []);
+  const salesOrdersList = React.useMemo(() => StorageService.getSalesOrders(), []);
+  const hasActualStock = purchasesList.length > 0 && inventoryList.length > 0;
 
   // Weighted operational food cost % across all active portions
   const allPortions = menuItems.flatMap((m) => m.portions || []);
@@ -133,24 +118,129 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const estimatedFoodCogs = monthlyNetSales * (avgFoodCostPercent / 100);
   const estimatedPackagingCogs = monthlyNetSales * 0.035;
 
+  let foodCogsToUse = estimatedFoodCogs;
+  let packagingCogsToUse = estimatedPackagingCogs;
+
+  if (hasActualStock) {
+    const totalPurchasesCost = purchasesList.reduce((sum, p) => sum + (p.totalPrice || p.price || 0), 0);
+    const totalEndingStockCost = inventoryList.reduce((sum, item) => sum + ((item.currentStock ?? 0) * (item.costPerUnit || 0)), 0);
+    const totalWasteCost = (allWaste || []).reduce((sum, w) => sum + (w.totalCost || w.cost || 0), 0);
+    const estimatedBeginningStockCost = totalEndingStockCost * 1.05;
+    const actualCogsResult = calculateInventoryCOGS(
+      estimatedBeginningStockCost,
+      totalPurchasesCost,
+      totalEndingStockCost,
+      totalWasteCost
+    );
+    foodCogsToUse = actualCogsResult.cogs;
+    packagingCogsToUse = salesOrdersList.reduce((sum, o) => sum + (o.packagingCost || 0), 0) || estimatedPackagingCogs;
+  }
+
+  const incomeTaxRate = typeof currentSettings.incomeTaxRatePercent === 'number' && Number.isFinite(currentSettings.incomeTaxRatePercent)
+    ? currentSettings.incomeTaxRatePercent
+    : 20;
+
   const pnl = calculateProfitAndLoss(
     monthlyGrossSales,
     monthlyDiscounts,
     monthlyRefunds,
-    estimatedFoodCogs,
-    estimatedPackagingCogs,
+    foodCogsToUse,
+    packagingCogsToUse,
     totalOperatingExpenses,
-    directLaborEstimate,
-    currentSettings.taxRatePercent || 7
+    directKitchenLabor,
+    incomeTaxRate
   );
 
   const avgCMPercent = 100 - avgFoodCostPercent - 3.5;
   const breakEven = calculateBreakEven(
-    fixedExpenses + directLaborEstimate,
+    fixedExpenses + directKitchenLabor,
     avgCMPercent,
     110,
     currentSettings.operatingDaysPerMonth || 30
   );
+
+  // Real average daily net sales calculation from distinct logged days
+  const loggedDates = Array.from(new Set(sales.map((s) => s.date).filter(Boolean)));
+  const loggedDaysCount = loggedDates.length;
+  const totalLoggedNetSales = sales.reduce((sum, s) => sum + s.netSales, 0);
+  const avgDailyNetSales = loggedDaysCount > 0 ? totalLoggedNetSales / loggedDaysCount : 0;
+
+  // Build real dynamic actionable advices if not explicitly provided
+  const defaultAdvicesList: WhatShouldIDoAdvice[] = [];
+
+  // 1. Food cost alert from real menu items if available
+  const highCostPortion = menuItems
+    .flatMap((m) => (m.portions || []).map((p) => ({ menu: m, portion: p })))
+    .filter((x) => (x.portion.foodCostPercent || 0) > (currentSettings.defaultTargetFoodCostPercent || 40))
+    .sort((a, b) => (b.portion.foodCostPercent || 0) - (a.portion.foodCostPercent || 0))[0];
+
+  if (highCostPortion) {
+    const p = highCostPortion.portion;
+    const m = highCostPortion.menu;
+    defaultAdvicesList.push({
+      id: 'adv-1',
+      type: 'CRITICAL',
+      category: 'Food Cost',
+      titleTh: `เมนู "${m.thaiName} (${p.name})" มี % Food Cost สูงเกินเป้าหมาย (${p.foodCostPercent.toFixed(1)}% vs เป้า ${currentSettings.defaultTargetFoodCostPercent || 40}%)`,
+      titleEn: `Menu "${m.thaiName} (${p.name})" Food Cost % is Exceeding Target (${p.foodCostPercent.toFixed(1)}% vs ${currentSettings.defaultTargetFoodCostPercent || 40}% target)`,
+      descriptionTh: `ต้นทุนวัตถุดิบและกล่องอยู่ที่ ฿${p.totalDirectCost.toFixed(2)} บนราคาขาย ฿${p.sellingPrice} แนะนำพิจารณาปรับราคาขายหรือลดต้นทุนวัตถุดิบ`,
+      descriptionEn: `Direct cost is ฿${p.totalDirectCost.toFixed(2)} on selling price ฿${p.sellingPrice}. Consider adjusting price or standardizing portions.`,
+      actionRecommendationTh: 'ปรับราคาขายหรือเจรจาซัพพลายเออร์',
+      actionRecommendationEn: 'Reprice or optimize portion recipe',
+      metricLabel: 'Food Cost',
+      metricValue: `${p.foodCostPercent.toFixed(1)}%`,
+      relatedEntityType: 'menu',
+      relatedEntityId: m.id,
+    });
+  }
+
+  // 2. Delivery GP alert based on real delivery channel settings
+  const grabChannel = channels.find((c) => c.channelId === 'grab') || { commissionPercent: currentSettings.grabFoodCommissionPercent ?? 30 };
+  const grabVatGp = ((grabChannel.commissionPercent || 30) * 1.07).toFixed(1);
+  defaultAdvicesList.push({
+    id: 'adv-2',
+    type: 'WARNING',
+    category: 'Delivery Loss',
+    titleTh: `ช่องทาง GrabFood โดนหัก GP รวม VAT ${grabVatGp}%`,
+    titleEn: `GrabFood Delivery Commission with VAT is ${grabVatGp}%`,
+    descriptionTh: 'หากตั้งราคาขายเดลิเวอรีเท่ากับหน้าร้าน กำไรขั้นต้นจะลดลง แนะนำใช้สูตรคำนวณราคา Delivery Markup เพื่อรักษากำไรสุทธิ',
+    descriptionEn: 'Selling at dine-in prices on delivery erodes gross margin. Use the built-in Delivery Markup strategy.',
+    actionRecommendationTh: 'ปรับราคาเมนูเดลิเวอรีเพื่อรักษา Net Profit',
+    actionRecommendationEn: 'Optimize delivery selling prices',
+    metricLabel: 'GP + VAT',
+    metricValue: `${grabVatGp}%`,
+    relatedEntityType: 'channel',
+  });
+
+  // 3. Break-even insight card: only include if enough data (loggedDaysCount >= 1 and breakEvenDailySales > 0)
+  if (loggedDaysCount >= 1 && breakEven.breakEvenDailySales > 0) {
+    const diffPercent = ((avgDailyNetSales - breakEven.breakEvenDailySales) / breakEven.breakEvenDailySales) * 100;
+    const isAbove = diffPercent >= 0;
+    defaultAdvicesList.push({
+      id: 'adv-3',
+      type: isAbove ? 'OPPORTUNITY' : 'WARNING',
+      category: 'Break-Even',
+      titleTh: isAbove
+        ? `ยอดขายเฉลี่ยผ่านจุดคุ้มทุนรายวัน (Break-Even) เกินเป้าหมาย ${diffPercent.toFixed(1)}%`
+        : `ยอดขายเฉลี่ยต่ำกว่าจุดคุ้มทุนรายวัน ${Math.abs(diffPercent).toFixed(1)}%`,
+      titleEn: isAbove
+        ? `Average Daily Sales Exceed Break-Even Target by ${diffPercent.toFixed(1)}%`
+        : `Average Daily Sales Below Break-Even Target by ${Math.abs(diffPercent).toFixed(1)}%`,
+      descriptionTh: isAbove
+        ? `จุดคุ้มทุนอยู่ที่ ฿${Math.round(breakEven.breakEvenDailySales).toLocaleString()}/วัน (${Math.round(breakEven.breakEvenDailyOrders)} จาน) ยอดขายเฉลี่ยจริงทำได้ ฿${Math.round(avgDailyNetSales).toLocaleString()}/วัน (${loggedDaysCount} วันที่บันทึก)`
+        : `จุดคุ้มทุนอยู่ที่ ฿${Math.round(breakEven.breakEvenDailySales).toLocaleString()}/วัน (${Math.round(breakEven.breakEvenDailyOrders)} จาน) ยอดขายเฉลี่ยจริง ฿${Math.round(avgDailyNetSales).toLocaleString()}/วัน ขาดอีก ฿${Math.round(breakEven.breakEvenDailySales - avgDailyNetSales).toLocaleString()}/วัน เพื่อคุ้มทุน`,
+      descriptionEn: isAbove
+        ? `Daily break-even is ฿${Math.round(breakEven.breakEvenDailySales).toLocaleString()}/day (~${Math.round(breakEven.breakEvenDailyOrders)} orders). Actual average is ฿${Math.round(avgDailyNetSales).toLocaleString()}/day.`
+        : `Daily break-even is ฿${Math.round(breakEven.breakEvenDailySales).toLocaleString()}/day. Actual average is ฿${Math.round(avgDailyNetSales).toLocaleString()}/day.`,
+      actionRecommendationTh: isAbove ? 'เพิ่มโปรโมชัน Upselling ช่วง Peak Hours' : 'เร่งยอดขายหรือควบคุมค่าใช้จ่ายคงที่',
+      actionRecommendationEn: isAbove ? 'Deploy peak-hour upselling combos' : 'Increase sales or control fixed overheads',
+      metricLabel: 'BE Margin',
+      metricValue: `${isAbove ? '+' : ''}${diffPercent.toFixed(1)}%`,
+      relatedEntityType: 'ingredient',
+    });
+  }
+
+  const generatedAdvices: WhatShouldIDoAdvice[] = advices && advices.length > 0 ? advices : defaultAdvicesList;
 
   return (
     <div className="space-y-6">
@@ -185,6 +275,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
       </div>
 
+      {/* Warning banner when duplicate payroll expenses exist */}
+      {hasDuplicatePayroll && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+          <span>พบรายจ่ายหมวดเงินเดือน ระบบไม่นับซ้ำ เพราะใช้ข้อมูลจากหน้าพนักงาน</span>
+        </div>
+      )}
+
       {/* 8 Essential Restaurant KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Today's Net Sales */}
@@ -198,11 +296,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-light tracking-tight text-white">฿{todayNetSales.toLocaleString()}</span>
+            <span className="text-2xl font-light tracking-tight text-white font-mono">
+              ฿{sales.length > 0 ? todayNetSales.toLocaleString() : '0.00'}
+            </span>
             <span className="text-xs text-white/20 font-mono">NET</span>
           </div>
           <div className="mt-2 text-[10px] text-white/40">
-            {todayOrders} {activeLanguage === 'th' ? 'รายการคำสั่งซื้อล่าสุด' : 'recent transactions'}
+            {sales.length > 0
+              ? `${todayOrders} ${activeLanguage === 'th' ? 'รายการคำสั่งซื้อล่าสุด' : 'recent transactions'}`
+              : (activeLanguage === 'th' ? 'ยังไม่มีข้อมูลยอดขาย' : 'No sales data yet')}
           </div>
         </div>
 
@@ -330,7 +432,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <span className="text-xs text-white/20 font-mono">BOTTOM LINE</span>
           </div>
           <div className="mt-2 text-[10px] text-white/40">
-            {activeLanguage === 'th' ? `หักภาษี ${currentSettings.taxRatePercent || 7}% เรียบร้อย` : `Post-tax deduction @ ${currentSettings.taxRatePercent || 7}%`}
+            {activeLanguage === 'th' ? `ประมาณการภาษีเงินได้ ${incomeTaxRate}%` : `Estimated income tax @ ${incomeTaxRate}%`}
           </div>
         </div>
 

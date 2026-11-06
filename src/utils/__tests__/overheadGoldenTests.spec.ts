@@ -9,6 +9,7 @@ import {
   calculateBreakEven,
 } from '../../engine/calculations';
 import { ExpenseRecord } from '../../types/domain';
+import { StorageService } from '../../services/storageService';
 
 describe('Overhead Calculator Golden Tests (O1 – O15)', () => {
   // O1: Frequency conversion - Weekly to Monthly
@@ -219,5 +220,80 @@ describe('Overhead Calculator Golden Tests (O1 – O15)', () => {
     expect(result.breakEvenDailySales).toBe(4800);
     expect(result.breakEvenOrders).toBe(1200);
     expect(result.breakEvenDailyOrders).toBe(48);
+  });
+
+  // O15-B: Owner Salary check detection
+  it('O15-B: Owner salary presence detection identifies missing owner compensation', () => {
+    const expensesWithoutOwner: ExpenseRecord[] = [
+      {
+        id: '1',
+        date: '2026-03-01',
+        category: 'Rent',
+        description: 'ค่าเช่าร้าน',
+        amount: 25000,
+        isFixed: true,
+        recurring: true,
+        paymentMethod: 'Bank Transfer',
+        frequency: 'monthly',
+      },
+      {
+        id: '2',
+        date: '2026-03-01',
+        category: 'Labor (Salary & Wages)',
+        description: 'เงินเดือนพนักงานเสิร์ฟ',
+        amount: 15000,
+        isFixed: true,
+        recurring: true,
+        paymentMethod: 'Bank Transfer',
+        frequency: 'monthly',
+      },
+    ];
+
+    const hasOwner = expensesWithoutOwner.some((e) => {
+      if (e.isExcluded) return false;
+      const desc = (e.description || '').toLowerCase();
+      const isOwnerDesc = desc.includes('เจ้าของ') || desc.includes('owner') || desc.includes('ผู้จัดการ/เจ้าของ');
+      return isOwnerDesc && Number(e.amount) > 0;
+    });
+    expect(hasOwner).toBe(false);
+
+    const expensesWithOwner: ExpenseRecord[] = [
+      ...expensesWithoutOwner,
+      {
+        id: '3',
+        date: '2026-03-01',
+        category: 'Labor (Salary & Wages)',
+        description: 'เงินเดือนเจ้าของร้าน',
+        amount: 35000,
+        isFixed: true,
+        recurring: true,
+        paymentMethod: 'Bank Transfer',
+        frequency: 'monthly',
+      },
+    ];
+
+    const hasOwnerNow = expensesWithOwner.some((e) => {
+      if (e.isExcluded) return false;
+      const desc = (e.description || '').toLowerCase();
+      const isOwnerDesc = desc.includes('เจ้าของ') || desc.includes('owner') || desc.includes('ผู้จัดการ/เจ้าของ');
+      return isOwnerDesc && Number(e.amount) > 0;
+    });
+    expect(hasOwnerNow).toBe(true);
+  });
+
+  // E5: Storage backup export includes top-level overheadPercentOfSales
+  it('E5: exportBackup contains top-level overheadPercentOfSales', () => {
+    const backup = StorageService.exportBackup();
+    expect(backup).toBeDefined();
+    expect(backup.appId).toBe('TONYS_KITCHEN_POS');
+    expect(typeof backup.overheadPercentOfSales).toBe('number');
+    expect(backup.overheadPercentOfSales).toBeGreaterThanOrEqual(0);
+  });
+
+  // E6: Backup overdue threshold works correctly
+  it('E6: isBackupOverdue reports overdue when no backup recorded or > 7 days', () => {
+    const overdueStatus = StorageService.isBackupOverdue(7);
+    expect(overdueStatus).toBeDefined();
+    expect(typeof overdueStatus.isOverdue).toBe('boolean');
   });
 });

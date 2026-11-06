@@ -117,6 +117,7 @@ export interface RecipeItem {
   calculatedUnitCost?: number;
   calculatedLineCost?: number;
   isReviewRequired?: boolean;
+  missingPrice?: boolean;
 }
 
 export interface PackagingLineItem {
@@ -169,6 +170,8 @@ export interface RecipeCostBreakdown {
   sellingPrice: number;
   takeawayPrice: number;
   deliveryPrice: number;
+  netDineInSellingPrice?: number;
+  netTakeawaySellingPrice?: number;
 
   // Breakdown components
   shrimpCost: number;
@@ -209,6 +212,8 @@ export interface RecipeCostBreakdown {
 
   hasReviewIssue: boolean;
   reviewMessage?: string;
+  hasMissingPrice?: boolean;
+  missingPrice?: boolean;
   items: RecipeItem[];
 }
 
@@ -232,10 +237,13 @@ export interface RestaurantSettings {
   overheadCalculationBase?: OverheadCalculationBase; // คิดโสหุ้ยจาก: 'SELLING_PRICE' (DEFAULT) หรือ 'FOOD_COST'
   targetFoodCostPercent: number;
   defaultTargetFoodCostPercent?: number;
-  primeCostTargetPercent?: number;
+  targetProfitAmount?: number;
   operatingDaysPerMonth?: number;
+  primeCostTargetPercent?: number;
+  vatRatePercent?: number; // default 7% VAT
+  incomeTaxRatePercent?: number; // default 20% estimated corporate income tax
+  /** @deprecated Do not read in calculations. Use vatRatePercent or incomeTaxRatePercent instead. */
   taxRatePercent?: number;
-  targetProfitAmount: number;
   takeawayPackagingCost: number;
   packagingCostTakeaway?: number;
   deliveryPackagingCost: number;
@@ -245,6 +253,7 @@ export interface RestaurantSettings {
   lineManCommissionHasVat?: boolean; // C-01: delivery GP must include 7% VAT (defaults to true)
   channels: ChannelSettings[];
   userRole: UserRole;
+  cogsVarianceThresholdPercent?: number; // e.g. 3.0 percentage points of net sales
 }
 
 export interface InventoryItem {
@@ -509,10 +518,11 @@ export interface WhatShouldIDoAdvice {
 
 // Unified Local-First Backup/Restore Package
 export interface AppBackupPackage {
-  schemaVersion: '1.0.0';
+  schemaVersion: '1.0.0' | '1.1.0' | string;
   appId: 'TONYS_KITCHEN_POS';
   appName: string;
   exportedAt: string; // ISO 8601
+  overheadPercentOfSales?: number;
   payload: {
     settings: RestaurantSettings;
     ingredients: Ingredient[];

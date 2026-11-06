@@ -38,9 +38,12 @@ export function runAllCalculationUnitTests(): TestSuiteResult[] {
     actual: number | string
   ) => {
     const start = performance.now();
-    const isNum = typeof expected === 'number' && typeof actual === 'number';
-    const diff = isNum ? Math.abs((actual as number) - (expected as number)) : expected === actual ? 0 : 1;
-    const passed = isNum ? diff < 0.001 : expected === actual;
+    const actualVal = typeof actual === 'object' && actual !== null
+      ? (typeof (actual as any).cost === 'number' ? (actual as any).cost : typeof (actual as any).cogs === 'number' ? (actual as any).cogs : Number(actual))
+      : actual;
+    const isNum = typeof expected === 'number' && typeof actualVal === 'number';
+    const diff = isNum ? Math.abs((actualVal as number) - (expected as number)) : expected === actualVal ? 0 : 1;
+    const passed = isNum ? diff < 0.001 : expected === actualVal;
 
     results.push({
       testId,
@@ -48,7 +51,7 @@ export function runAllCalculationUnitTests(): TestSuiteResult[] {
       testDescription,
       inputs,
       expectedOutput: isNum ? Number((expected as number).toFixed(4)) : expected,
-      actualOutput: isNum ? Number((actual as number).toFixed(4)) : actual,
+      actualOutput: isNum ? Number((actualVal as number).toFixed(4)) : actualVal,
       difference: Number(diff.toFixed(4)),
       status: passed ? 'PASS' : 'FAIL',
       executionTimeMs: Number((performance.now() - start).toFixed(2)),
@@ -241,7 +244,7 @@ export function runAllCalculationUnitTests(): TestSuiteResult[] {
     'Accounting COGS calculation (50k + 120k - 3k - 45k)',
     { beginning: 50000, purchases: 120000, ending: 45000, waste: 3000 },
     122000,
-    invCogs
+    invCogs.cogs
   );
 
   // Test 16: Prime Cost Metrics (COGS + Direct Labor)
@@ -275,18 +278,41 @@ export function runAllCalculationUnitTests(): TestSuiteResult[] {
     12000, // Packaging COGS
     120000, // Operating expenses
     50000, // Direct labor
-    7 // Tax %
+    20 // Income tax %
   );
   // Net sales = 383,000, total cogs = 127,000, gross profit = 256,000
-  // Operating profit = 256,000 - 120,000 = 136,000
-  // Tax = 136,000 * 0.07 = 9,520, Net profit = 126,480
+  // Operating profit = gross profit - directLabor - opex = 256,000 - 50,000 - 120,000 = 86,000
+  // Tax = 86,000 * 0.20 = 17,200, Net profit = 86,000 - 17,200 = 68,800
   record(
     'TC-PNL-01',
     'calculateProfitAndLoss() - Net Profit',
-    'Monthly Net profit calculation after COGS, expenses, and tax',
-    { grossSales: 400000, discounts: 15000, cogs: 127000, opex: 120000 },
-    126480,
+    'Monthly Net profit calculation after COGS, direct labor, expenses, and 20% income tax',
+    { grossSales: 400000, discounts: 15000, refunds: 2000, cogs: 127000, directLabor: 50000, opex: 120000, taxRate: 20 },
+    68800,
     pnl.netProfit
+  );
+
+  // Test 19: P&L negative operating profit (tax must be 0)
+  const lossPnl = calculateProfitAndLoss(
+    100000, // Gross sales
+    0, // Discounts
+    0, // Refunds
+    60000, // Food COGS
+    10000, // Packaging COGS
+    50000, // Operating expenses
+    40000, // Direct labor
+    20 // Income tax %
+  );
+  // Gross profit = 100,000 - 70,000 = 30,000
+  // Operating profit = 30,000 - 40,000 - 50,000 = -60,000
+  // Tax must be 0 when operating profit <= 0; Net profit = -60,000
+  record(
+    'TC-PNL-02',
+    'calculateProfitAndLoss() - Negative Profit (Zero Tax)',
+    'Negative operating profit must result in 0 tax amount',
+    { grossSales: 100000, operatingProfit: -60000, taxRate: 20 },
+    0,
+    lossPnl.taxAmount
   );
 
   return results;

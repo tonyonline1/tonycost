@@ -7,7 +7,13 @@ import { registerSW } from 'virtual:pwa-register';
 
 // Register Service Worker for PWA offline caching & standalone installability
 if ('serviceWorker' in navigator) {
-  registerSW({ immediate: true });
+  const updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      // Automatically reload to apply new deployed version
+      updateSW(true);
+    },
+  });
 }
 
 createRoot(document.getElementById('root')!).render(

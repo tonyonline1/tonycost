@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Receipt, Trash2, Calendar, DollarSign, Filter, EyeOff, Eye, Check } from 'lucide-react';
+import { Plus, Receipt, Trash2, Calendar, DollarSign, Filter, EyeOff, Eye, Check, AlertTriangle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { ExpenseRecord, ExpenseCategory, ExpenseFrequency } from '../../types/domain';
 import { NumericInput } from '../common/NumericInput';
 import { convertExpenseToMonthly, calculateTotalMonthlyExpenses, validateExpenseInput } from '../../engine/calculations';
@@ -23,6 +23,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [isGuidanceOpen, setIsGuidanceOpen] = useState(false);
 
   const [formData, setFormData] = useState<{
     date: string;
@@ -135,6 +136,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     ? expenses
     : expenses.filter((e) => e.category === selectedCategory);
 
+  const hasOwnerSalary = expenses.some((e) => {
+    if (e.isExcluded) return false;
+    const desc = (e.description || '').toLowerCase();
+    const isOwnerDesc = desc.includes('เจ้าของ') || desc.includes('owner') || desc.includes('ผู้จัดการ/เจ้าของ');
+    return isOwnerDesc && Number(e.amount) > 0;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -157,6 +165,90 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           <Plus className="h-4 w-4" />
           <span>{activeLanguage === 'th' ? 'เพิ่มค่าใช้จ่าย' : 'Add Expense'}</span>
         </button>
+      </div>
+
+      {/* Warning: Owner Salary Check (O15) */}
+      {!hasOwnerSalary && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <div className="font-bold text-amber-950 flex items-center gap-1.5">
+              <span>คำเตือน: ยังไม่ได้ใส่อัตราเงินเดือนเจ้าของร้าน (Owner Salary)</span>
+              <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-semibold">แนะนำอย่างยิ่ง</span>
+            </div>
+            <p className="text-amber-800 leading-relaxed">
+              ในหลักการคิดต้นทุนร้านอาหาร SME หากไม่รวมเงินเดือนประจำของเจ้าของร้านลงในต้นทุนคงที่ (Fixed Labor) จะทำให้คำนวณอัตราโสหุ้ย (% Overhead) ต่ำกว่าความเป็นจริง ส่งผลให้ตั้งราคาอาหารต่ำเกินไปและเกิดภาวะขาดทุนแฝง แนะนำให้เพิ่มรายการ เช่น <span className="font-bold underline decoration-amber-400">"เงินเดือนเจ้าของร้าน"</span> ในหมวด "Labor (Salary & Wages)"
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Educational Guidance: 10 Items NOT to count as Overhead (E9) */}
+      <div className="rounded-xl border border-sky-200 bg-sky-50/70 shadow-xs overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setIsGuidanceOpen(!isGuidanceOpen)}
+          className="w-full flex items-center justify-between p-3.5 text-left text-xs font-bold text-sky-950 hover:bg-sky-100/60 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-sky-600 shrink-0" />
+            <span>ข้อควรระวัง: 10 รายการที่ไม่ควรนำมาคิดเป็นค่าโสหุ้ย (What NOT to count as Overhead)</span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-sky-700">
+            <span>{isGuidanceOpen ? 'ซ่อนคำแนะนำ' : 'ดูรายการที่ไม่ควรใส่'}</span>
+            {isGuidanceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </button>
+
+        {isGuidanceOpen && (
+          <div className="p-4 pt-1 border-t border-sky-100 text-xs text-sky-900 bg-white/60 space-y-2">
+            <p className="text-slate-600 mb-2">
+              การกรอกค่าใช้จ่ายซ้ำซ้อนจะทำให้ต้นทุนโสหุ้ยสูงเกินจริงจนตั้งราคาอาหารไม่ได้ รายการต่อไปนี้<strong>ห้ามใส่ในตารางโสหุ้ย</strong>:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">1. วัตถุดิบอาหารและเครื่องดื่มหลัก (F&B Direct Cost)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">เป็น Direct COGS ที่คำนวณในสูตรอาหาร (Recipe) แล้ว ห้ามใส่ซ้ำในโสหุ้ย</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">2. บรรจุภัณฑ์ใส่อาหารต่อจาน (Direct Packaging)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">กล่องข้าว ช้อนส้อม ถุงหิ้ว ให้คิดเป็นต้นทุนตรงต่อจานในเมนูสั่งกลับบ้าน/เดลิเวอรี</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">3. ค่าคอมมิชชั่น GP เดลิเวอรี (Platform Commission)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">เป็นส่วนลดจากยอดขายหน้าแอป (Platform Deduction) ให้คำนวณแยกตามช่องทางขาย</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">4. ภาษีมูลค่าเพิ่ม (VAT ซื้อ / VAT ขาย)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">ไม่ใช่ต้นทุนของร้าน เป็นเงินหมุนเวียนนำส่งสรรพากร ยอดขายต้องใช้แบบ Ex-VAT</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">5. เงินมัดจำ/เงินประกันสัญญาเช่า (Security Deposits)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">เป็นสินทรัพย์ (Asset) ที่ได้คืนเมื่อสิ้นสุดสัญญา ไม่ใช่ค่าใช้จ่ายดำเนินงาน</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">6. เงินลงทุนตกแต่งก้อนแรกก่อนเปิดร้าน (CapEx / Initial Fitout)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">ให้ใส่เฉพาะ "ค่าเสื่อมราคา (Depreciation)" ตามอายุใช้งาน ไม่ใช่ใส่เงินก้อนใหญ่ทั้งก้อน</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">7. เงินต้นที่ชำระคืนเงินกู้ธนาคาร (Loan Principal)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">การผ่อนเงินต้นเป็นการลดหนี้สิน ไม่ใช่ค่าใช้จ่าย (คิดได้เฉพาะดอกเบี้ยเงินกู้หรือค่างวดเครื่องจักร)</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">8. เงินถอนส่วนตัวของเจ้าของ (Owner's Drawings)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">การเบิกถอนเงินสดไปใช้ส่วนตัวไม่ถือเป็นต้นทุนร้าน (ต้องแยกจากเงินเดือนประจำ)</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">9. ภาษีเงินได้นิติบุคคลหรือบุคคลธรรมดาสิ้นปี (Income Tax)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">คิดจากกำไรสุทธิหลังหักค่าใช้จ่ายทั้งหมดแล้ว ไม่ใช่ต้นทุนดำเนินงานของร้าน</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-sky-100">
+                <div className="font-bold text-slate-800">10. Service Charge ที่แบ่งจ่ายพนักงาน (Distributed Service Charge)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">เป็นเงินที่เรียกเก็บแทนพนักงานและส่งต่อทั้งหมด ไม่ใช่ค่าใช้จ่ายดำเนินงานของร้าน</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards (Normalized Monthly) */}
