@@ -14,6 +14,12 @@ import { BreakEvenView } from './components/Financials/BreakEvenView';
 import { AlertTriangle } from 'lucide-react';
 import { ExpensesView } from './components/Financials/ExpensesView';
 import { SalesEntryView } from './components/Financials/SalesEntryView';
+import { ProfitAndLossView } from './components/Financials/ProfitAndLossView';
+import { ExecutiveDashboard } from './components/Dashboard/ExecutiveDashboard';
+import { LaborView } from './components/Financials/LaborView';
+import { InventoryView } from './components/InventoryView';
+import { PurchasesView } from './components/PurchasesView';
+import { ReportsView } from './components/ReportsView';
 import { DailySalesRecord, SalesChannel, Employee as DomainEmployee } from './types/domain';
 import { upsertDailySalesRecord } from './engine/calculations';
 import { AppIconModal } from './components/common/AppIconModal';
@@ -79,34 +85,12 @@ export default function App() {
     { id: 'lineman', code: 'LINEMAN', name: 'LINE MAN', commissionPercent: 25, paymentFeePercent: 0, fixedFeePerOrder: 0, packagingFeeSurcharge: 0, taxOnCommissionPercent: 7, active: true },
   ];
 
-  const [dailySales, setDailySales] = useState<DailySalesRecord[]>(() => [
-    {
-      id: 'sales-init-1',
-      date: new Date().toISOString().split('T')[0],
-      channelId: 'dine-in',
-      channelName: 'หน้าร้าน (Dine-in)',
-      orderCount: 45,
-      grossSales: 16000,
-      discounts: 500,
-      refunds: 0,
-      netSales: 15500,
-      platformFees: 0,
-      actualPayout: 15500,
-    },
-    {
-      id: 'sales-init-2',
-      date: new Date().toISOString().split('T')[0],
-      channelId: 'grab',
-      channelName: 'GrabFood',
-      orderCount: 20,
-      grossSales: 8500,
-      discounts: 300,
-      refunds: 0,
-      netSales: 8200,
-      platformFees: 2632,
-      actualPayout: 5568,
-    },
-  ]);
+  const [employees, setEmployees] = useState<DomainEmployee[]>(() =>
+    StorageService.getEmployees()
+  );
+  const [dailySales, setDailySales] = useState<DailySalesRecord[]>(() =>
+    StorageService.getDailySales()
+  );
 
   // Navigation & UI state: focused purely on Food Cost System
   const [currentTab, setCurrentTab] = useState<string>('food_cost');
@@ -176,6 +160,14 @@ export default function App() {
   useEffect(() => {
     StorageService.saveWasteLog(wasteLog);
   }, [wasteLog]);
+
+  useEffect(() => {
+    StorageService.saveEmployees(employees as any);
+  }, [employees]);
+
+  useEffect(() => {
+    StorageService.saveDailySales(dailySales);
+  }, [dailySales]);
 
   // Derived metrics for Badges
   const reviewRequiredCount = ingredients.filter((i) => i.isReviewRequired).length;
@@ -422,6 +414,8 @@ export default function App() {
     setExpenses(StorageService.getExpenses());
     setSalesOrders(StorageService.getSalesOrders());
     setWasteLog(StorageService.getWasteLog());
+    setEmployees(StorageService.getEmployees());
+    setDailySales(StorageService.getDailySales());
   };
 
   const handleNavigateToRecipeBuilder = (variantId: string) => {
@@ -610,6 +604,99 @@ export default function App() {
               onDeleteSalesRecord={(id) => setDailySales((prev) => prev.filter((s) => s.id !== id))}
               defaultVatRate={typeof settings.vatRatePercent === 'number' && Number.isFinite(settings.vatRatePercent) ? settings.vatRatePercent : 7}
               activeLanguage="th"
+            />
+          )}
+
+          {/* TAB: EXECUTIVE DASHBOARD */}
+          {currentTab === 'executive_dashboard' && (
+            <ExecutiveDashboard
+              sales={dailySales}
+              expenses={expenses as any}
+              employees={employees as any}
+              menuItems={menus as any}
+              inventory={inventory as any}
+              allWaste={wasteLog as any}
+              channels={defaultSalesChannels}
+              currentSettings={settings}
+              activeLanguage="th"
+              onNavigateToTab={(tabId) => setCurrentTab(tabId)}
+            />
+          )}
+
+          {/* TAB: PROFIT & LOSS STATEMENT (P&L) */}
+          {currentTab === 'pnl' && (
+            <ProfitAndLossView
+              sales={dailySales}
+              expenses={expenses as any}
+              employees={employees as any}
+              settings={settings}
+              activeLanguage="th"
+            />
+          )}
+
+          {/* TAB: LABOR MANAGEMENT */}
+          {currentTab === 'labor' && (
+            <LaborView
+              employees={employees as any}
+              monthlyNetSales={dailySales.reduce((sum, s) => sum + s.netSales, 0)}
+              onAddEmployee={(newEmp) => setEmployees((prev) => [newEmp, ...prev])}
+              onDeleteEmployee={(id) => setEmployees((prev) => prev.filter((e) => e.id !== id))}
+              activeLanguage="th"
+            />
+          )}
+
+          {/* TAB: INVENTORY & WASTE LOG */}
+          {currentTab === 'inventory' && (
+            <InventoryView
+              inventory={inventory}
+              ingredients={ingredients}
+              transactions={inventoryTransactions}
+              wasteLog={wasteLog}
+              onSaveAdjustment={(txn, waste) => {
+                const nextTxns = [txn, ...inventoryTransactions];
+                setInventoryTransactions(nextTxns);
+                const nextInv = inventory.map((item) =>
+                  item.id === txn.inventoryItemId
+                    ? { ...item, currentStock: Math.max(0, item.currentStock + txn.quantityChange), lastUpdated: new Date().toISOString() }
+                    : item
+                );
+                setInventory(nextInv);
+                if (waste) {
+                  const nextWaste = [waste, ...wasteLog];
+                  setWasteLog(nextWaste);
+                }
+              }}
+            />
+          )}
+
+          {/* TAB: PURCHASES & PRICE HISTORY */}
+          {currentTab === 'purchases' && (
+            <PurchasesView
+              ingredients={ingredients}
+              suppliers={suppliers}
+              purchases={purchases}
+              priceHistory={priceHistory}
+              settings={settings}
+              onSavePurchase={(newPurchase) => setPurchases((prev) => [newPurchase, ...prev])}
+              onUpdateIngredientPrice={(id, price) =>
+                setIngredients((prev) => prev.map((i) => (i.id === id ? { ...i, purchasePrice: price } : i)))
+              }
+              onRecordPriceChange={handleRecordPriceChange}
+            />
+          )}
+
+          {/* TAB: REPORTS & EXCEL IMPORT/EXPORT */}
+          {currentTab === 'reports' && (
+            <ReportsView
+              ingredients={ingredients}
+              sauces={sauces}
+              menus={menus}
+              expenses={expenses}
+              salesOrders={salesOrders}
+              settings={settings}
+              onIngredientsImported={(newIngredients) => setIngredients(newIngredients)}
+              onEditIngredient={(ing) => handleSaveIngredient(ing)}
+              onResetDefaults={handleReloadAllData}
             />
           )}
 

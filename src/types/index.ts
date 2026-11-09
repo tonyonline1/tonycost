@@ -536,6 +536,7 @@ export interface AppBackupPackage {
     expenses: ExpenseRecord[];
     salesOrders: SaleOrder[];
     wasteLog: WasteRecord[];
+    dailySales?: any[];
     yieldTests?: YieldTestRecord[];
     employees?: Employee[];
     packagingItems?: PackagingItem[];

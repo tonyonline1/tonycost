@@ -44,6 +44,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const getCurrentTabInfo = () => {
     switch (currentTab) {
+      case 'executive_dashboard':
+        return { label: '📊 แดชบอร์ดบริหาร', icon: Calculator };
+      case 'pnl':
+        return { label: '📈 งบกำไรขาดทุน (P&L)', icon: Calculator };
+      case 'overhead_breakeven':
+        return { label: '⚖️ โสหุ้ย & จุดคุ้มทุน', icon: Calculator };
       case 'food_cost':
       case 'dashboard':
       case 'menus':
@@ -57,8 +63,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         return { label: '📖 คลังสูตรอาหารกลาง', icon: BookOpen };
       case 'sauces':
         return { label: '🧪 ซอส & สต็อก Batch', icon: FlaskConical };
+      case 'sales_entry':
+        return { label: '📝 บันทึกยอดขายประจำวัน', icon: Calculator };
+      case 'expenses':
+        return { label: '🧾 บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Calculator };
+      case 'labor':
+        return { label: '👥 จัดการค่าแรง & พนักงาน', icon: Calculator };
+      case 'inventory':
+        return { label: '📦 สต็อกคงเหลือ & ของเสีย', icon: Calculator };
+      case 'purchases':
+        return { label: '🛒 บันทึกการจัดซื้อ', icon: Calculator };
       case 'ingredients':
         return { label: '🥩 วัตถุดิบ & Yield Lab', icon: Beef };
+      case 'reports':
+        return { label: '📑 รายงาน & Excel', icon: Calculator };
       case 'settings':
         return { label: '⚙️ เกณฑ์ต้นทุน & ตั้งค่า', icon: Settings };
       default:

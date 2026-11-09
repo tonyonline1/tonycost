@@ -24,6 +24,8 @@ import {
   Loader2,
   Smartphone,
   Image as ImageIcon,
+  Users,
+  ShoppingCart,
 } from 'lucide-react';
 import { PWAInstallButton } from './common/PWAInstallButton';
 import { StorageService } from '../services/storageService';
@@ -126,6 +128,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Clean and well-structured modules
   const moduleGroups: NavGroup[] = [
     {
+      id: 'executive-financials',
+      label: 'ภาพรวม & บัญชีกำไรขาดทุน',
+      subtitle: '',
+      icon: LayoutDashboard,
+      items: [
+        { id: 'executive_dashboard', name: 'แดชบอร์ดบริหาร (Executive)', icon: LayoutDashboard },
+        { id: 'pnl', name: 'งบกำไรขาดทุนบริหาร (P&L)', icon: PieChart },
+        { id: 'overhead_breakeven', name: 'โสหุ้ย & จุดคุ้มทุน (Break-Even)', icon: TrendingUp },
+      ],
+    },
+    {
       id: 'cost-pricing',
       label: 'คำนวณต้นทุน & ราคาขาย',
       subtitle: '',
@@ -147,10 +160,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      id: 'master-data-group',
-      label: 'วัตถุดิบ & การตั้งค่า',
+      id: 'daily-ops-labor',
+      label: 'บันทึกประจำวัน & ค่าแรง',
+      subtitle: '',
+      icon: BarChart3,
+      items: [
+        { id: 'sales_entry', name: 'บันทึกยอดขาย (Sales)', icon: BarChart3 },
+        { id: 'expenses', name: 'บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Receipt },
+        { id: 'labor', name: 'จัดการค่าแรง & พนักงาน', icon: Users },
+      ],
+    },
+    {
+      id: 'inventory-procurement',
+      label: 'คลังสินค้า & การจัดซื้อ',
       subtitle: '',
       icon: Database,
+      items: [
+        { id: 'inventory', name: 'สต็อกคงเหลือ & ของเสีย (Waste)', icon: Database },
+        { id: 'purchases', name: 'บันทึกการจัดซื้อ & ประวัติราคา', icon: ShoppingCart },
+      ],
+    },
+    {
+      id: 'master-data-group',
+      label: 'ข้อมูลหลัก & รายงาน',
+      subtitle: '',
+      icon: Settings,
       items: [
         {
           id: 'ingredients',
@@ -159,9 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: reviewCount > 0 ? reviewCount : undefined,
           badgeColor: 'bg-rose-500 text-white',
         },
-        { id: 'overhead_breakeven', name: 'โสหุ้ย & จุดคุ้มทุน (Break-Even)', icon: TrendingUp },
-        { id: 'expenses', name: 'บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Receipt },
-        { id: 'sales_entry', name: 'บันทึกยอดขาย (Sales)', icon: BarChart3 },
+        { id: 'reports', name: 'รายงาน & Excel Import/Export', icon: FileSpreadsheet },
         { id: 'settings', name: 'เกณฑ์ต้นทุน & ตั้งค่าระบบ', icon: Settings },
       ],
     },

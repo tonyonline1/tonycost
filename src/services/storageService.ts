@@ -34,6 +34,7 @@ import { generateId, generateOrderNumber } from '../utils/id';
 export { generateId, generateOrderNumber };
 
 import { calculateTotalMonthlyExpenses, calculateNormalizedNetSales, calculateOverheadRatePercent } from '../engine/calculations';
+import { DailySalesRecord } from '../types/domain';
 
 const STORAGE_KEYS = {
   SETTINGS: 'tonys_settings_v1',
@@ -47,6 +48,7 @@ const STORAGE_KEYS = {
   PRICE_HISTORY: 'tonys_price_history_v1',
   EXPENSES: 'tonys_expenses_v1',
   SALES: 'tonys_sales_v1',
+  DAILY_SALES: 'tonys_daily_sales_v1',
   WASTE: 'tonys_waste_v1',
   YIELD_TESTS: 'tonys_yield_tests_v1',
   EMPLOYEES: 'tonys_employees_v1',
@@ -278,8 +280,96 @@ export const StorageService = {
     safeSave(STORAGE_KEYS.YIELD_TESTS, records);
   },
 
+  getDailySales(): DailySalesRecord[] {
+    const raw = safeLoad<DailySalesRecord[]>(STORAGE_KEYS.DAILY_SALES, []);
+    if (raw && raw.length > 0) return raw;
+    const today = new Date().toISOString().split('T')[0];
+    return [
+      {
+        id: 'sales-init-1',
+        date: today,
+        channelId: 'dine-in',
+        channelName: 'หน้าร้าน (Dine-in)',
+        orderCount: 45,
+        grossSales: 16000,
+        discounts: 500,
+        refunds: 0,
+        netSales: 15500,
+        platformFees: 0,
+        actualPayout: 15500,
+      },
+      {
+        id: 'sales-init-2',
+        date: today,
+        channelId: 'grab',
+        channelName: 'GrabFood',
+        orderCount: 20,
+        grossSales: 8500,
+        discounts: 300,
+        refunds: 0,
+        netSales: 8200,
+        platformFees: 2632,
+        actualPayout: 5568,
+      },
+    ];
+  },
+  saveDailySales(sales: DailySalesRecord[]): void {
+    safeSave(STORAGE_KEYS.DAILY_SALES, sales);
+  },
+
   getEmployees(): Employee[] {
-    return safeLoad(STORAGE_KEYS.EMPLOYEES, []);
+    const stored = safeLoad<Employee[]>(STORAGE_KEYS.EMPLOYEES, []);
+    if (stored && stored.length > 0) return stored;
+    return [
+      {
+        id: 'emp-1',
+        name: 'สมชาย เชฟใหญ่ (Head Chef)',
+        position: 'หัวหน้าพ่อครัว',
+        type: 'monthly',
+        roleCategory: 'direct_kitchen',
+        wageRate: 28000,
+        standardHoursPerMonth: 208,
+        overtimeHoursMonthly: 0,
+        overtimeRateMultiplier: 1.5,
+        benefitsMonthly: 2000,
+        active: true,
+        department: 'kitchen',
+        role: 'หัวหน้าพ่อครัว (Head Chef)',
+        employmentType: 'full_time',
+      },
+      {
+        id: 'emp-2',
+        name: 'สมศรี ผู้ช่วยครัว (Kitchen Assistant)',
+        position: 'ผู้ช่วยครัว/เตรียมวัตถุดิบ',
+        type: 'monthly',
+        roleCategory: 'direct_kitchen',
+        wageRate: 15000,
+        standardHoursPerMonth: 208,
+        overtimeHoursMonthly: 0,
+        overtimeRateMultiplier: 1.5,
+        benefitsMonthly: 1000,
+        active: true,
+        department: 'kitchen',
+        role: 'ผู้ช่วยครัว (Kitchen Hand)',
+        employmentType: 'full_time',
+      },
+      {
+        id: 'emp-3',
+        name: 'วิภา บริการหน้าร้าน (Service Staff)',
+        position: 'พนักงานบริการ',
+        type: 'monthly',
+        roleCategory: 'direct_service',
+        wageRate: 14000,
+        standardHoursPerMonth: 208,
+        overtimeHoursMonthly: 0,
+        overtimeRateMultiplier: 1.5,
+        benefitsMonthly: 1000,
+        active: true,
+        department: 'front_of_house',
+        role: 'พนักงานเสิร์ฟ (Server)',
+        employmentType: 'full_time',
+      },
+    ];
   },
   saveEmployees(employees: Employee[]): void {
     safeSave(STORAGE_KEYS.EMPLOYEES, employees);
@@ -605,6 +695,7 @@ export const StorageService = {
         expenses: this.getExpenses(),
         salesOrders: this.getSalesOrders(),
         wasteLog: this.getWasteLog(),
+        dailySales: this.getDailySales(),
         yieldTests: this.getYieldTests(),
         employees: this.getEmployees(),
         packagingItems: this.getPackagingItems(),
@@ -770,6 +861,10 @@ export const StorageService = {
     if (Array.isArray(p.wasteLog)) {
       this.saveWasteLog(p.wasteLog);
       counts.wasteLog = p.wasteLog.length;
+    }
+    if (Array.isArray(p.dailySales)) {
+      this.saveDailySales(p.dailySales);
+      counts.dailySales = p.dailySales.length;
     }
     if (Array.isArray(p.yieldTests)) {
       this.saveYieldTests(p.yieldTests);

@@ -18,6 +18,8 @@ import {
   ExpenseRecord,
   RecipeCostBreakdown,
 } from '../types';
+import { StorageService } from '../services/storageService';
+import { calculateInventoryCOGS } from '../engine/calculations';
 import {
   calculateVariantCostBreakdown,
   runFullSpecificationTests,
@@ -87,8 +89,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const onlineSales = grabSales + linemanSales;
   const totalGpAmount = grabGpAmount + linemanGpAmount;
 
+  // Check for actual purchases & inventory stock (consistent with P&L and Executive Dashboard)
+  const purchasesList = React.useMemo(() => StorageService.getPurchases(), []);
+  const inventoryList = React.useMemo(() => StorageService.getInventory(), []);
+  const wasteList = React.useMemo(() => StorageService.getWasteLog(), []);
+  const hasActualStock = purchasesList.length > 0 && inventoryList.length > 0;
+
   // Costs
-  const totalFoodCost = periodSales.reduce((sum, o) => sum + o.totalFoodCost, 0);
+  const theoreticalFoodCost = periodSales.reduce((sum, o) => sum + o.totalFoodCost, 0);
+  let totalFoodCost = theoreticalFoodCost;
+
+  if (hasActualStock) {
+    const totalPurchasesCost = purchasesList.reduce((sum, p) => sum + (p.totalPrice || p.price || 0), 0);
+    const totalEndingStockCost = inventoryList.reduce((sum, item) => sum + ((item.currentStock ?? 0) * (item.costPerUnit || 0)), 0);
+    const totalWasteCost = wasteList.reduce((sum, w) => sum + (w.totalCost || w.cost || 0), 0);
+    const estimatedBeginningStockCost = totalEndingStockCost * 1.05;
+    const actualCogsResult = calculateInventoryCOGS(
+      estimatedBeginningStockCost,
+      totalPurchasesCost,
+      totalEndingStockCost,
+      totalWasteCost
+    );
+    totalFoodCost = actualCogsResult.cogs;
+  }
+
   const totalOpex = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalPackaging = periodSales.reduce((sum, o) => sum + o.packagingCost, 0);
   const totalOtherCosts = totalPackaging;
