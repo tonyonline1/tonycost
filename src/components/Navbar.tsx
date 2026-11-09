@@ -10,6 +10,7 @@ import {
   Sparkles,
   Settings,
   HelpCircle,
+  Cloud,
 } from 'lucide-react';
 import { RestaurantSettings } from '../types';
 import { PWAInstallButton } from './common/PWAInstallButton';
@@ -23,6 +24,7 @@ interface NavbarProps {
   onOpenMobileNav: () => void;
   onNavigateToTab: (tabId: string) => void;
   onOpenIconModal?: () => void;
+  onOpenFirebaseSync?: () => void;
 }
 
 interface MainNavItem {
@@ -39,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenMobileNav,
   onNavigateToTab,
   onOpenIconModal,
+  onOpenFirebaseSync,
 }) => {
   const navigate = (tabId: string) => onNavigateToTab(tabId);
 
@@ -136,8 +139,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Target Food Cost Indicator Pill & Settings & PWA Install */}
+          {/* Target Food Cost Indicator Pill & Settings & PWA Install & Firebase Cloud */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Firebase Cloud Sync Button */}
+            {onOpenFirebaseSync && (
+              <button
+                type="button"
+                onClick={onOpenFirebaseSync}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                title="แชร์ข้อมูลและซิงค์ Firebase Cloud กับทีมงาน"
+              >
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">คลาวด์ทีม</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </button>
+            )}
+
             {/* PWA Mobile & Tablet Install Button */}
             <PWAInstallButton onOpenIconModal={onOpenIconModal} />
 

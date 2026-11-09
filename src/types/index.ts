@@ -129,7 +129,8 @@ export interface PackagingLineItem {
 export interface MenuVariant {
   id: string;
   menuId?: string;
-  code?: string;
+  code?: string; // e.g. "MK-01-PORK"
+  sku?: string; // POS SKU mapping
   barcode?: string;
   name: string; // e.g. "กะเพราหมูหมัก", "กะเพราทะเล"
   proteinType: string; // "หมูหมัก" | "หมูบด" | "ไก่" | "เนื้อ" | "กุ้ง" | "ปลาหมึก" | "ทะเล"
@@ -147,15 +148,22 @@ export interface MenuVariant {
   kitchenStation?: string; // e.g. 'WOK', 'FRY', 'PREP'
   taxType?: 'INCLUSIVE' | 'EXCLUSIVE' | 'NONE';
   active: boolean;
+  isOutOfStock?: boolean; // POS availability flag: out of stock in kitchen
+  availableChannels?: string[]; // e.g. ['DINE_IN', 'TAKEAWAY', 'GRAB', 'LINEMAN']
   isReviewRequired?: boolean;
 }
 
 export interface MenuItem {
   id: string;
+  code?: string; // e.g. "MK-01"
+  sku?: string;
+  barcode?: string;
   name: string; // e.g. "กะเพรา", "ข้าวผัด", "ต้มยำ"
   category: string;
   description?: string;
   active: boolean;
+  isOutOfStock?: boolean;
+  availableChannels?: string[];
   displayOrder?: number;
   variants: MenuVariant[];
   createdAt?: string;

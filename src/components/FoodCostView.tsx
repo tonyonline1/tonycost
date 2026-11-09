@@ -735,6 +735,9 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
     const finalVariant: MenuVariant = {
       id: v.id || `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       menuId: targetMenu.id,
+      code: v.code?.trim() || undefined,
+      sku: v.sku?.trim() || v.code?.trim() || undefined,
+      barcode: v.barcode?.trim() || undefined,
       name: v.name?.trim() || `${targetMenu.name} ${pType}`,
       proteinType: pType,
       sellingPrice: Number(v.sellingPrice) || 60,
@@ -747,6 +750,8 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
       packagingCost: v.packagingCost !== undefined && !isNaN(Number(v.packagingCost)) ? Number(v.packagingCost) : 9.0,
       recipeItems: finalRecipeItems,
       active: v.active !== undefined ? v.active : true,
+      isOutOfStock: v.isOutOfStock || false,
+      availableChannels: v.availableChannels || ['DINE_IN', 'TAKEAWAY', 'GRAB', 'LINEMAN'],
     };
 
     let updatedVariants: MenuVariant[];
@@ -1750,6 +1755,48 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-700 mb-1 font-bold text-xs">
+                    รหัสเมนู / SKU (เชื่อม POS)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น MK-01, KPR"
+                    value={editingMenu.code || editingMenu.sku || ''}
+                    onChange={(e) => setEditingMenu({ ...editingMenu, code: e.target.value, sku: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-mono font-semibold focus:outline-none focus:border-[#F27D26]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-700 mb-1 font-bold text-xs">
+                    บาร์โค้ด (Barcode)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 885001234567"
+                    value={editingMenu.barcode || ''}
+                    onChange={(e) => setEditingMenu({ ...editingMenu, barcode: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-[#D6CEBE] rounded-xl text-stone-900 text-xs font-mono focus:outline-none focus:border-[#F27D26]"
+                  />
+                </div>
+              </div>
+
+              {/* Status toggles */}
+              <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingMenu.isOutOfStock || false}
+                    onChange={(e) => setEditingMenu({ ...editingMenu, isOutOfStock: e.target.checked })}
+                    className="w-4 h-4 text-rose-600 rounded border-stone-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-stone-800">
+                    ⚠️ วัตถุดิบหมด / งดขายเมนูนี้ชั่วคราว (Out of Stock สำหรับ POS)
+                  </span>
+                </label>
+              </div>
+
               <div className="flex justify-end gap-3 pt-3 border-t border-[#EAE4D9]">
                 <button
                   type="button"
@@ -2702,6 +2749,149 @@ export const FoodCostView: React.FC<FoodCostViewProps> = ({
                       }
                       className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-bold font-mono focus:outline-none focus:border-[#F27D26]"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* POS Integration: Code / SKU, Out-of-Stock Status & Available Channels */}
+              <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                    <span>📡 ข้อมูลเชื่อมต่อระบบ POS (POS Integration)</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500 font-mono">
+                    SKU & Channel Availability
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      รหัสตัวเลือก / SKU (เชื่อม POS)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="เช่น KPR-PORK, MK01-1"
+                      value={variantModalState.variant?.code || variantModalState.variant?.sku || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: {
+                            ...prev.variant,
+                            code: e.target.value,
+                            sku: e.target.value,
+                          },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-mono font-semibold focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 mb-1 font-bold text-[11px]">
+                      บาร์โค้ด (Barcode)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="เช่น 885001234567"
+                      value={variantModalState.variant?.barcode || ''}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, barcode: e.target.value },
+                        }))
+                      }
+                      className="w-full p-2 bg-white border border-stone-300 rounded-xl text-stone-900 text-xs font-mono focus:outline-none focus:border-[#F27D26]"
+                    />
+                  </div>
+                </div>
+
+                {/* Stock & Active toggles */}
+                <div className="flex items-center gap-4 flex-wrap pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={variantModalState.variant?.isOutOfStock || false}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, isOutOfStock: e.target.checked },
+                        }))
+                      }
+                      className="w-4 h-4 text-rose-600 rounded border-stone-300 focus:ring-rose-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-rose-700">
+                      ⚠️ วัตถุดิบหมด / งดขายชั่วคราว (Out of Stock)
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={variantModalState.variant?.active !== false}
+                      onChange={(e) =>
+                        setVariantModalState((prev) => ({
+                          ...prev,
+                          variant: { ...prev.variant, active: e.target.checked },
+                        }))
+                      }
+                      className="w-4 h-4 text-[#F27D26] rounded border-stone-300 focus:ring-[#F27D26] cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-stone-700">
+                      เปิดใช้งานในระบบ (Active)
+                    </span>
+                  </label>
+                </div>
+
+                {/* Channel selection */}
+                <div className="pt-1 border-t border-stone-200">
+                  <label className="block text-stone-700 mb-1.5 font-bold text-[11px]">
+                    ช่องทางจำหน่ายที่เปิดขาย (Available Channels):
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'DINE_IN', label: 'หน้าร้าน (Dine-in)' },
+                      { id: 'TAKEAWAY', label: 'ใส่กล่อง (Takeaway)' },
+                      { id: 'GRAB', label: 'GrabFood' },
+                      { id: 'LINEMAN', label: 'LINE MAN' },
+                    ].map((ch) => {
+                      const currentChannels = variantModalState.variant?.availableChannels || [
+                        'DINE_IN',
+                        'TAKEAWAY',
+                        'GRAB',
+                        'LINEMAN',
+                      ];
+                      const isChecked = currentChannels.includes(ch.id);
+                      return (
+                        <label
+                          key={ch.id}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer border transition-colors ${
+                            isChecked
+                              ? 'bg-[#F27D26]/10 border-[#F27D26] text-[#B45309]'
+                              : 'bg-white border-stone-200 text-stone-500'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const nextChannels = e.target.checked
+                                ? [...currentChannels, ch.id]
+                                : currentChannels.filter((c) => c !== ch.id);
+                              setVariantModalState((prev) => ({
+                                ...prev,
+                                variant: {
+                                  ...prev.variant,
+                                  availableChannels: nextChannels,
+                                },
+                              }));
+                            }}
+                            className="sr-only"
+                          />
+                          <span>{ch.label}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

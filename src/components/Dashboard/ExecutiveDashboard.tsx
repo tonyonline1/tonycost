@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   UtensilsCrossed,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Ingredient,
@@ -25,6 +26,7 @@ import {
 } from '../../types/domain';
 import { calculateProfitAndLoss, calculateBreakEven, calculateInventoryCOGS } from '../../engine/calculations';
 import { StorageService } from '../../services/storageService';
+import { FirebaseSyncService } from '../../services/firebaseSyncService';
 import { INITIAL_SETTINGS } from '../../data/initialData';
 import { WhatShouldIDoSection } from './WhatShouldIDoSection';
 
@@ -42,6 +44,7 @@ interface ExecutiveDashboardProps {
   advices?: WhatShouldIDoAdvice[];
   activeLanguage: 'th' | 'en';
   onNavigate: (view: string) => void;
+  onSalesUpdated?: (sales: DailySalesRecord[]) => void;
 }
 
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
@@ -57,7 +60,32 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   advices,
   activeLanguage,
   onNavigate,
+  onSalesUpdated,
 }) => {
+  const [isSyncingSales, setIsSyncingSales] = React.useState(false);
+  const [syncFeedback, setSyncFeedback] = React.useState<string | null>(null);
+
+  const handleSyncLivePOS = async () => {
+    setIsSyncingSales(true);
+    setSyncFeedback(null);
+    try {
+      const res = await FirebaseSyncService.pullDailySales();
+      if (res.success && res.data) {
+        if (onSalesUpdated) {
+          onSalesUpdated(res.data);
+        }
+        setSyncFeedback(`ซิงค์สำเร็จ (${res.data.length} วัน)`);
+      } else {
+        setSyncFeedback(res.error ? `ข้อผิดพลาด: ${res.error}` : 'ไม่พบข้อมูลใหม่จาก POS');
+      }
+    } catch (err: any) {
+      setSyncFeedback('ซิงค์ล้มเหลว');
+    } finally {
+      setIsSyncingSales(false);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    }
+  };
+
   const currentSettings = settings || INITIAL_SETTINGS;
   const allWaste = waste && waste.length > 0 ? waste : wasteRecords || [];
 
@@ -263,7 +291,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {syncFeedback && (
+            <span className="text-xs text-amber-300 bg-amber-950/60 px-2.5 py-1.5 rounded-lg border border-amber-500/30">
+              {syncFeedback}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleSyncLivePOS}
+            disabled={isSyncingSales}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 px-3.5 py-2 text-xs font-medium text-emerald-400 transition-all cursor-pointer disabled:opacity-50"
+            title="ดึงยอดขายสดล่าสุดจาก Firebase Firestore ที่ POS บันทึกเข้ามา"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isSyncingSales ? 'animate-spin' : ''}`} />
+            <span>{isSyncingSales ? 'กำลังซิงค์ POS...' : '📡 ซิงค์ยอดขายสดจาก POS'}</span>
+          </button>
           <button
             type="button"
             onClick={() => onNavigate('scenario_calculator')}

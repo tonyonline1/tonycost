@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   Users,
   ShoppingCart,
+  Cloud,
 } from 'lucide-react';
 import { PWAInstallButton } from './common/PWAInstallButton';
 import { StorageService } from '../services/storageService';
@@ -56,6 +57,7 @@ interface SidebarProps {
   lowStockCount?: number;
   onReloadData?: () => void;
   onOpenIconModal?: () => void;
+  onOpenFirebaseSync?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -66,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   reviewCount,
   onReloadData,
   onOpenIconModal,
+  onOpenFirebaseSync,
 }) => {
   // Backup & Restore states
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -365,6 +368,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>กู้คืนข้อมูล</span>
             </button>
           </div>
+
+          {/* Cloud Sync with Team */}
+          {onOpenFirebaseSync && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenFirebaseSync();
+                onCloseMobile();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all cursor-pointer"
+            >
+              <Cloud className="w-4 h-4 text-emerald-600" />
+              <span>แชร์ข้อมูล Firebase Cloud (ทีมงาน)</span>
+            </button>
+          )}
 
           {/* Feedback Message */}
           {backupMessage && (

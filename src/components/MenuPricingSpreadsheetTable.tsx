@@ -93,6 +93,13 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
     onSaveMenu({ ...menu, variants: updated });
   };
 
+  const handleToggleOutOfStock = (variantId: string) => {
+    const updated = menu.variants.map((v) =>
+      v.id === variantId ? { ...v, isOutOfStock: !v.isOutOfStock } : v
+    );
+    onSaveMenu({ ...menu, variants: updated });
+  };
+
   const handleVariantDragStart = (e: React.DragEvent, id: string) => {
     setDraggedVariantId(id);
     e.dataTransfer.effectAllowed = 'move';
@@ -1075,7 +1082,33 @@ export const MenuPricingSpreadsheetTable: React.FC<MenuPricingSpreadsheetTablePr
                   {/* Common 1. รายการ */}
                   <td className="py-2 px-3 bg-[#FFE0B2] text-stone-900 font-bold border-r border-black text-left whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1.5">
-                      <span className="font-bold">{v.proteinType || v.name}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`font-bold ${v.isOutOfStock ? 'line-through text-stone-500' : ''}`}>
+                          {v.proteinType || v.name}
+                        </span>
+                        {(v.sku || v.code) && (
+                          <span className="text-[10px] bg-stone-100 text-stone-700 px-1 py-0.2 rounded font-mono font-normal border border-stone-300" title={`รหัสเมนู POS / SKU: ${v.sku || v.code}`}>
+                            #{v.sku || v.code}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleOutOfStock(v.id)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-normal transition-colors cursor-pointer ${
+                            v.isOutOfStock
+                              ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200 font-bold'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-amber-100 hover:text-amber-800'
+                          }`}
+                          title={v.isOutOfStock ? 'คลิกเพื่อเปลี่ยนเป็น พร้อมขาย' : 'คลิกเพื่อแจ้ง วัตถุดิบหมด (POS จะปิดขาย)'}
+                        >
+                          {v.isOutOfStock ? '⚠️ ของหมด' : 'พร้อมขาย'}
+                        </button>
+                        {v.availableChannels && v.availableChannels.length > 0 && v.availableChannels.length < 4 && (
+                          <span className="text-[9px] bg-amber-100/80 text-amber-900 px-1 py-0.2 rounded font-normal border border-amber-200" title={`ช่องทางที่ขาย: ${v.availableChannels.join(', ')}`}>
+                            {v.availableChannels.map(c => c === 'DINE_IN' ? 'หน้าร้าน' : c === 'TAKEAWAY' ? 'กลับบ้าน' : c).join('·')}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {onEditVariant && (
                           <button

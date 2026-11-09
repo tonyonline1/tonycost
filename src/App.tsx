@@ -24,6 +24,8 @@ import { DailySalesRecord, SalesChannel, Employee as DomainEmployee } from './ty
 import { upsertDailySalesRecord } from './engine/calculations';
 import { AppIconModal } from './components/common/AppIconModal';
 import { AppIconService } from './services/appIconService';
+import { FirebaseSyncModal } from './components/common/FirebaseSyncModal';
+import { testConnection } from './services/firebase';
 
 import {
   RestaurantSettings,
@@ -98,6 +100,12 @@ export default function App() {
   const [targetRecipeVariantId, setTargetRecipeVariantId] = useState<string>('');
   const [backupStatus, setBackupStatus] = useState(() => StorageService.isBackupOverdue(7));
   const [isIconModalOpen, setIsIconModalOpen] = useState<boolean>(false);
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
+
+  // Test Firestore connection on boot
+  useEffect(() => {
+    testConnection().catch(() => {});
+  }, []);
 
   // Sync active custom icon to document head on load
   useEffect(() => {
@@ -442,6 +450,7 @@ export default function App() {
         onOpenMobileNav={() => setIsMobileNavOpen(true)}
         onNavigateToTab={(tabId) => setCurrentTab(tabId)}
         onOpenIconModal={() => setIsIconModalOpen(true)}
+        onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
       />
 
       {/* E6: Yellow banner when last backup is older than 7 days or never */}
@@ -483,6 +492,7 @@ export default function App() {
           lowStockCount={0}
           onReloadData={handleReloadAllData}
           onOpenIconModal={() => setIsIconModalOpen(true)}
+          onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
         />
 
         <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 sm:py-6 lg:py-8 min-w-0 overflow-x-hidden">
@@ -620,6 +630,7 @@ export default function App() {
               currentSettings={settings}
               activeLanguage="th"
               onNavigateToTab={(tabId) => setCurrentTab(tabId)}
+              onSalesUpdated={(updatedSales) => setDailySales(updatedSales)}
             />
           )}
 
@@ -631,6 +642,7 @@ export default function App() {
               employees={employees as any}
               settings={settings}
               activeLanguage="th"
+              onSalesUpdated={(updatedSales) => setDailySales(updatedSales)}
             />
           )}
 
@@ -715,6 +727,13 @@ export default function App() {
       <AppIconModal
         isOpen={isIconModalOpen}
         onClose={() => setIsIconModalOpen(false)}
+      />
+
+      {/* Firebase Cloud Sync Modal */}
+      <FirebaseSyncModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+        onDataSynced={handleReloadAllData}
       />
 
       {/* Light Theme Footer */}

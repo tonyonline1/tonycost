@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "RestaurantSettings": {
+      "title": "RestaurantSettings",
+      "description": "Global restaurant settings, cost targets, and configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "restaurantName": { "type": "string", "maxLength": 100 },
+        "targetFoodCostPercent": { "type": "number" },
+        "vatRatePercent": { "type": "number" },
+        "operatingDaysPerMonth": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "restaurantName"]
+    },
+    "Ingredient": {
+      "title": "Ingredient",
+      "description": "Raw ingredient item with yield and purchasing cost",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 80 },
+        "purchasePrice": { "type": "number" },
+        "purchaseQuantity": { "type": "number" },
+        "purchaseUnit": { "type": "string", "maxLength": 30 },
+        "costPerBaseUnit": { "type": "number" },
+        "yieldPercent": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "purchasePrice", "purchaseUnit"]
+    },
+    "Sauce": {
+      "title": "Sauce",
+      "description": "Sub-recipe or sauce batch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "productionQuantity": { "type": "number" },
+        "costPerGram": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Menu item with recipes and selling prices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 80 },
+        "sellingPrice": { "type": "number" },
+        "foodCost": { "type": "number" },
+        "foodCostPercent": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "DailySale": {
+      "title": "DailySale",
+      "description": "Daily aggregated sales record by sales channel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "maxLength": 20 },
+        "channelId": { "type": "string", "maxLength": 50 },
+        "channelName": { "type": "string", "maxLength": 80 },
+        "grossSales": { "type": "number" },
+        "netSales": { "type": "number" },
+        "orderCount": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "date", "channelId", "netSales"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operating or overhead expense record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 80 },
+        "amount": { "type": "number" },
+        "period": { "type": "string", "maxLength": 30 },
+        "isFixed": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "amount"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Restaurant staff and wage configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "position": { "type": "string", "maxLength": 80 },
+        "roleCategory": { "type": "string", "maxLength": 50 },
+        "wageRate": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "wageRate"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Inventory stock item record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ingredientId": { "type": "string", "maxLength": 80 },
+        "ingredientName": { "type": "string", "maxLength": 120 },
+        "currentStock": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 30 },
+        "costPerUnit": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "ingredientName", "currentStock"]
+    },
+    "PurchaseRecord": {
+      "title": "PurchaseRecord",
+      "description": "Purchase transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ingredientName": { "type": "string", "maxLength": 120 },
+        "totalPrice": { "type": "number" },
+        "purchaseDate": { "type": "string", "maxLength": 30 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "ingredientName", "totalPrice"]
+    },
+    "WasteRecord": {
+      "title": "WasteRecord",
+      "description": "Kitchen waste tracking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ingredientName": { "type": "string", "maxLength": 120 },
+        "totalCost": { "type": "number" },
+        "wasteDate": { "type": "string", "maxLength": 30 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "ingredientName", "totalCost"]
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": "RestaurantSettings",
+      "description": "Global restaurant settings documents"
+    },
+    "/ingredients/{ingredientId}": {
+      "schema": "Ingredient",
+      "description": "Restaurant ingredient catalog"
+    },
+    "/sauces/{sauceId}": {
+      "schema": "Sauce",
+      "description": "Sub-recipes and sauce batches"
+    },
+    "/menus/{menuId}": {
+      "schema": "MenuItem",
+      "description": "Menu items and portions"
+    },
+    "/daily_sales/{saleId}": {
+      "schema": "DailySale",
+      "description": "Daily sales records"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Operating and fixed expense records"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Staff roster and wage information"
+    },
+    "/inventory/{inventoryId}": {
+      "schema": "InventoryItem",
+      "description": "Inventory stock counts"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "PurchaseRecord",
+      "description": "Goods received and purchasing logs"
+    },
+    "/waste_log/{wasteId}": {
+      "schema": "WasteRecord",
+      "description": "Kitchen food waste tracking logs"
+    }
+  }
+}

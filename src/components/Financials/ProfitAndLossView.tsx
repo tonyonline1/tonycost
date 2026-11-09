@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, Percent, TrendingUp, Layers, Calendar, ArrowDownRight, ArrowUpRight, Scale, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Percent, TrendingUp, Layers, Calendar, ArrowDownRight, ArrowUpRight, Scale, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { ExpenseRecord, DailySalesRecord, Employee, BusinessSettings } from '../../types/domain';
 import { calculateProfitAndLoss, calculateInventoryCOGS, calculateVariance } from '../../engine/calculations';
 import { StorageService } from '../../services/storageService';
+import { FirebaseSyncService } from '../../services/firebaseSyncService';
 
 interface ProfitAndLossViewProps {
   sales: DailySalesRecord[];
@@ -10,6 +11,7 @@ interface ProfitAndLossViewProps {
   employees: Employee[];
   settings: BusinessSettings;
   activeLanguage: 'th' | 'en';
+  onSalesUpdated?: (sales: DailySalesRecord[]) => void;
 }
 
 export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
@@ -18,7 +20,32 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
   employees,
   settings,
   activeLanguage,
+  onSalesUpdated,
 }) => {
+  const [isSyncingSales, setIsSyncingSales] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  const handleSyncLivePOS = async () => {
+    setIsSyncingSales(true);
+    setSyncFeedback(null);
+    try {
+      const res = await FirebaseSyncService.pullDailySales();
+      if (res.success && res.data) {
+        if (onSalesUpdated) {
+          onSalesUpdated(res.data);
+        }
+        setSyncFeedback(`ซิงค์สำเร็จ (${res.data.length} รายการ)`);
+      } else {
+        setSyncFeedback(res.error ? `ข้อผิดพลาด: ${res.error}` : 'ไม่พบข้อมูลใหม่จาก POS');
+      }
+    } catch (err: any) {
+      setSyncFeedback('ซิงค์ล้มเหลว');
+    } finally {
+      setIsSyncingSales(false);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    }
+  };
+
   // Aggregate monthly revenues
   const grossSales = sales.reduce((sum, s) => sum + s.grossSales, 0);
   const discounts = sales.reduce((sum, s) => sum + s.discounts, 0);
@@ -145,6 +172,24 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
               ? 'งบการเงินมาตรฐานร้านอาหาร คำนวณยอดขายสุทธิ ต้นทุนอาหาร Prime Cost กำไรดำเนินงาน และกำไรสุทธิ'
               : 'Standard restaurant financial statement showing Net Sales, COGS, Prime Cost, EBITDA, and Net Margin.'}
           </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          {syncFeedback && (
+            <span className="text-xs text-amber-300 bg-amber-950/60 px-2.5 py-1.5 rounded-lg border border-amber-500/30">
+              {syncFeedback}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleSyncLivePOS}
+            disabled={isSyncingSales}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-medium cursor-pointer transition-colors disabled:opacity-50"
+            title="ดึงยอดขายสดล่าสุดจาก Firebase Firestore ที่ POS บันทึกเข้ามา"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSales ? 'animate-spin' : ''}`} />
+            <span>{isSyncingSales ? 'กำลังซิงค์ POS...' : '📡 ซิงค์ยอดขายสดจาก POS'}</span>
+          </button>
         </div>
       </div>
 
