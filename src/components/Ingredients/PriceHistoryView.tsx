@@ -188,7 +188,7 @@ export const PriceHistoryView: React.FC<PriceHistoryViewProps> = ({
               type="submit"
               className="w-full rounded-lg bg-[#FF6321] hover:bg-[#FF6321]/90 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
             >
-              บันทึกราคาและอัปเดตสต็อก
+              บันทึกราคาวัตถุดิบใหม่
             </button>
           </form>
         </div>

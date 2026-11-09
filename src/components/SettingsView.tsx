@@ -396,7 +396,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             >
               <div className="font-bold text-white text-sm">STAFF (พนักงานหน้าร้าน)</div>
               <p className="text-[11px] text-white/60 mt-1">
-                บันทึกยอดขายหน้าร้าน และตรวจดูสูตรตวงชั่ง (ไม่แสดงระบบสต็อก)
+                บันทึกยอดขายหน้าร้าน และตรวจดูสูตรตวงชั่งตามมาตรฐาน
               </p>
             </div>
           </div>

@@ -87,10 +87,8 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
   // Check if purchase and inventory records exist
   const hasActualStockData = purchasesList.length > 0 && inventoryList.length > 0;
 
-  // Selector: "actual" vs "estimated"
-  const [cogsMode, setCogsMode] = useState<'actual' | 'estimated'>(() =>
-    hasActualStockData ? 'actual' : 'estimated'
-  );
+  // Selector: "actual" vs "estimated" (Default to estimated % of sales as user doesn't track inventory stock)
+  const [cogsMode, setCogsMode] = useState<'actual' | 'estimated'>('estimated');
 
   // Effective mode falls back to estimated if actual stock data is missing
   const effectiveCogsMode = cogsMode === 'actual' && !hasActualStockData ? 'estimated' : cogsMode;
@@ -193,8 +191,8 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
         </div>
       </div>
 
-      {/* Warning banner when stock calculation is negative */}
-      {effectiveCogsMode === 'actual' && actualCogsResult.isNegative && (
+      {/* Warning banner when stock calculation is negative (only if actual stock is tracked and negative) */}
+      {effectiveCogsMode === 'actual' && hasActualStockData && actualCogsResult.isNegative && (
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-300 text-xs flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
           <span className="font-semibold">ตัวเลขสต็อกผิดปกติ ตรวจสอบการนับสต็อก (ต้นทุนสต็อกติดลบ ฿{actualCogsResult.cogs.toLocaleString()})</span>
@@ -205,21 +203,10 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-[#151518] border border-white/5">
         <div className="flex items-center gap-2">
           <Scale className="h-4 w-4 text-[#F27D26]" />
-          <span className="text-xs font-semibold text-white/80">วิธีคำนวณต้นทุนขาย (COGS Method):</span>
+          <span className="text-xs font-semibold text-white/80">วิธีคำนวณต้นทุนอาหารขาย (COGS):</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="inline-flex rounded-lg bg-black/40 p-1 border border-white/10">
-            <button
-              type="button"
-              onClick={() => setCogsMode('actual')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                effectiveCogsMode === 'actual'
-                  ? 'bg-[#F27D26] text-white shadow-xs'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              ต้นทุนจริง (จากการซื้อ/สต็อก)
-            </button>
             <button
               type="button"
               onClick={() => setCogsMode('estimated')}
@@ -229,17 +216,28 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              ต้นทุนประมาณการ (% ของยอดขาย)
+              ต้นทุนตามสูตร & ยอดขาย (% Food Cost)
+            </button>
+            <button
+              type="button"
+              onClick={() => setCogsMode('actual')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                effectiveCogsMode === 'actual'
+                  ? 'bg-[#F27D26] text-white shadow-xs'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              ต้นทุนจากการจัดซื้อ (Actual Purchases)
             </button>
           </div>
           {effectiveCogsMode === 'estimated' && (
             <span className="px-2 py-1 rounded text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              ใช้ค่าประมาณ
+              ตามสูตรมาตรฐาน
             </span>
           )}
           {effectiveCogsMode === 'actual' && (
             <span className="px-2 py-1 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              สต็อกจริง
+              บิลซื้อจริง
             </span>
           )}
         </div>
@@ -270,7 +268,7 @@ export const ProfitAndLossView: React.FC<ProfitAndLossViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white/5 p-3.5 rounded-xl border border-white/5">
-            <div className="text-white/40 text-[10px] uppercase font-bold tracking-wider">ต้นทุนจริงจากการนับสต็อก (Actual)</div>
+            <div className="text-white/40 text-[10px] uppercase font-bold tracking-wider">ต้นทุนจริงจากการจัดซื้อ (Actual)</div>
             <div className="mt-1.5 text-xl font-light text-white font-mono">
               ฿{Math.round(actualCogsResult.cogs).toLocaleString()}
             </div>

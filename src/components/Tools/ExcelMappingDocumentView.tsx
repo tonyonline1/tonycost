@@ -24,7 +24,7 @@ export const ExcelMappingDocumentView: React.FC<ExcelMappingDocumentViewProps> =
       improvements: 'รองรับ Absorption Yield > 100% (ข้าวหุงสุก, เส้นต้ม, เห็ดหอมแห้งแช่น้ำ) ได้ถูกต้อง',
     },
     {
-      excelSheet: '3. SAUCE_BATCH (ซอส & สต็อก)',
+      excelSheet: '3. SAUCE_BATCH (ซอส & น้ำซุปกลาง)',
       columns: 'Recipe Name, Yield Volume, Ingredients List, Cost Sum, Cost/ml',
       domainModel: 'SubRecipe Entity (batchYieldQuantity, batchYieldUnit, items[], costPerUnit)',
       engineLogic: 'calculateSubRecipeUnitCost()',

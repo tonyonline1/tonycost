@@ -65,17 +65,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'recipes':
         return { label: '📖 คลังสูตรอาหารกลาง', icon: BookOpen };
       case 'sauces':
-        return { label: '🧪 ซอส & สต็อก Batch', icon: FlaskConical };
+        return { label: '🧪 ซอส & น้ำซุปสูตรกลาง (Batch)', icon: FlaskConical };
       case 'sales_entry':
         return { label: '📝 บันทึกยอดขายประจำวัน', icon: Calculator };
       case 'expenses':
         return { label: '🧾 บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Calculator };
       case 'labor':
         return { label: '👥 จัดการค่าแรง & พนักงาน', icon: Calculator };
-      case 'inventory':
-        return { label: '📦 สต็อกคงเหลือ & ของเสีย', icon: Calculator };
       case 'purchases':
-        return { label: '🛒 บันทึกการจัดซื้อ', icon: Calculator };
+        return { label: '🛒 บันทึกการจัดซื้อ & ประวัติราคา', icon: Calculator };
       case 'ingredients':
         return { label: '🥩 วัตถุดิบ & Yield Lab', icon: Beef };
       case 'reports':

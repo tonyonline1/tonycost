@@ -134,7 +134,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             การสั่งซื้อและประวัติราคา (Purchases & Price Audits)
           </h1>
           <p className="text-xs text-white/60 mt-0.5">
-            บันทึกบิลซื้อวัตถุดิบเข้าสต็อก และประวัติการเปลี่ยนแปลงราคาเพื่อความโปร่งใสทางบัญชี
+            บันทึกบิลซื้อวัตถุดิบเข้าร้าน และประวัติการเปลี่ยนแปลงราคาเพื่อความโปร่งใสทางบัญชี
           </p>
         </div>
 
@@ -318,7 +318,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
           <div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/20 text-white">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="font-bold text-white text-base">
-                บันทึกการซื้อวัตถุดิบเข้าสต็อก
+                บันทึกการซื้อวัตถุดิบเข้าร้าน
               </h3>
               <button
                 type="button"

@@ -154,33 +154,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'recipes-group',
-      label: 'สูตรอาหาร & ซอสสต็อก',
+      label: 'สูตรอาหาร & ซอสปรุงรส',
       subtitle: '',
       icon: BookOpen,
       items: [
         { id: 'recipes', name: 'คลังสูตรอาหารกลาง (Base)', icon: BookOpen },
-        { id: 'sauces', name: 'ซอส & สต็อก Batch', icon: FlaskConical },
+        { id: 'sauces', name: 'ซอส & น้ำซุปสูตรกลาง (Batch)', icon: FlaskConical },
       ],
     },
     {
       id: 'daily-ops-labor',
-      label: 'บันทึกประจำวัน & ค่าแรง',
+      label: 'บันทึกประจำวัน & จัดซื้อ',
       subtitle: '',
       icon: BarChart3,
       items: [
         { id: 'sales_entry', name: 'บันทึกยอดขาย (Sales)', icon: BarChart3 },
         { id: 'expenses', name: 'บันทึกค่าใช้จ่าย & โสหุ้ย', icon: Receipt },
-        { id: 'labor', name: 'จัดการค่าแรง & พนักงาน', icon: Users },
-      ],
-    },
-    {
-      id: 'inventory-procurement',
-      label: 'คลังสินค้า & การจัดซื้อ',
-      subtitle: '',
-      icon: Database,
-      items: [
-        { id: 'inventory', name: 'สต็อกคงเหลือ & ของเสีย (Waste)', icon: Database },
         { id: 'purchases', name: 'บันทึกการจัดซื้อ & ประวัติราคา', icon: ShoppingCart },
+        { id: 'labor', name: 'จัดการค่าแรง & พนักงาน', icon: Users },
       ],
     },
     {

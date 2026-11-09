@@ -115,6 +115,13 @@ export default function App() {
     );
   }, []);
 
+  // Redirect away from inventory stock tab to food cost view
+  useEffect(() => {
+    if (currentTab === 'inventory') {
+      setCurrentTab('food_cost');
+    }
+  }, [currentTab]);
+
   const handleDownloadBackup = () => {
     StorageService.downloadBackupFile();
     setBackupStatus(StorageService.isBackupOverdue(7));

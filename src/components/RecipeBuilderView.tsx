@@ -955,7 +955,7 @@ export const RecipeBuilderView: React.FC<RecipeBuilderViewProps> = ({
             }`}
           >
             <FlaskConical className="w-3.5 h-3.5" />
-            <span>ขั้นตอนที่ 3: ซอสและสต็อก (Sauce Batches)</span>
+            <span>ขั้นตอนที่ 3: ซอสและน้ำซุปกลาง (Sauce Batches)</span>
           </button>
 
           <button
