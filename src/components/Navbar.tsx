@@ -25,6 +25,8 @@ interface NavbarProps {
   onNavigateToTab: (tabId: string) => void;
   onOpenIconModal?: () => void;
   onOpenFirebaseSync?: () => void;
+  currentUser?: { displayName?: string | null; email?: string | null; photoURL?: string | null } | null;
+  isCloudLoading?: boolean;
 }
 
 interface MainNavItem {
@@ -42,6 +44,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateToTab,
   onOpenIconModal,
   onOpenFirebaseSync,
+  currentUser,
+  isCloudLoading,
 }) => {
   const navigate = (tabId: string) => onNavigateToTab(tabId);
 
@@ -144,12 +148,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={onOpenFirebaseSync}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                title="แชร์ข้อมูลและซิงค์ Firebase Cloud กับทีมงาน"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer ${
+                  currentUser
+                    ? 'border-emerald-300/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                    : 'border-amber-300/80 bg-amber-50 hover:bg-amber-100 text-amber-900'
+                }`}
+                title={
+                  currentUser
+                    ? `เชื่อมต่อ Cloud Firestore แล้ว: ${currentUser.email || currentUser.displayName} (คลิกเพื่อจัดการ/สำรองข้อมูล)`
+                    : 'เข้าสู่ระบบด้วย Google เพื่อบันทึกข้อมูลขึ้น Cloud Firestore'
+                }
               >
-                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">คลาวด์ทีม</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <Cloud className={`w-3.5 h-3.5 ${currentUser ? 'text-emerald-600' : 'text-amber-600'} ${isCloudLoading ? 'animate-bounce' : ''}`} />
+                <span className="hidden sm:inline">
+                  {currentUser ? (currentUser.displayName?.split(' ')[0] || 'Cloud') : 'เข้าสู่ระบบ Cloud'}
+                </span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    currentUser ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  }`}
+                />
               </button>
             )}
 

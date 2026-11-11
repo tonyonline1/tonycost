@@ -11,7 +11,7 @@ import { RecipeBuilderView } from './components/RecipeBuilderView';
 import { QuickCostCalculatorView } from './components/QuickCostCalculatorView';
 import { SettingsView } from './components/SettingsView';
 import { BreakEvenView } from './components/Financials/BreakEvenView';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Cloud, CheckCircle2, RefreshCw, X, LogIn, Database } from 'lucide-react';
 import { ExpensesView } from './components/Financials/ExpensesView';
 import { SalesEntryView } from './components/Financials/SalesEntryView';
 import { ProfitAndLossView } from './components/Financials/ProfitAndLossView';
@@ -25,7 +25,9 @@ import { upsertDailySalesRecord } from './engine/calculations';
 import { AppIconModal } from './components/common/AppIconModal';
 import { AppIconService } from './services/appIconService';
 import { FirebaseSyncModal } from './components/common/FirebaseSyncModal';
-import { testConnection } from './services/firebase';
+import { auth, loginWithGoogle, testConnection } from './services/firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { FirebaseSyncService, COLLECTIONS } from './services/firebaseSyncService';
 
 import {
   RestaurantSettings,
@@ -102,10 +104,256 @@ export default function App() {
   const [isIconModalOpen, setIsIconModalOpen] = useState<boolean>(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
 
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [isAutoMigrating, setIsAutoMigrating] = useState<boolean>(false);
+
   // Test Firestore connection on boot
   useEffect(() => {
     testConnection().catch(() => {});
   }, []);
+
+  // Firebase Authentication & Real-Time Firestore Sync (Requirements 1, 2, 3)
+  useEffect(() => {
+    let unsubs: (() => void)[] = [];
+
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      // Clean up any existing subscriptions
+      unsubs.forEach((u) => u());
+      unsubs = [];
+
+      setCurrentUser(user);
+
+      if (!user) {
+        setIsCloudLoading(false);
+        return;
+      }
+
+      setIsCloudLoading(true);
+      setCloudError(null);
+
+      // 1. Initial check & auto-migration if cloud collections are brand new
+      try {
+        const hasData = await FirebaseSyncService.hasUserData(user.uid);
+        if (!hasData) {
+          setIsAutoMigrating(true);
+          await FirebaseSyncService.migrateLocalDataToUser(user.uid);
+          setIsAutoMigrating(false);
+        }
+      } catch (err: any) {
+        console.warn('Auto-migration error:', err);
+        setIsAutoMigrating(false);
+      }
+
+      // 2. Real-Time onSnapshot subscriptions for user-scoped collections (Requirement 3)
+      try {
+        // Settings Doc
+        unsubs.push(
+          FirebaseSyncService.subscribeUserDoc<RestaurantSettings>(
+            user.uid,
+            COLLECTIONS.SETTINGS,
+            'default',
+            (cloudSettings) => {
+              if (cloudSettings) {
+                setSettings(cloudSettings);
+                StorageService.saveSettings(cloudSettings);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing settings')
+          )
+        );
+
+        // Ingredients
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<Ingredient>(
+            user.uid,
+            COLLECTIONS.INGREDIENTS,
+            (cloudIngs) => {
+              if (cloudIngs && cloudIngs.length > 0) {
+                setIngredients(cloudIngs);
+                StorageService.saveIngredients(cloudIngs);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing ingredients')
+          )
+        );
+
+        // Sauces
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<Sauce>(
+            user.uid,
+            COLLECTIONS.SAUCES,
+            (cloudSauces) => {
+              if (cloudSauces && cloudSauces.length > 0) {
+                setSauces(cloudSauces);
+                StorageService.saveSauces(cloudSauces);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing sauces')
+          )
+        );
+
+        // Menus
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<MenuItem>(
+            user.uid,
+            COLLECTIONS.MENUS,
+            (cloudMenus) => {
+              if (cloudMenus && cloudMenus.length > 0) {
+                setMenus(cloudMenus);
+                StorageService.saveMenus(cloudMenus);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing menus')
+          )
+        );
+
+        // Daily Sales
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<DailySalesRecord>(
+            user.uid,
+            COLLECTIONS.DAILY_SALES,
+            (cloudSales) => {
+              if (cloudSales && cloudSales.length > 0) {
+                setDailySales(cloudSales);
+                StorageService.saveDailySales(cloudSales);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing daily sales')
+          )
+        );
+
+        // Expenses
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<ExpenseRecord>(
+            user.uid,
+            COLLECTIONS.EXPENSES,
+            (cloudExp) => {
+              if (cloudExp && cloudExp.length > 0) {
+                setExpenses(cloudExp);
+                StorageService.saveExpenses(cloudExp);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing expenses')
+          )
+        );
+
+        // Employees
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<DomainEmployee>(
+            user.uid,
+            COLLECTIONS.EMPLOYEES,
+            (cloudEmp) => {
+              if (cloudEmp && cloudEmp.length > 0) {
+                setEmployees(cloudEmp);
+                StorageService.saveEmployees(cloudEmp as any);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing employees')
+          )
+        );
+
+        // Purchases
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<PurchaseRecord>(
+            user.uid,
+            COLLECTIONS.PURCHASES,
+            (cloudPurchases) => {
+              if (cloudPurchases && cloudPurchases.length > 0) {
+                setPurchases(cloudPurchases);
+                StorageService.savePurchases(cloudPurchases);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing purchases')
+          )
+        );
+
+        // Inventory
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<InventoryItem>(
+            user.uid,
+            COLLECTIONS.INVENTORY,
+            (cloudInv) => {
+              if (cloudInv && cloudInv.length > 0) {
+                setInventory(cloudInv);
+                StorageService.saveInventory(cloudInv);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing inventory')
+          )
+        );
+
+        // Waste Log
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<WasteRecord>(
+            user.uid,
+            COLLECTIONS.WASTE_LOG,
+            (cloudWaste) => {
+              if (cloudWaste && cloudWaste.length > 0) {
+                setWasteLog(cloudWaste);
+                StorageService.saveWasteLog(cloudWaste);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing waste log')
+          )
+        );
+
+        // Suppliers
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<Supplier>(
+            user.uid,
+            COLLECTIONS.SUPPLIERS,
+            (cloudSuppliers) => {
+              if (cloudSuppliers && cloudSuppliers.length > 0) {
+                setSuppliers(cloudSuppliers);
+                StorageService.saveSuppliers(cloudSuppliers);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing suppliers')
+          )
+        );
+
+        // Price History
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<PriceHistoryRecord>(
+            user.uid,
+            COLLECTIONS.PRICE_HISTORY,
+            (cloudHistory) => {
+              if (cloudHistory && cloudHistory.length > 0) {
+                setPriceHistory(cloudHistory);
+                StorageService.savePriceHistory(cloudHistory);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing price history')
+          )
+        );
+
+        // Sales Orders
+        unsubs.push(
+          FirebaseSyncService.subscribeUserCollection<SaleOrder>(
+            user.uid,
+            COLLECTIONS.SALES_ORDERS,
+            (cloudOrders) => {
+              if (cloudOrders && cloudOrders.length > 0) {
+                setSalesOrders(cloudOrders);
+                StorageService.saveSalesOrders(cloudOrders);
+              }
+            },
+            (err) => setCloudError(err.message || 'Error syncing sales orders')
+          )
+        );
+      } finally {
+        setIsCloudLoading(false);
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      unsubs.forEach((u) => u());
+    };
+  }, []);
+
 
   // Sync active custom icon to document head on load
   useEffect(() => {
@@ -208,6 +456,11 @@ export default function App() {
       updated = [ingredient, ...ingredients];
     }
     setIngredients(updated);
+    StorageService.saveIngredients(updated);
+
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.INGREDIENTS, ingredient.id, ingredient);
+    }
 
     // Also update or add inventory item if missing
     const invIndex = inventory.findIndex((inv) => inv.ingredientId === ingredient.id);
@@ -228,26 +481,50 @@ export default function App() {
   };
 
   const handleDeleteIngredient = (ingredientId: string) => {
-    setIngredients((prev) => prev.filter((i) => i.id !== ingredientId));
-    setInventory((prev) => prev.filter((inv) => inv.ingredientId !== ingredientId));
+    setIngredients((prev) => {
+      const updated = prev.filter((i) => i.id !== ingredientId);
+      StorageService.saveIngredients(updated);
+      return updated;
+    });
+    setInventory((prev) => {
+      const updated = prev.filter((inv) => inv.ingredientId !== ingredientId);
+      StorageService.saveInventory(updated);
+      return updated;
+    });
+    if (currentUser) {
+      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.INGREDIENTS, ingredientId);
+    }
   };
 
   const handleReorderIngredients = (reordered: Ingredient[]) => {
     setIngredients(reordered);
+    StorageService.saveIngredients(reordered);
+    if (currentUser) {
+      FirebaseSyncService.batchSaveUser(currentUser.uid, COLLECTIONS.INGREDIENTS, reordered);
+    }
   };
 
   const handleRecordPriceChange = (record: PriceHistoryRecord) => {
     setPriceHistory([record, ...priceHistory]);
+    StorageService.savePriceHistory([record, ...priceHistory]);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.PRICE_HISTORY, record.id, record);
+    }
   };
 
   const handleSaveSauce = (sauce: Sauce) => {
     const existingIndex = sauces.findIndex((s) => s.id === sauce.id);
+    let updated: Sauce[];
     if (existingIndex >= 0) {
-      const updated = [...sauces];
+      updated = [...sauces];
       updated[existingIndex] = sauce;
-      setSauces(updated);
     } else {
-      setSauces([...sauces, sauce]);
+      updated = [...sauces, sauce];
+    }
+    setSauces(updated);
+    StorageService.saveSauces(updated);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SAUCES, sauce.id, sauce);
     }
   };
 
@@ -264,6 +541,9 @@ export default function App() {
       StorageService.saveMenus(updated);
       return updated;
     });
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, menu.id, menu);
+    }
   };
 
   const handleDeleteMenu = (menuId: string) => {
@@ -272,11 +552,17 @@ export default function App() {
       StorageService.saveMenus(updated);
       return updated;
     });
+    if (currentUser) {
+      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.MENUS, menuId);
+    }
   };
 
   const handleReorderMenus = (reordered: MenuItem[]) => {
     setMenus(reordered);
     StorageService.saveMenus(reordered);
+    if (currentUser) {
+      FirebaseSyncService.batchSaveUser(currentUser.uid, COLLECTIONS.MENUS, reordered);
+    }
   };
 
   const handleUpdateVariantPrice = (
@@ -284,6 +570,7 @@ export default function App() {
     variantId: string,
     prices: { sellingPrice: number; takeawayPrice: number; deliveryPrice: number }
   ) => {
+    let targetMenu: MenuItem | undefined;
     setMenus((prevMenus) => {
       const updated = prevMenus.map((m) => {
         if (m.id !== menuId) return m;
@@ -296,11 +583,16 @@ export default function App() {
             deliveryPrice: prices.deliveryPrice,
           };
         });
-        return { ...m, variants: updatedVariants };
+        const mUpdated = { ...m, variants: updatedVariants };
+        targetMenu = mUpdated;
+        return mUpdated;
       });
       StorageService.saveMenus(updated);
       return updated;
     });
+    if (currentUser && targetMenu) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, (targetMenu as MenuItem).id, targetMenu);
+    }
   };
 
   const handleSaveVariantRecipe = (
@@ -308,6 +600,7 @@ export default function App() {
     variantId: string,
     recipeItems: RecipeItem[]
   ) => {
+    let targetMenu: MenuItem | undefined;
     setMenus((prevMenus) => {
       const updated = prevMenus.map((m) => {
         if (m.id !== menuId) return m;
@@ -315,15 +608,28 @@ export default function App() {
           if (v.id !== variantId) return v;
           return { ...v, recipeItems };
         });
-        return { ...m, variants: updatedVariants };
+        const mUpdated = { ...m, variants: updatedVariants };
+        targetMenu = mUpdated;
+        return mUpdated;
       });
       StorageService.saveMenus(updated);
       return updated;
     });
+    if (currentUser && targetMenu) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, (targetMenu as MenuItem).id, targetMenu);
+    }
   };
 
   const handleSavePurchase = (purchase: PurchaseRecord) => {
-    setPurchases([purchase, ...purchases]);
+    setPurchases((prev) => {
+      const updated = [purchase, ...prev];
+      StorageService.savePurchases(updated);
+      return updated;
+    });
+
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.PURCHASES, purchase.id, purchase);
+    }
 
     // Update inventory quantity
     const item = inventory.find((i) => i.ingredientId === purchase.ingredientId);
@@ -335,6 +641,7 @@ export default function App() {
           : inv
       );
       setInventory(updated);
+      StorageService.saveInventory(updated);
 
       // Record transaction
       const txn: InventoryTransaction = {
@@ -350,6 +657,7 @@ export default function App() {
         cost: purchase.totalPrice,
       };
       setInventoryTransactions([txn, ...inventoryTransactions]);
+      StorageService.saveInventoryTransactions([txn, ...inventoryTransactions]);
     }
   };
 
@@ -385,11 +693,91 @@ export default function App() {
   };
 
   const handleSaveExpense = (expense: ExpenseRecord) => {
-    setExpenses([expense, ...expenses]);
+    const nextExpenses = [expense, ...expenses];
+    setExpenses(nextExpenses);
+    StorageService.saveExpenses(nextExpenses);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, expense.id, expense);
+    }
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    const nextExpenses = expenses.filter((e) => e.id !== id);
+    setExpenses(nextExpenses);
+    StorageService.saveExpenses(nextExpenses);
+    if (currentUser) {
+      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, id);
+    }
+  };
+
+  const handleUpdateExpense = (updatedExp: ExpenseRecord) => {
+    const nextExpenses = expenses.map((e) => (e.id === updatedExp.id ? updatedExp : e));
+    setExpenses(nextExpenses);
+    StorageService.saveExpenses(nextExpenses);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, updatedExp.id, updatedExp);
+    }
   };
 
   const handleSaveSaleOrder = (order: SaleOrder) => {
-    setSalesOrders([order, ...salesOrders]);
+    const nextOrders = [order, ...salesOrders];
+    setSalesOrders(nextOrders);
+    StorageService.saveSalesOrders(nextOrders);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SALES_ORDERS, order.id, order);
+    }
+  };
+
+  const handleAddDailySalesRecord = (rec: DailySalesRecord) => {
+    setDailySales((prev) => {
+      const next = upsertDailySalesRecord(prev, rec);
+      StorageService.saveDailySales(next);
+      return next;
+    });
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.DAILY_SALES, rec.id, rec);
+    }
+  };
+
+  const handleDeleteDailySalesRecord = (id: string) => {
+    setDailySales((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      StorageService.saveDailySales(next);
+      return next;
+    });
+    if (currentUser) {
+      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.DAILY_SALES, id);
+    }
+  };
+
+  const handleAddEmployee = (newEmp: DomainEmployee) => {
+    setEmployees((prev) => {
+      const next = [newEmp, ...prev];
+      StorageService.saveEmployees(next as any);
+      return next;
+    });
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EMPLOYEES, newEmp.id, newEmp);
+    }
+  };
+
+  const handleDeleteEmployee = (id: string) => {
+    setEmployees((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      StorageService.saveEmployees(next as any);
+      return next;
+    });
+    if (currentUser) {
+      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.EMPLOYEES, id);
+    }
+  };
+
+  const handleSaveSettings = (newSettings: RestaurantSettings) => {
+    setSettings(newSettings);
+    StorageService.saveSettings(newSettings);
+    if (currentUser) {
+      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SETTINGS, 'default', newSettings);
+    }
   };
 
   const handleIngredientsImported = (newIngredients: Ingredient[]) => {
@@ -458,7 +846,39 @@ export default function App() {
         onNavigateToTab={(tabId) => setCurrentTab(tabId)}
         onOpenIconModal={() => setIsIconModalOpen(true)}
         onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
+        currentUser={currentUser}
+        isCloudLoading={isCloudLoading}
       />
+
+      {/* Cloud Sync Status / Notifications Banner (Requirement 3: Loading states & Clear error messages in UI) */}
+      {isCloudLoading && (
+        <div className="bg-sky-50 border-b border-sky-200 px-4 sm:px-6 py-2 text-sky-800 text-xs sm:text-sm flex items-center justify-between gap-3 relative z-20">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-sky-600 animate-spin shrink-0" />
+            <span>
+              {isAutoMigrating
+                ? 'กำลังเชื่อมต่อและคัดลอกข้อมูลขึ้น Cloud Firestore ครั้งแรก...'
+                : 'กำลังซิงค์ข้อมูลกับ Cloud Firestore แบบ Real-time...'}
+            </span>
+          </div>
+          <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded font-mono font-medium">Real-time sync</span>
+        </div>
+      )}
+
+      {cloudError && (
+        <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-6 py-2 text-rose-800 text-xs sm:text-sm flex items-center justify-between gap-3 relative z-20">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>เกิดข้อผิดพลาดในการเชื่อมต่อคลาวด์: {cloudError} (ระบบทำงานในโหมด Offline สำรองข้อมูลในเครื่องอัตโนมัติ)</span>
+          </div>
+          <button
+            onClick={() => setCloudError(null)}
+            className="text-rose-600 hover:text-rose-900 text-xs cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* E6: Yellow banner when last backup is older than 7 days or never */}
       {backupStatus.isOverdue && (
@@ -592,21 +1012,9 @@ export default function App() {
           {currentTab === 'expenses' && (
             <ExpensesView
               expenses={expenses as any}
-              onAddExpense={(newExp) => {
-                const next = [newExp, ...expenses];
-                setExpenses(next);
-                StorageService.saveExpenses(next);
-              }}
-              onDeleteExpense={(id) => {
-                const next = expenses.filter((e) => e.id !== id);
-                setExpenses(next);
-                StorageService.saveExpenses(next);
-              }}
-              onUpdateExpense={(updatedExp) => {
-                const next = expenses.map((e) => (e.id === updatedExp.id ? updatedExp : e));
-                setExpenses(next);
-                StorageService.saveExpenses(next);
-              }}
+              onAddExpense={handleSaveExpense}
+              onDeleteExpense={handleDeleteExpense}
+              onUpdateExpense={handleUpdateExpense}
               operatingDays={settings.operatingDaysPerMonth || 26}
               activeLanguage="th"
             />
@@ -617,8 +1025,8 @@ export default function App() {
             <SalesEntryView
               sales={dailySales}
               channels={defaultSalesChannels}
-              onAddSalesRecord={(rec) => setDailySales((prev) => upsertDailySalesRecord(prev, rec))}
-              onDeleteSalesRecord={(id) => setDailySales((prev) => prev.filter((s) => s.id !== id))}
+              onAddSalesRecord={handleAddDailySalesRecord}
+              onDeleteSalesRecord={handleDeleteDailySalesRecord}
               defaultVatRate={typeof settings.vatRatePercent === 'number' && Number.isFinite(settings.vatRatePercent) ? settings.vatRatePercent : 7}
               activeLanguage="th"
             />
@@ -658,8 +1066,8 @@ export default function App() {
             <LaborView
               employees={employees as any}
               monthlyNetSales={dailySales.reduce((sum, s) => sum + s.netSales, 0)}
-              onAddEmployee={(newEmp) => setEmployees((prev) => [newEmp, ...prev])}
-              onDeleteEmployee={(id) => setEmployees((prev) => prev.filter((e) => e.id !== id))}
+              onAddEmployee={handleAddEmployee}
+              onDeleteEmployee={handleDeleteEmployee}
               activeLanguage="th"
             />
           )}
@@ -696,7 +1104,7 @@ export default function App() {
               purchases={purchases}
               priceHistory={priceHistory}
               settings={settings}
-              onSavePurchase={(newPurchase) => setPurchases((prev) => [newPurchase, ...prev])}
+              onSavePurchase={handleSavePurchase}
               onUpdateIngredientPrice={(id, price) =>
                 setIngredients((prev) => prev.map((i) => (i.id === id ? { ...i, purchasePrice: price } : i)))
               }
@@ -723,7 +1131,7 @@ export default function App() {
           {currentTab === 'settings' && (
             <SettingsView
               settings={settings}
-              onSaveSettings={(newSettings) => setSettings(newSettings)}
+              onSaveSettings={handleSaveSettings}
               onOpenIconModal={() => setIsIconModalOpen(true)}
             />
           )}

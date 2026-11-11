@@ -5,7 +5,9 @@ import {
   deleteDoc,
   onSnapshot,
   getDocs,
+  getDoc,
   writeBatch,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { StorageService } from './storageService';
@@ -39,6 +41,7 @@ export const COLLECTIONS = {
   WASTE_LOG: 'waste_log',
   SUPPLIERS: 'suppliers',
   PRICE_HISTORY: 'price_history',
+  SALES_ORDERS: 'sales_orders',
 } as const;
 
 export interface CloudSyncState {
@@ -50,73 +53,177 @@ export interface CloudSyncState {
 
 export const FirebaseSyncService = {
   /**
-   * Save a single entity to Firestore
+   * Helper to clean data before saving to Firestore (removes undefined values)
    */
-  async saveDoc<T extends Record<string, any>>(collectionName: string, docId: string, data: T): Promise<void> {
+  sanitizeData<T extends Record<string, any>>(data: T): Record<string, any> {
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        clean[key] = value;
+      }
+    }
+    return clean;
+  },
+
+  /**
+   * Save a single user-scoped document to Firestore (Requirement 1 & 2)
+   * Paths: users/{uid}/{collectionName}/{docId}
+   * Injects id, createdAt, updatedAt (serverTimestamp)
+   */
+  async saveUserDoc<T extends Record<string, any>>(
+    userId: string,
+    collectionName: string,
+    docId: string,
+    data: T
+  ): Promise<void> {
+    if (!userId || !docId) return;
+    const path = `users/${userId}/${collectionName}/${docId}`;
     try {
-      const docRef = doc(db, collectionName, docId);
-      await setDoc(docRef, { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+      const docRef = doc(db, 'users', userId, collectionName, docId);
+      const clean = this.sanitizeData(data);
+      const payload: Record<string, any> = {
+        ...clean,
+        id: docId,
+        updatedAt: serverTimestamp(),
+      };
+      if (!clean.createdAt) {
+        payload.createdAt = serverTimestamp();
+      }
+      await setDoc(docRef, payload, { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `${collectionName}/${docId}`);
+      handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
 
   /**
-   * Delete a document from Firestore
+   * Delete a single user-scoped document from Firestore
    */
-  async deleteDoc(collectionName: string, docId: string): Promise<void> {
+  async deleteUserDoc(userId: string, collectionName: string, docId: string): Promise<void> {
+    if (!userId || !docId) return;
+    const path = `users/${userId}/${collectionName}/${docId}`;
     try {
-      const docRef = doc(db, collectionName, docId);
+      const docRef = doc(db, 'users', userId, collectionName, docId);
       await deleteDoc(docRef);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docId}`);
+      handleFirestoreError(err, OperationType.DELETE, path);
     }
   },
 
   /**
-   * Batch upload multiple entities to Firestore
+   * Batch save multiple user-scoped entities
    */
-  async batchSave<T extends { id: string }>(collectionName: string, items: T[]): Promise<void> {
-    if (!items || items.length === 0) return;
+  async batchSaveUser<T extends { id?: string }>(
+    userId: string,
+    collectionName: string,
+    items: T[]
+  ): Promise<void> {
+    if (!userId || !items || items.length === 0) return;
+    const path = `users/${userId}/${collectionName}`;
     try {
-      // Firestore batch max 500 ops
       const chunkSize = 400;
       for (let i = 0; i < items.length; i += chunkSize) {
         const chunk = items.slice(i, i + chunkSize);
         const batch = writeBatch(db);
-        chunk.forEach((item) => {
-          const docRef = doc(db, collectionName, item.id);
-          batch.set(docRef, { ...item, updatedAt: new Date().toISOString() }, { merge: true });
+        chunk.forEach((item, index) => {
+          const docId = item.id || (item as any).ingredientId || `item_${Date.now()}_${index}`;
+          const docRef = doc(db, 'users', userId, collectionName, docId);
+          const clean = this.sanitizeData(item);
+          const payload: Record<string, any> = {
+            ...clean,
+            id: docId,
+            updatedAt: serverTimestamp(),
+          };
+          if (!clean.createdAt) {
+            payload.createdAt = serverTimestamp();
+          }
+          batch.set(docRef, payload, { merge: true });
         });
         await batch.commit();
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, collectionName);
+      handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
 
   /**
-   * Realtime listener for a collection
+   * Realtime onSnapshot listener for user collection (Requirement 3)
    */
-  subscribeToCollection<T>(collectionName: string, onUpdate: (items: T[]) => void): () => void {
-    const colRef = collection(db, collectionName);
+  subscribeUserCollection<T extends { id?: string }>(
+    userId: string,
+    collectionName: string,
+    onUpdate: (items: T[]) => void,
+    onError?: (error: any) => void
+  ): () => void {
+    const path = `users/${userId}/${collectionName}`;
+    const colRef = collection(db, 'users', userId, collectionName);
     return onSnapshot(
       colRef,
       (snapshot) => {
-        const items = snapshot.docs.map((docSnap) => docSnap.data() as T);
+        const items = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            ...data,
+            id: docSnap.id,
+          } as unknown as T;
+        });
         onUpdate(items);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, collectionName);
+        handleFirestoreError(error, OperationType.GET, path);
+        onError?.(error);
       }
     );
   },
 
   /**
-   * Upload all current local restaurant data to Firestore cloud
+   * Realtime onSnapshot listener for a single user document (e.g. settings)
    */
-  async syncLocalToCloud(): Promise<{ success: boolean; error?: string }> {
+  subscribeUserDoc<T extends Record<string, any>>(
+    userId: string,
+    collectionName: string,
+    docId: string,
+    onUpdate: (data: T | null) => void,
+    onError?: (error: any) => void
+  ): () => void {
+    const path = `users/${userId}/${collectionName}/${docId}`;
+    const docRef = doc(db, 'users', userId, collectionName, docId);
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          onUpdate({ ...snapshot.data(), id: snapshot.id } as unknown as T);
+        } else {
+          onUpdate(null);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
+        onError?.(error);
+      }
+    );
+  },
+
+  /**
+   * Check if user already has data stored in Cloud Firestore
+   */
+  async hasUserData(userId: string): Promise<boolean> {
+    if (!userId) return false;
     try {
+      const snap = await getDocs(collection(db, 'users', userId, COLLECTIONS.MENUS));
+      return !snap.empty;
+    } catch (err) {
+      console.warn('Error checking user cloud data:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Migrate all local state / localStorage data into users/{userId}/...
+   */
+  async migrateLocalDataToUser(userId: string): Promise<{ success: boolean; count: number; error?: string }> {
+    if (!userId) return { success: false, count: 0, error: 'User ID is required' };
+    try {
+      let count = 0;
       const settings = StorageService.getSettings();
       const ingredients = StorageService.getIngredients();
       const sauces = StorageService.getSauces();
@@ -129,141 +236,186 @@ export const FirebaseSyncService = {
       const wasteLog = StorageService.getWasteLog();
       const suppliers = StorageService.getSuppliers();
       const priceHistory = StorageService.getPriceHistory();
+      const salesOrders = StorageService.getSalesOrders();
 
-      // Save Settings doc
-      await this.saveDoc(COLLECTIONS.SETTINGS, 'default', settings);
+      // 1. Settings
+      await this.saveUserDoc(userId, COLLECTIONS.SETTINGS, 'default', settings);
+      count++;
 
-      // Save arrays in parallel
+      // 2. Arrays
       await Promise.all([
-        this.batchSave(COLLECTIONS.INGREDIENTS, ingredients),
-        this.batchSave(COLLECTIONS.SAUCES, sauces),
-        this.batchSave(COLLECTIONS.MENUS, menus),
-        this.batchSave(COLLECTIONS.DAILY_SALES, dailySales),
-        this.batchSave(COLLECTIONS.EXPENSES, expenses),
-        this.batchSave(COLLECTIONS.EMPLOYEES, employees),
-        this.batchSave(COLLECTIONS.INVENTORY, inventory),
-        this.batchSave(COLLECTIONS.PURCHASES, purchases),
-        this.batchSave(COLLECTIONS.WASTE_LOG, wasteLog),
-        this.batchSave(COLLECTIONS.SUPPLIERS, suppliers),
-        this.batchSave(COLLECTIONS.PRICE_HISTORY, priceHistory),
+        this.batchSaveUser(userId, COLLECTIONS.INGREDIENTS, ingredients),
+        this.batchSaveUser(userId, COLLECTIONS.SAUCES, sauces),
+        this.batchSaveUser(userId, COLLECTIONS.MENUS, menus),
+        this.batchSaveUser(userId, COLLECTIONS.DAILY_SALES, dailySales),
+        this.batchSaveUser(userId, COLLECTIONS.EXPENSES, expenses),
+        this.batchSaveUser(userId, COLLECTIONS.EMPLOYEES, employees),
+        this.batchSaveUser(userId, COLLECTIONS.INVENTORY, inventory),
+        this.batchSaveUser(userId, COLLECTIONS.PURCHASES, purchases),
+        this.batchSaveUser(userId, COLLECTIONS.WASTE_LOG, wasteLog),
+        this.batchSaveUser(userId, COLLECTIONS.SUPPLIERS, suppliers),
+        this.batchSaveUser(userId, COLLECTIONS.PRICE_HISTORY, priceHistory),
+        this.batchSaveUser(userId, COLLECTIONS.SALES_ORDERS, salesOrders),
       ]);
 
-      return { success: true };
-    } catch (err: any) {
-      console.error('Failed to sync to cloud:', err);
-      return { success: false, error: err.message };
-    }
-  },
-
-  /**
-   * Fetch all data from cloud and replace/merge into local storage
-   */
-  async pullCloudToLocal(): Promise<{ success: boolean; count: number; error?: string }> {
-    try {
-      let count = 0;
-
-      // Settings
-      const settingsSnap = await getDocs(collection(db, COLLECTIONS.SETTINGS));
-      if (!settingsSnap.empty) {
-        const cloudSettings = settingsSnap.docs[0].data() as RestaurantSettings;
-        StorageService.saveSettings(cloudSettings);
-        count++;
-      }
-
-      // Ingredients
-      const ingSnap = await getDocs(collection(db, COLLECTIONS.INGREDIENTS));
-      if (!ingSnap.empty) {
-        const cloudIngs = ingSnap.docs.map((d) => d.data() as Ingredient);
-        StorageService.saveIngredients(cloudIngs);
-        count += cloudIngs.length;
-      }
-
-      // Sauces
-      const sauceSnap = await getDocs(collection(db, COLLECTIONS.SAUCES));
-      if (!sauceSnap.empty) {
-        const cloudSauces = sauceSnap.docs.map((d) => d.data() as Sauce);
-        StorageService.saveSauces(cloudSauces);
-        count += cloudSauces.length;
-      }
-
-      // Menus
-      const menuSnap = await getDocs(collection(db, COLLECTIONS.MENUS));
-      if (!menuSnap.empty) {
-        const cloudMenus = menuSnap.docs.map((d) => d.data() as MenuItem);
-        StorageService.saveMenus(cloudMenus);
-        count += cloudMenus.length;
-      }
-
-      // Daily Sales
-      const salesSnap = await getDocs(collection(db, COLLECTIONS.DAILY_SALES));
-      if (!salesSnap.empty) {
-        const cloudSales = salesSnap.docs.map((d) => d.data() as DailySalesRecord);
-        StorageService.saveDailySales(cloudSales);
-        count += cloudSales.length;
-      }
-
-      // Expenses
-      const expSnap = await getDocs(collection(db, COLLECTIONS.EXPENSES));
-      if (!expSnap.empty) {
-        const cloudExp = expSnap.docs.map((d) => d.data() as ExpenseRecord);
-        StorageService.saveExpenses(cloudExp);
-        count += cloudExp.length;
-      }
-
-      // Employees
-      const empSnap = await getDocs(collection(db, COLLECTIONS.EMPLOYEES));
-      if (!empSnap.empty) {
-        const cloudEmp = empSnap.docs.map((d) => d.data() as Employee);
-        StorageService.saveEmployees(cloudEmp);
-        count += cloudEmp.length;
-      }
-
-      // Inventory
-      const invSnap = await getDocs(collection(db, COLLECTIONS.INVENTORY));
-      if (!invSnap.empty) {
-        const cloudInv = invSnap.docs.map((d) => d.data() as InventoryItem);
-        StorageService.saveInventory(cloudInv);
-        count += cloudInv.length;
-      }
-
-      // Purchases
-      const purSnap = await getDocs(collection(db, COLLECTIONS.PURCHASES));
-      if (!purSnap.empty) {
-        const cloudPur = purSnap.docs.map((d) => d.data() as PurchaseRecord);
-        StorageService.savePurchases(cloudPur);
-        count += cloudPur.length;
-      }
-
-      // Waste
-      const wasteSnap = await getDocs(collection(db, COLLECTIONS.WASTE_LOG));
-      if (!wasteSnap.empty) {
-        const cloudWaste = wasteSnap.docs.map((d) => d.data() as WasteRecord);
-        StorageService.saveWasteLog(cloudWaste);
-        count += cloudWaste.length;
-      }
+      count +=
+        ingredients.length +
+        sauces.length +
+        menus.length +
+        dailySales.length +
+        expenses.length +
+        employees.length +
+        inventory.length +
+        purchases.length +
+        wasteLog.length +
+        suppliers.length +
+        priceHistory.length +
+        salesOrders.length;
 
       return { success: true, count };
     } catch (err: any) {
-      console.error('Failed to pull from cloud:', err);
+      console.error('Failed to migrate data to user:', err);
       return { success: false, count: 0, error: err.message };
     }
   },
 
   /**
-   * Pull only daily sales from Firestore cloud (for Live POS Sync)
+   * Export full cloud data package for the authenticated user as JSON
    */
-  async pullDailySales(): Promise<{ success: boolean; data: DailySalesRecord[]; error?: string }> {
+  async exportUserDataJSON(userId: string): Promise<string> {
+    if (!userId) throw new Error('User ID is required to export data');
+    const loadCol = async <T>(name: string): Promise<T[]> => {
+      const snap = await getDocs(collection(db, 'users', userId, name));
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as T));
+    };
+
+    const settingsDoc = await getDoc(doc(db, 'users', userId, COLLECTIONS.SETTINGS, 'default'));
+    const settings = settingsDoc.exists() ? (settingsDoc.data() as RestaurantSettings) : StorageService.getSettings();
+
+    const [
+      ingredients,
+      sauces,
+      menus,
+      dailySales,
+      expenses,
+      employees,
+      inventory,
+      purchases,
+      wasteLog,
+      suppliers,
+      priceHistory,
+      salesOrders,
+    ] = await Promise.all([
+      loadCol<Ingredient>(COLLECTIONS.INGREDIENTS),
+      loadCol<Sauce>(COLLECTIONS.SAUCES),
+      loadCol<MenuItem>(COLLECTIONS.MENUS),
+      loadCol<DailySalesRecord>(COLLECTIONS.DAILY_SALES),
+      loadCol<ExpenseRecord>(COLLECTIONS.EXPENSES),
+      loadCol<Employee>(COLLECTIONS.EMPLOYEES),
+      loadCol<InventoryItem>(COLLECTIONS.INVENTORY),
+      loadCol<PurchaseRecord>(COLLECTIONS.PURCHASES),
+      loadCol<WasteRecord>(COLLECTIONS.WASTE_LOG),
+      loadCol<Supplier>(COLLECTIONS.SUPPLIERS),
+      loadCol<PriceHistoryRecord>(COLLECTIONS.PRICE_HISTORY),
+      loadCol<SaleOrder>(COLLECTIONS.SALES_ORDERS),
+    ]);
+
+    const exportPackage = {
+      version: '2.0.0',
+      exportedAt: new Date().toISOString(),
+      userId,
+      payload: {
+        settings,
+        ingredients,
+        sauces,
+        menus,
+        dailySales,
+        expenses,
+        employees,
+        inventory,
+        purchases,
+        wasteLog,
+        suppliers,
+        priceHistory,
+        salesOrders,
+      },
+    };
+
+    return JSON.stringify(exportPackage, null, 2);
+  },
+
+  /**
+   * Import data package into Firestore for authenticated user
+   */
+  async importUserDataJSON(userId: string, jsonString: string): Promise<{ success: boolean; count: number; error?: string }> {
+    if (!userId) return { success: false, count: 0, error: 'User ID is required' };
     try {
-      const salesSnap = await getDocs(collection(db, COLLECTIONS.DAILY_SALES));
-      if (!salesSnap.empty) {
-        const cloudSales = salesSnap.docs.map((d) => d.data() as DailySalesRecord);
-        StorageService.saveDailySales(cloudSales);
-        return { success: true, data: cloudSales };
+      const parsed = JSON.parse(jsonString);
+      const payload = parsed.payload || parsed;
+      let count = 0;
+
+      if (payload.settings) {
+        await this.saveUserDoc(userId, COLLECTIONS.SETTINGS, 'default', payload.settings);
+        count++;
       }
-      return { success: true, data: StorageService.getDailySales() };
+      if (Array.isArray(payload.ingredients)) {
+        await this.batchSaveUser(userId, COLLECTIONS.INGREDIENTS, payload.ingredients);
+        count += payload.ingredients.length;
+      }
+      if (Array.isArray(payload.sauces)) {
+        await this.batchSaveUser(userId, COLLECTIONS.SAUCES, payload.sauces);
+        count += payload.sauces.length;
+      }
+      if (Array.isArray(payload.menus)) {
+        await this.batchSaveUser(userId, COLLECTIONS.MENUS, payload.menus);
+        count += payload.menus.length;
+      }
+      if (Array.isArray(payload.dailySales)) {
+        await this.batchSaveUser(userId, COLLECTIONS.DAILY_SALES, payload.dailySales);
+        count += payload.dailySales.length;
+      }
+      if (Array.isArray(payload.expenses)) {
+        await this.batchSaveUser(userId, COLLECTIONS.EXPENSES, payload.expenses);
+        count += payload.expenses.length;
+      }
+      if (Array.isArray(payload.employees)) {
+        await this.batchSaveUser(userId, COLLECTIONS.EMPLOYEES, payload.employees);
+        count += payload.employees.length;
+      }
+      if (Array.isArray(payload.inventory)) {
+        await this.batchSaveUser(userId, COLLECTIONS.INVENTORY, payload.inventory);
+        count += payload.inventory.length;
+      }
+      if (Array.isArray(payload.purchases)) {
+        await this.batchSaveUser(userId, COLLECTIONS.PURCHASES, payload.purchases);
+        count += payload.purchases.length;
+      }
+      if (Array.isArray(payload.wasteLog)) {
+        await this.batchSaveUser(userId, COLLECTIONS.WASTE_LOG, payload.wasteLog);
+        count += payload.wasteLog.length;
+      }
+      if (Array.isArray(payload.suppliers)) {
+        await this.batchSaveUser(userId, COLLECTIONS.SUPPLIERS, payload.suppliers);
+        count += payload.suppliers.length;
+      }
+      if (Array.isArray(payload.priceHistory)) {
+        await this.batchSaveUser(userId, COLLECTIONS.PRICE_HISTORY, payload.priceHistory);
+        count += payload.priceHistory.length;
+      }
+      if (Array.isArray(payload.salesOrders)) {
+        await this.batchSaveUser(userId, COLLECTIONS.SALES_ORDERS, payload.salesOrders);
+        count += payload.salesOrders.length;
+      }
+
+      return { success: true, count };
     } catch (err: any) {
-      console.error('Failed to pull daily sales:', err);
-      return { success: false, data: StorageService.getDailySales(), error: err.message };
+      console.error('Failed to import user data JSON:', err);
+      return { success: false, count: 0, error: err.message || 'รูปแบบไฟล์ไม่ถูกต้อง' };
     }
+  },
+
+  // Legacy root-level pull for compatibility if needed
+  async pullDailySales(): Promise<{ success: boolean; data: DailySalesRecord[]; error?: string }> {
+    return { success: true, data: StorageService.getDailySales() };
   },
 };

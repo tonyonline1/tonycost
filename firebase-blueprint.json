@@ -10,6 +10,7 @@
         "targetFoodCostPercent": { "type": "number" },
         "vatRatePercent": { "type": "number" },
         "operatingDaysPerMonth": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "restaurantName"]
@@ -27,6 +28,7 @@
         "purchaseUnit": { "type": "string", "maxLength": 30 },
         "costPerBaseUnit": { "type": "number" },
         "yieldPercent": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "purchasePrice", "purchaseUnit"]
@@ -40,6 +42,7 @@
         "name": { "type": "string", "maxLength": 120 },
         "productionQuantity": { "type": "number" },
         "costPerGram": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name"]
@@ -55,6 +58,7 @@
         "sellingPrice": { "type": "number" },
         "foodCost": { "type": "number" },
         "foodCostPercent": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name"]
@@ -71,6 +75,7 @@
         "grossSales": { "type": "number" },
         "netSales": { "type": "number" },
         "orderCount": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "date", "channelId", "netSales"]
@@ -86,6 +91,7 @@
         "amount": { "type": "number" },
         "period": { "type": "string", "maxLength": 30 },
         "isFixed": { "type": "boolean" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "amount"]
@@ -100,6 +106,7 @@
         "position": { "type": "string", "maxLength": 80 },
         "roleCategory": { "type": "string", "maxLength": 50 },
         "wageRate": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "wageRate"]
@@ -115,6 +122,7 @@
         "currentStock": { "type": "number" },
         "unit": { "type": "string", "maxLength": 30 },
         "costPerUnit": { "type": "number" },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "ingredientName", "currentStock"]
@@ -128,6 +136,7 @@
         "ingredientName": { "type": "string", "maxLength": 120 },
         "totalPrice": { "type": "number" },
         "purchaseDate": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "ingredientName", "totalPrice"]
@@ -141,51 +150,52 @@
         "ingredientName": { "type": "string", "maxLength": 120 },
         "totalCost": { "type": "number" },
         "wasteDate": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "ingredientName", "totalCost"]
     }
   },
   "firestore": {
-    "/settings/{settingId}": {
+    "/users/{userId}/settings/{settingId}": {
       "schema": "RestaurantSettings",
-      "description": "Global restaurant settings documents"
+      "description": "User specific restaurant settings"
     },
-    "/ingredients/{ingredientId}": {
+    "/users/{userId}/ingredients/{ingredientId}": {
       "schema": "Ingredient",
-      "description": "Restaurant ingredient catalog"
+      "description": "User specific ingredient catalog"
     },
-    "/sauces/{sauceId}": {
+    "/users/{userId}/sauces/{sauceId}": {
       "schema": "Sauce",
-      "description": "Sub-recipes and sauce batches"
+      "description": "User specific sauces and batches"
     },
-    "/menus/{menuId}": {
+    "/users/{userId}/menus/{menuId}": {
       "schema": "MenuItem",
-      "description": "Menu items and portions"
+      "description": "User specific menu catalog and variants"
     },
-    "/daily_sales/{saleId}": {
+    "/users/{userId}/daily_sales/{saleId}": {
       "schema": "DailySale",
-      "description": "Daily sales records"
+      "description": "User specific daily sales"
     },
-    "/expenses/{expenseId}": {
+    "/users/{userId}/expenses/{expenseId}": {
       "schema": "Expense",
-      "description": "Operating and fixed expense records"
+      "description": "User specific expense records"
     },
-    "/employees/{employeeId}": {
+    "/users/{userId}/employees/{employeeId}": {
       "schema": "Employee",
-      "description": "Staff roster and wage information"
+      "description": "User specific employee roster"
     },
-    "/inventory/{inventoryId}": {
+    "/users/{userId}/inventory/{inventoryId}": {
       "schema": "InventoryItem",
-      "description": "Inventory stock counts"
+      "description": "User specific inventory items"
     },
-    "/purchases/{purchaseId}": {
+    "/users/{userId}/purchases/{purchaseId}": {
       "schema": "PurchaseRecord",
-      "description": "Goods received and purchasing logs"
+      "description": "User specific purchase records"
     },
-    "/waste_log/{wasteId}": {
+    "/users/{userId}/waste_log/{wasteId}": {
       "schema": "WasteRecord",
-      "description": "Kitchen food waste tracking logs"
+      "description": "User specific waste logs"
     }
   }
 }

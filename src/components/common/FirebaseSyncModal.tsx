@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Cloud,
   CloudUpload,
@@ -12,6 +12,10 @@ import {
   LogIn,
   ShieldCheck,
   Users,
+  FileDown,
+  FileUp,
+  Database,
+  ArrowRight,
 } from 'lucide-react';
 import { auth, loginWithGoogle, logoutUser, testConnection } from '../../services/firebase';
 import { FirebaseSyncService } from '../../services/firebaseSyncService';
@@ -31,9 +35,11 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
 }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -72,46 +78,94 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
     }
   };
 
-  const handleUploadToCloud = async () => {
+  const handleMigrateLocalToUser = async () => {
+    if (!currentUser) {
+      setStatusMessage({ text: 'กรุณาเข้าสู่ระบบด้วย Google ก่อนโอนย้ายข้อมูล', type: 'error' });
+      return;
+    }
     try {
-      setIsUploading(true);
-      setStatusMessage({ text: 'กำลังส่งข้อมูลทั้งหมดขึ้น Firebase Cloud...', type: 'info' });
-      const res = await FirebaseSyncService.syncLocalToCloud();
+      setIsMigrating(true);
+      setStatusMessage({ text: 'กำลังโอนย้ายข้อมูลเดิมในเครื่องขึ้นบัญชี Firestore Cloud ของคุณ...', type: 'info' });
+      const res = await FirebaseSyncService.migrateLocalDataToUser(currentUser.uid);
       if (res.success) {
-        setStatusMessage({ text: 'แชร์ข้อมูลขึ้น Firebase Cloud สำเร็จแล้ว ทีมงานสามารถเข้าถึงได้ทันที', type: 'success' });
+        setStatusMessage({ text: `โอนย้ายข้อมูลขึ้น Cloud สำเร็จแล้ว (${res.count} รายการ) ระบบเชื่อมต่อเรียลไทม์แล้ว`, type: 'success' });
+        if (onDataSynced) onDataSynced();
       } else {
-        setStatusMessage({ text: `เกิดข้อผิดพลาดในการอัปโหลด: ${res.error}`, type: 'error' });
+        setStatusMessage({ text: `เกิดข้อผิดพลาดในการโอนย้าย: ${res.error}`, type: 'error' });
       }
     } catch (err: any) {
-      setStatusMessage({ text: `อัปโหลดไม่สำเร็จ: ${err.message}`, type: 'error' });
+      setStatusMessage({ text: `โอนย้ายไม่สำเร็จ: ${err.message}`, type: 'error' });
     } finally {
-      setIsUploading(false);
+      setIsMigrating(false);
     }
   };
 
-  const handleDownloadFromCloud = async () => {
+  const handleExportJSON = async () => {
+    if (!currentUser) {
+      setStatusMessage({ text: 'กรุณาเข้าสู่ระบบก่อนส่งออกไฟล์ข้อมูล', type: 'error' });
+      return;
+    }
     try {
-      setIsDownloading(true);
-      setStatusMessage({ text: 'กำลังดึงข้อมูลล่าสุดจาก Firebase Cloud...', type: 'info' });
-      const res = await FirebaseSyncService.pullCloudToLocal();
-      if (res.success) {
-        setStatusMessage({ text: `ดึงข้อมูลจาก Cloud สำเร็จ (${res.count} รายการ)`, type: 'success' });
-        if (onDataSynced) {
-          onDataSynced();
-        }
-      } else {
-        setStatusMessage({ text: `เกิดข้อผิดพลาดในการดึงข้อมูล: ${res.error}`, type: 'error' });
-      }
+      setIsExporting(true);
+      setStatusMessage({ text: 'กำลังสร้างไฟล์ส่งออก JSON จาก Cloud...', type: 'info' });
+      const json = await FirebaseSyncService.exportUserDataJSON(currentUser.uid);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `food_cost_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatusMessage({ text: 'ดาวน์โหลดไฟล์สำรองข้อมูล JSON เรียบร้อยแล้ว', type: 'success' });
     } catch (err: any) {
-      setStatusMessage({ text: `ดึงข้อมูลไม่สำเร็จ: ${err.message}`, type: 'error' });
+      setStatusMessage({ text: `ส่งออกไฟล์ไม่สำเร็จ: ${err.message}`, type: 'error' });
     } finally {
-      setIsDownloading(false);
+      setIsExporting(false);
+    }
+  };
+
+  const handleTriggerFileInput = () => {
+    if (!currentUser) {
+      setStatusMessage({ text: 'กรุณาเข้าสู่ระบบก่อนนำเข้าไฟล์ข้อมูล', type: 'error' });
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+    try {
+      setIsImporting(true);
+      setStatusMessage({ text: `กำลังอ่านและนำเข้าไฟล์ ${file.name}...`, type: 'info' });
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const content = event.target?.result as string;
+          const res = await FirebaseSyncService.importUserDataJSON(currentUser.uid, content);
+          if (res.success) {
+            setStatusMessage({ text: `นำเข้าข้อมูลเข้า Firestore Cloud สำเร็จ (${res.count} รายการ)`, type: 'success' });
+            if (onDataSynced) onDataSynced();
+          } else {
+            setStatusMessage({ text: `นำเข้าไม่สำเร็จ: ${res.error}`, type: 'error' });
+          }
+        } catch (innerErr: any) {
+          setStatusMessage({ text: `ไฟล์ JSON ไม่ถูกต้อง: ${innerErr.message}`, type: 'error' });
+        } finally {
+          setIsImporting(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsText(file);
+    } catch (err: any) {
+      setStatusMessage({ text: `เกิดข้อผิดพลาด: ${err.message}`, type: 'error' });
+      setIsImporting(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-[#1C1917] text-white w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-[#1C1917] text-white w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/10 bg-white/5">
           <div className="flex items-center gap-3">
@@ -119,8 +173,8 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-base text-white">เชื่อมต่อ Firebase Cloud</h2>
-              <p className="text-xs text-white/50">จัดเก็บและแชร์ข้อมูลต้นทุน-ยอดขายกับทีมงานแบบเรียลไทม์</p>
+              <h2 className="font-bold text-base text-white">Cloud Firestore & ซิงค์ข้อมูลเรียลไทม์</h2>
+              <p className="text-xs text-white/50">จัดเก็บข้อมูลแยกบัญชีผู้ใช้ (users/{'{uid}'}) ข้ามทุกอุปกรณ์</p>
             </div>
           </div>
           <button
@@ -133,7 +187,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5 text-xs">
+        <div className="p-6 space-y-4 text-xs overflow-y-auto">
           {/* Status Message */}
           {statusMessage && (
             <div
@@ -156,32 +210,11 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
             </div>
           )}
 
-          {/* Cloud Info Card */}
-          <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">สถานะ Firebase:</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                เชื่อมต่อฐานข้อมูลแล้ว (Active)
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Project ID:</span>
-              <span className="font-mono text-white/80">{firebaseConfig.projectId}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Database:</span>
-              <span className="font-mono text-white/70 text-[11px] truncate max-w-[220px]">
-                {firebaseConfig.firestoreDatabaseId}
-              </span>
-            </div>
-          </div>
-
           {/* User Auth Card */}
           <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white/80 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-[#F27D26]" /> บัญชีผู้ใช้งาน / ทีมงาน:
+                <Users className="w-4 h-4 text-[#F27D26]" /> บัญชีเข้าสู่ระบบ (Google Authentication):
               </span>
               {currentUser && (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
@@ -210,6 +243,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
@@ -219,10 +253,11 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
               </div>
             ) : (
               <div className="space-y-2 pt-1">
-                <p className="text-white/50 text-[11px]">
-                  เข้าสู่ระบบด้วย Google เพื่อระบุตัวตนในการบันทึกและแชร์ข้อมูลกับทีมงาน
+                <p className="text-white/60 text-[11px]">
+                  เข้าสู่ระบบด้วย Google เพื่อเปิดใช้งานระบบคลาวด์ ข้อมูลจะถูกจัดเก็บและซิงค์แบบเรียลไทม์ข้ามมือถือ แท็บเล็ต และคอมพิวเตอร์
                 </p>
                 <button
+                  type="button"
                   onClick={handleLogin}
                   disabled={isConnecting}
                   className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-stone-100 text-stone-900 font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
@@ -234,29 +269,75 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
             )}
           </div>
 
-          {/* Sync Actions */}
+          {/* Migration Note Card (Requirement 5) */}
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-300">
+              <Database className="w-4 h-4 text-amber-400" />
+              คำแนะนำการโอนย้ายข้อมูล (Migration Note):
+            </div>
+            <p className="text-[11px] leading-relaxed text-amber-100/90">
+              ข้อมูลทั้งหมดจะถูกจัดเก็บลงใน <strong>Cloud Firestore</strong> ภายใต้พาธส่วนตัวของคุณ <code>users/{currentUser ? currentUser.uid.substring(0, 8) + '...' : '{uid}'}</code> ทุกเอกสารมีรหัส <code>id</code>, <code>createdAt</code>, และ <code>updatedAt</code> กำกับ หากคุณมีข้อมูลเดิมในเครื่อง ให้กดปุ่ม <strong>"โอนย้ายข้อมูลเดิมขึ้น Cloud"</strong> เพื่อบันทึกข้อมูลเข้าบัญชีทันที
+            </p>
+          </div>
+
+          {/* Cloud Actions */}
           <div className="space-y-2 pt-1">
-            <div className="font-semibold text-white/80">การซิงค์ข้อมูล (Cloud Synchronization):</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="font-semibold text-white/80">การจัดการข้อมูลบน Cloud:</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* 1. Migrate Local to Cloud */}
               <button
-                onClick={handleUploadToCloud}
-                disabled={isUploading}
-                className="p-3.5 rounded-xl bg-[#F27D26] hover:bg-[#E06D1A] text-white font-semibold flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50 text-center"
+                type="button"
+                onClick={handleMigrateLocalToUser}
+                disabled={!currentUser || isMigrating}
+                className="p-3 rounded-xl bg-[#F27D26] hover:bg-[#E06D1A] text-white font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-md disabled:opacity-40 text-center"
               >
-                <CloudUpload className={`w-5 h-5 ${isUploading ? 'animate-bounce' : ''}`} />
-                <span>{isUploading ? 'กำลังอัปโหลด...' : 'แชร์ข้อมูลขึ้น Cloud'}</span>
-                <span className="text-[10px] text-white/80 font-normal">ส่งข้อมูลในเครื่องให้ทีม</span>
+                <CloudUpload className={`w-4 h-4 ${isMigrating ? 'animate-bounce' : ''}`} />
+                <span className="text-xs">{isMigrating ? 'กำลังโอนย้าย...' : 'โอนย้ายขึ้น Cloud'}</span>
+                <span className="text-[10px] text-white/70 font-normal">คัดลอกข้อมูลในเครื่องขึ้นบัญชี</span>
               </button>
 
+              {/* 2. Export JSON */}
               <button
-                onClick={handleDownloadFromCloud}
-                disabled={isDownloading}
-                className="p-3.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50 text-center"
+                type="button"
+                onClick={handleExportJSON}
+                disabled={!currentUser || isExporting}
+                className="p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-40 text-center"
               >
-                <CloudDownload className={`w-5 h-5 ${isDownloading ? 'animate-bounce' : ''}`} />
-                <span>{isDownloading ? 'กำลังดึงข้อมูล...' : 'ดึงข้อมูลจาก Cloud'}</span>
-                <span className="text-[10px] text-white/60 font-normal">อัปเดตข้อมูลล่าสุดจากทีม</span>
+                <FileDown className={`w-4 h-4 ${isExporting ? 'animate-spin' : ''}`} />
+                <span className="text-xs">{isExporting ? 'กำลังส่งออก...' : 'ส่งออกไฟล์ JSON'}</span>
+                <span className="text-[10px] text-white/60 font-normal">สำรองข้อมูลลงเครื่อง</span>
               </button>
+
+              {/* 3. Import JSON */}
+              <button
+                type="button"
+                onClick={handleTriggerFileInput}
+                disabled={!currentUser || isImporting}
+                className="p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-40 text-center"
+              >
+                <FileUp className={`w-4 h-4 ${isImporting ? 'animate-spin' : ''}`} />
+                <span className="text-xs">{isImporting ? 'กำลังนำเข้า...' : 'นำเข้าไฟล์ JSON'}</span>
+                <span className="text-[10px] text-white/60 font-normal">กู้คืนข้อมูลขึ้น Cloud</span>
+              </button>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImportFileSelected}
+              accept=".json"
+              className="hidden"
+            />
+          </div>
+
+          {/* Database Details */}
+          <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] space-y-1 text-white/60">
+            <div className="flex justify-between">
+              <span>Database Instance:</span>
+              <span className="font-mono text-white/80 text-[10px] truncate max-w-[200px]">{firebaseConfig.firestoreDatabaseId}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Security Rule:</span>
+              <span className="text-emerald-400 font-semibold">users/{'{uid}'} Zero-Trust (Restricted)</span>
             </div>
           </div>
         </div>
@@ -264,9 +345,10 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
         {/* Footer */}
         <div className="p-4 border-t border-white/10 bg-white/5 flex items-center justify-between text-[11px] text-white/40">
           <span className="flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> ข้อมูลปลอดภัยด้วย Firebase Firestore
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> ข้อมูลปลอดภัยด้วย Firebase Firestore & Auth
           </span>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 transition-colors cursor-pointer"
           >
