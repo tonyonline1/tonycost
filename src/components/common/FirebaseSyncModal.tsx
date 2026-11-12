@@ -39,11 +39,38 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [cloudCounts, setCloudCounts] = useState<{
+    menus: number;
+    ingredients: number;
+    sauces: number;
+    expenses: number;
+    dailySales: number;
+    total: number;
+    settingsSaved: boolean;
+  } | null>(null);
+  const [isLoadingCounts, setIsLoadingCounts] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadCounts = async (uid: string) => {
+    try {
+      setIsLoadingCounts(true);
+      const counts = await FirebaseSyncService.getUserCloudCounts(uid);
+      setCloudCounts(counts);
+    } catch (err) {
+      console.warn('Error loading cloud counts:', err);
+    } finally {
+      setIsLoadingCounts(false);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      if (user) {
+        loadCounts(user.uid);
+      } else {
+        setCloudCounts(null);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -51,8 +78,11 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       testConnection().catch(() => {});
+      if (currentUser) {
+        loadCounts(currentUser.uid);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -89,6 +119,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
       const res = await FirebaseSyncService.migrateLocalDataToUser(currentUser.uid);
       if (res.success) {
         setStatusMessage({ text: `โอนย้ายข้อมูลขึ้น Cloud สำเร็จแล้ว (${res.count} รายการ) ระบบเชื่อมต่อเรียลไทม์แล้ว`, type: 'success' });
+        await loadCounts(currentUser.uid);
         if (onDataSynced) onDataSynced();
       } else {
         setStatusMessage({ text: `เกิดข้อผิดพลาดในการโอนย้าย: ${res.error}`, type: 'error' });
@@ -145,6 +176,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
           const res = await FirebaseSyncService.importUserDataJSON(currentUser.uid, content);
           if (res.success) {
             setStatusMessage({ text: `นำเข้าข้อมูลเข้า Firestore Cloud สำเร็จ (${res.count} รายการ)`, type: 'success' });
+            await loadCounts(currentUser.uid);
             if (onDataSynced) onDataSynced();
           } else {
             setStatusMessage({ text: `นำเข้าไม่สำเร็จ: ${res.error}`, type: 'error' });
@@ -268,6 +300,77 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Live Cloud Data Inspector - ยืนยันว่าข้อมูลถูกบันทึกจริง */}
+          {currentUser && (
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" /> ข้อมูลจริงบน Cloud Firestore:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => currentUser && loadCounts(currentUser.uid)}
+                  disabled={isLoadingCounts}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingCounts ? 'animate-spin' : ''}`} />
+                  <span>ตรวจสอบสด</span>
+                </button>
+              </div>
+
+              {isLoadingCounts && !cloudCounts ? (
+                <div className="text-[11px] text-emerald-300/70 flex items-center gap-2 py-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" /> กำลังนับเอกสารจริงจาก Firestore Instance...
+                </div>
+              ) : cloudCounts ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-baseline justify-between border-b border-emerald-500/20 pb-1.5">
+                    <span className="text-[11px] text-emerald-200 font-medium">รวมเอกสารที่บันทึกบน Cloud:</span>
+                    <span className="text-sm font-bold text-emerald-300 font-mono">
+                      {cloudCounts.total} เอกสาร
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">เมนูอาหาร:</span>
+                      <span className="font-mono font-bold text-white">{cloudCounts.menus} รายการ</span>
+                    </div>
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">วัตถุดิบ (AP/EP):</span>
+                      <span className="font-mono font-bold text-white">{cloudCounts.ingredients} รายการ</span>
+                    </div>
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">สูตรซอส:</span>
+                      <span className="font-mono font-bold text-white">{cloudCounts.sauces} รายการ</span>
+                    </div>
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">ค่าใช้จ่าย/โสหุ้ย:</span>
+                      <span className="font-mono font-bold text-white">{cloudCounts.expenses} รายการ</span>
+                    </div>
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">ยอดขายรายวัน:</span>
+                      <span className="font-mono font-bold text-white">{cloudCounts.dailySales} วัน</span>
+                    </div>
+                    <div className="flex justify-between bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5">
+                      <span className="text-white/70">การตั้งค่าร้าน:</span>
+                      <span className="font-bold text-emerald-400">
+                        {cloudCounts.settingsSaved ? '✓ บันทึกแล้ว' : '-'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-300/80 pt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>ข้อมูลเหล่านี้ถูกบันทึกและซิงค์เรียลไทม์บน Cloud Firestore จริง</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] text-amber-300/90 py-1">
+                  ยังไม่มีข้อมูลบน Cloud ในบัญชีนี้ สามารถกดปุ่ม "โอนย้ายขึ้น Cloud" ด้านล่างเพื่อบันทึกทันที
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Migration Note Card (Requirement 5) */}
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2">

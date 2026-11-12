@@ -218,6 +218,48 @@ export const FirebaseSyncService = {
   },
 
   /**
+   * Fetch live counts of documents stored on Cloud Firestore for verification
+   */
+  async getUserCloudCounts(userId: string): Promise<{
+    menus: number;
+    ingredients: number;
+    sauces: number;
+    expenses: number;
+    dailySales: number;
+    total: number;
+    settingsSaved: boolean;
+  } | null> {
+    if (!userId) return null;
+    try {
+      const [mSnap, iSnap, sSnap, eSnap, dSnap, setSnap] = await Promise.all([
+        getDocs(collection(db, 'users', userId, COLLECTIONS.MENUS)),
+        getDocs(collection(db, 'users', userId, COLLECTIONS.INGREDIENTS)),
+        getDocs(collection(db, 'users', userId, COLLECTIONS.SAUCES)),
+        getDocs(collection(db, 'users', userId, COLLECTIONS.EXPENSES)),
+        getDocs(collection(db, 'users', userId, COLLECTIONS.DAILY_SALES)),
+        getDoc(doc(db, 'users', userId, COLLECTIONS.SETTINGS, 'default')),
+      ]);
+      const menus = mSnap.size;
+      const ingredients = iSnap.size;
+      const sauces = sSnap.size;
+      const expenses = eSnap.size;
+      const dailySales = dSnap.size;
+      return {
+        menus,
+        ingredients,
+        sauces,
+        expenses,
+        dailySales,
+        total: menus + ingredients + sauces + expenses + dailySales + (setSnap.exists() ? 1 : 0),
+        settingsSaved: setSnap.exists(),
+      };
+    } catch (err) {
+      console.warn('Error fetching cloud counts:', err);
+      return null;
+    }
+  },
+
+  /**
    * Migrate all local state / localStorage data into users/{userId}/...
    */
   async migrateLocalDataToUser(userId: string): Promise<{ success: boolean; count: number; error?: string }> {
