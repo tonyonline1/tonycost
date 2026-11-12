@@ -1035,6 +1035,7 @@ export default function App() {
           {/* TAB: EXECUTIVE DASHBOARD */}
           {currentTab === 'executive_dashboard' && (
             <ExecutiveDashboard
+              ingredients={ingredients as any}
               sales={dailySales}
               expenses={expenses as any}
               employees={employees as any}
@@ -1044,6 +1045,7 @@ export default function App() {
               channels={defaultSalesChannels}
               currentSettings={settings}
               activeLanguage="th"
+              onNavigate={(tabId) => setCurrentTab(tabId)}
               onNavigateToTab={(tabId) => setCurrentTab(tabId)}
               onSalesUpdated={(updatedSales) => setDailySales(updatedSales)}
             />

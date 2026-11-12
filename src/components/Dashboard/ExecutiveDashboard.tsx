@@ -27,12 +27,13 @@ import {
 import { calculateProfitAndLoss, calculateBreakEven, calculateInventoryCOGS } from '../../engine/calculations';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService } from '../../services/firebaseSyncService';
+import { calculateVariantCostBreakdown } from '../../services/calculationEngine';
 import { INITIAL_SETTINGS } from '../../data/initialData';
 import { WhatShouldIDoSection } from './WhatShouldIDoSection';
 
 interface ExecutiveDashboardProps {
-  ingredients: Ingredient[];
-  menuItems: MenuItem[];
+  ingredients?: any[];
+  menuItems: any[];
   subRecipes?: SubRecipe[];
   channels: SalesChannel[];
   expenses: ExpenseRecord[];
@@ -40,10 +41,14 @@ interface ExecutiveDashboardProps {
   sales: DailySalesRecord[];
   waste?: WasteRecord[];
   wasteRecords?: WasteRecord[];
+  inventory?: any[];
+  allWaste?: any[];
   settings?: BusinessSettings;
+  currentSettings?: any;
   advices?: WhatShouldIDoAdvice[];
   activeLanguage: 'th' | 'en';
-  onNavigate: (view: string) => void;
+  onNavigate?: (view: string) => void;
+  onNavigateToTab?: (tabId: string) => void;
   onSalesUpdated?: (sales: DailySalesRecord[]) => void;
 }
 
@@ -56,14 +61,26 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   sales = [],
   waste = [],
   wasteRecords = [],
+  inventory = [],
+  allWaste: rawAllWaste = [],
   settings = INITIAL_SETTINGS,
+  currentSettings: rawCurrentSettings,
   advices,
-  activeLanguage,
+  activeLanguage = 'th',
   onNavigate,
+  onNavigateToTab,
   onSalesUpdated,
 }) => {
   const [isSyncingSales, setIsSyncingSales] = React.useState(false);
   const [syncFeedback, setSyncFeedback] = React.useState<string | null>(null);
+
+  const handleNavigate = (view: string) => {
+    if (onNavigate) {
+      onNavigate(view);
+    } else if (onNavigateToTab) {
+      onNavigateToTab(view);
+    }
+  };
 
   const handleSyncLivePOS = async () => {
     setIsSyncingSales(true);
@@ -86,8 +103,65 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     }
   };
 
-  const currentSettings = settings || INITIAL_SETTINGS;
-  const allWaste = waste && waste.length > 0 ? waste : wasteRecords || [];
+  const currentSettings = rawCurrentSettings || settings || INITIAL_SETTINGS;
+  const allWaste = (rawAllWaste && rawAllWaste.length > 0)
+    ? rawAllWaste
+    : (waste && waste.length > 0 ? waste : wasteRecords || []);
+
+  // Safe helper to extract or adapt portions/variants for any menu structure
+  const getMenuPortions = React.useCallback(
+    (menu: any): any[] => {
+      if (!menu) return [];
+      if (menu.portions && Array.isArray(menu.portions) && menu.portions.length > 0) {
+        return menu.portions;
+      }
+      if (menu.variants && Array.isArray(menu.variants) && menu.variants.length > 0) {
+        const ings = (ingredients && ingredients.length > 0) ? ingredients : StorageService.getIngredients();
+        const sauces = StorageService.getSauces();
+        const ingMap = new Map((ings as any[]).map((i: any) => [i.id, i]));
+        const sauceMap = new Map((sauces as any[]).map((s: any) => [s.id, s]));
+        const st = currentSettings || StorageService.getSettings();
+
+        return menu.variants.map((v: any) => {
+          let directFoodCost = 0;
+          let packagingCost = (st as any)?.defaultTakeawayPackagingCost || 3.5;
+          let sellingPrice = v.sellingPrice || 50;
+
+          try {
+            if (v.recipeItems && v.recipeItems.length > 0) {
+              const bd = calculateVariantCostBreakdown(v, menu.name || menu.thaiName || '', ingMap as any, sauceMap as any, st as any);
+              directFoodCost = bd.totalFoodCost || bd.totalIngredientCost || 0;
+              packagingCost = bd.packagingCost || packagingCost;
+              sellingPrice = bd.sellingPrice || sellingPrice;
+            } else if (typeof v.totalFoodCost === 'number') {
+              directFoodCost = v.totalFoodCost;
+            } else if (typeof v.foodCost === 'number') {
+              directFoodCost = v.foodCost;
+            }
+          } catch (e) {
+            directFoodCost = v.foodCost || v.totalFoodCost || 0;
+          }
+
+          const totalDirectCost = directFoodCost + packagingCost;
+          const foodCostPercent = sellingPrice > 0 ? (totalDirectCost / sellingPrice) * 100 : 0;
+          const contributionProfit = Math.max(0, sellingPrice - totalDirectCost);
+
+          return {
+            id: v.id,
+            name: v.name || v.proteinType || 'จานปกติ',
+            directFoodCost,
+            packagingCost,
+            totalDirectCost,
+            sellingPrice,
+            foodCostPercent,
+            contributionProfit,
+          };
+        });
+      }
+      return [];
+    },
+    [ingredients, currentSettings]
+  );
 
   // Double-counting guard: exclude payroll expenses when employees exist
   const isPayrollExpense = (e: ExpenseRecord) => {
@@ -138,7 +212,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const hasActualStock = purchasesList.length > 0 && inventoryList.length > 0;
 
   // Weighted operational food cost % across all active portions
-  const allPortions = menuItems.flatMap((m) => m.portions || []);
+  const allPortions = menuItems.flatMap((m) => getMenuPortions(m));
   const avgFoodCostPercent = allPortions.length > 0
     ? allPortions.reduce((sum, p) => sum + (p.foodCostPercent || 0), 0) / allPortions.length
     : 32;
@@ -198,19 +272,20 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   // 1. Food cost alert from real menu items if available
   const highCostPortion = menuItems
-    .flatMap((m) => (m.portions || []).map((p) => ({ menu: m, portion: p })))
+    .flatMap((m) => getMenuPortions(m).map((p) => ({ menu: m, portion: p })))
     .filter((x) => (x.portion.foodCostPercent || 0) > (currentSettings.defaultTargetFoodCostPercent || 40))
     .sort((a, b) => (b.portion.foodCostPercent || 0) - (a.portion.foodCostPercent || 0))[0];
 
   if (highCostPortion) {
     const p = highCostPortion.portion;
     const m = highCostPortion.menu;
+    const menuTitle = m.thaiName || m.name || 'เมนูหลัก';
     defaultAdvicesList.push({
       id: 'adv-1',
       type: 'CRITICAL',
       category: 'Food Cost',
-      titleTh: `เมนู "${m.thaiName} (${p.name})" มี % Food Cost สูงเกินเป้าหมาย (${p.foodCostPercent.toFixed(1)}% vs เป้า ${currentSettings.defaultTargetFoodCostPercent || 40}%)`,
-      titleEn: `Menu "${m.thaiName} (${p.name})" Food Cost % is Exceeding Target (${p.foodCostPercent.toFixed(1)}% vs ${currentSettings.defaultTargetFoodCostPercent || 40}% target)`,
+      titleTh: `เมนู "${menuTitle} (${p.name})" มี % Food Cost สูงเกินเป้าหมาย (${p.foodCostPercent.toFixed(1)}% vs เป้า ${currentSettings.defaultTargetFoodCostPercent || 40}%)`,
+      titleEn: `Menu "${menuTitle} (${p.name})" Food Cost % is Exceeding Target (${p.foodCostPercent.toFixed(1)}% vs ${currentSettings.defaultTargetFoodCostPercent || 40}% target)`,
       descriptionTh: `ต้นทุนวัตถุดิบและกล่องอยู่ที่ ฿${p.totalDirectCost.toFixed(2)} บนราคาขาย ฿${p.sellingPrice} แนะนำพิจารณาปรับราคาขายหรือลดต้นทุนวัตถุดิบ`,
       descriptionEn: `Direct cost is ฿${p.totalDirectCost.toFixed(2)} on selling price ฿${p.sellingPrice}. Consider adjusting price or standardizing portions.`,
       actionRecommendationTh: 'ปรับราคาขายหรือเจรจาซัพพลายเออร์',
@@ -309,7 +384,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => onNavigate('scenario_calculator')}
+            onClick={() => handleNavigate('scenario_calculator')}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#FF6321] hover:bg-[#FF6321]/90 px-4 py-2 text-xs font-semibold text-white transition-all shadow-sm cursor-pointer"
           >
             <TrendingUp className="h-4 w-4" />
@@ -503,7 +578,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       <WhatShouldIDoSection
         advices={generatedAdvices}
         activeLanguage={activeLanguage}
-        onNavigate={onNavigate}
+        onNavigate={handleNavigate}
       />
 
       {/* Menu Profitability Summary Table */}
@@ -522,7 +597,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
           <button
             type="button"
-            onClick={() => onNavigate('menu_costing')}
+            onClick={() => handleNavigate('menu_costing')}
             className="text-xs font-semibold text-[#FF6321] hover:text-[#FF6321]/80 inline-flex items-center gap-1 cursor-pointer"
           >
             <span>{activeLanguage === 'th' ? 'ดูเมนูทั้งหมด' : 'View All Menus'}</span>
@@ -546,29 +621,32 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 font-mono text-white/80">
-              {menuItems.map((menu) =>
-                menu.portions.map((portion, pIdx) => {
-                  const isHighFoodCost = portion.foodCostPercent > settings.defaultTargetFoodCostPercent;
+              {menuItems.map((menu: any) => {
+                const portionsList = getMenuPortions(menu);
+                if (!portionsList || portionsList.length === 0) return null;
+                const targetFoodCost = (currentSettings?.defaultTargetFoodCostPercent || settings?.defaultTargetFoodCostPercent || 35);
+                return portionsList.map((portion: any, pIdx: number) => {
+                  const isHighFoodCost = (portion.foodCostPercent || 0) > targetFoodCost;
                   return (
                     <tr key={`${menu.id}-${portion.id}`} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3 px-3 font-medium text-white">
                         {pIdx === 0 ? (
                           <div>
-                            <div className="font-semibold text-white font-sans">{menu.thaiName}</div>
-                            <div className="text-[11px] text-white/30 font-mono">{menu.code}</div>
+                            <div className="font-semibold text-white font-sans">{menu.thaiName || menu.name || 'เมนู'}</div>
+                            <div className="text-[11px] text-white/30 font-mono">{menu.code || '-'}</div>
                           </div>
                         ) : (
                           <span className="text-white/30 pl-4">↳</span>
                         )}
                       </td>
                       <td className="py-3 px-3 text-white/60 font-sans">{portion.name}</td>
-                      <td className="py-3 px-3 text-right">฿{portion.directFoodCost.toFixed(2)}</td>
-                      <td className="py-3 px-3 text-right text-white/40">฿{portion.packagingCost.toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right">฿{(portion.directFoodCost || 0).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right text-white/40">฿{(portion.packagingCost || 0).toFixed(2)}</td>
                       <td className="py-3 px-3 text-right font-semibold text-white">
-                        ฿{portion.totalDirectCost.toFixed(2)}
+                        ฿{(portion.totalDirectCost || 0).toFixed(2)}
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-white">
-                        ฿{portion.sellingPrice}
+                        ฿{portion.sellingPrice || 0}
                       </td>
                       <td className="py-3 px-3 text-right font-semibold">
                         <span
@@ -578,11 +656,11 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                               : 'bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20'
                           }`}
                         >
-                          {portion.foodCostPercent.toFixed(1)}%
+                          {(portion.foodCostPercent || 0).toFixed(1)}%
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-[#10B981]">
-                        ฿{portion.contributionProfit.toFixed(2)}
+                        ฿{(portion.contributionProfit || 0).toFixed(2)}
                       </td>
                       <td className="py-3 px-3 text-center">
                         {isHighFoodCost ? (
@@ -597,8 +675,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       </td>
                     </tr>
                   );
-                })
-              )}
+                });
+              })}
             </tbody>
           </table>
         </div>
