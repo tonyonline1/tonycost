@@ -920,6 +920,7 @@ export default function App() {
           onReloadData={handleReloadAllData}
           onOpenIconModal={() => setIsIconModalOpen(true)}
           onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
+          currentUser={currentUser}
         />
 
         <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 sm:py-6 lg:py-8 min-w-0 overflow-x-hidden">

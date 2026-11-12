@@ -58,6 +58,7 @@ interface SidebarProps {
   onReloadData?: () => void;
   onOpenIconModal?: () => void;
   onOpenFirebaseSync?: () => void;
+  currentUser?: { displayName?: string | null; email?: string | null; photoURL?: string | null } | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -69,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onReloadData,
   onOpenIconModal,
   onOpenFirebaseSync,
+  currentUser,
 }) => {
   // Backup & Restore states
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -220,8 +222,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
+      {/* Prominent Firebase Cloud Sync in Drawer */}
+      {onOpenFirebaseSync && (
+        <div className="pt-3 pb-1 border-b border-[#EAE4D9]">
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMobile();
+              onOpenFirebaseSync();
+            }}
+            className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-semibold shadow-2xs transition-all cursor-pointer ${
+              currentUser
+                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Cloud className={`w-4 h-4 ${currentUser ? 'text-emerald-600' : 'text-amber-600'}`} />
+              <div className="text-left">
+                <div className="font-bold">
+                  {currentUser ? `เชื่อมต่อแล้ว (${currentUser.displayName?.split(' ')[0] || 'Tony'})` : 'เข้าสู่ระบบ Firebase Cloud'}
+                </div>
+                <div className="text-[10px] text-stone-500 font-normal">
+                  {currentUser ? 'ซิงค์ข้อมูลกับ Firestore แบบสด' : 'ซิงค์ข้อมูลทีมงานข้ามอุปกรณ์'}
+                </div>
+              </div>
+            </div>
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                currentUser ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
       {/* Structured Navigation Groups */}
-      <div className="flex-1 overflow-y-auto pt-3.5 pb-2 space-y-4.5 scrollbar-thin pr-0.5">
+      <div className="flex-1 overflow-y-auto pt-3 pb-2 space-y-4.5 scrollbar-thin pr-0.5">
         {moduleGroups.map((group) => {
           const GroupIcon = group.icon;
           const groupActive = group.items.some((item) => isTabActive(item.id));

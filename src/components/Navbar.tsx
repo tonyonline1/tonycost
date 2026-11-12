@@ -148,23 +148,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={onOpenFirebaseSync}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0 ${
                   currentUser
-                    ? 'border-emerald-300/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-                    : 'border-amber-300/80 bg-amber-50 hover:bg-amber-100 text-amber-900'
+                    ? 'border-emerald-300/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 ring-1 ring-emerald-400/20'
+                    : 'border-amber-300/80 bg-amber-50 hover:bg-amber-100 text-amber-900 ring-1 ring-amber-400/20'
                 }`}
                 title={
                   currentUser
                     ? `เชื่อมต่อ Cloud Firestore แล้ว: ${currentUser.email || currentUser.displayName} (คลิกเพื่อจัดการ/สำรองข้อมูล)`
-                    : 'เข้าสู่ระบบด้วย Google เพื่อบันทึกข้อมูลขึ้น Cloud Firestore'
+                    : 'คลิกเพื่อเข้าสู่ระบบด้วย Google และเชื่อมต่อ Cloud Firestore'
                 }
               >
-                <Cloud className={`w-3.5 h-3.5 ${currentUser ? 'text-emerald-600' : 'text-amber-600'} ${isCloudLoading ? 'animate-bounce' : ''}`} />
-                <span className="hidden sm:inline">
-                  {currentUser ? (currentUser.displayName?.split(' ')[0] || 'Cloud') : 'เข้าสู่ระบบ Cloud'}
+                <Cloud className={`w-3.5 h-3.5 shrink-0 ${currentUser ? 'text-emerald-600' : 'text-amber-600'} ${isCloudLoading ? 'animate-bounce' : ''}`} />
+                <span className="font-bold text-xs whitespace-nowrap">
+                  {currentUser ? (currentUser.displayName?.split(' ')[0] || 'Tony') : 'เชื่อมต่อ Firebase'}
                 </span>
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
+                  className={`w-2 h-2 rounded-full shrink-0 ${
                     currentUser ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
                   }`}
                 />

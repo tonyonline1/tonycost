@@ -71,8 +71,19 @@ export async function loginWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error logging in with Google:', error);
+    if (error?.code === 'auth/unauthorized-domain') {
+      throw new Error(
+        `โดเมนเว็บ (${window.location.hostname}) ยังไม่ได้รับอนุญาตใน Firebase Console กรุณาเพิ่ม "${window.location.hostname}" ที่เมนู Firebase Console -> Authentication -> Settings -> Authorized domains`
+      );
+    }
+    if (error?.code === 'auth/popup-blocked') {
+      throw new Error('เบราว์เซอร์บล็อกหน้าต่าง Pop-up กรุณากดยินยอมเปิด Pop-up เพื่อเข้าสู่ระบบ Google');
+    }
+    if (error?.code === 'auth/popup-closed-by-user') {
+      throw new Error('หน้าต่างเข้าสู่ระบบถูกปิดก่อนทำรายการสำเร็จ');
+    }
     throw error;
   }
 }
