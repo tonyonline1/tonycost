@@ -50,6 +50,7 @@ export interface Ingredient {
   reviewReason?: string;
   supplierId?: string;
   supplierName?: string;
+  displayOrder?: number;
   createdAt: string;
   updatedAt: string;
 }

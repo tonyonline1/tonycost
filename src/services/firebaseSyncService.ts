@@ -5,11 +5,16 @@ import {
   deleteDoc,
   onSnapshot,
   getDocs,
+  getDocsFromServer,
   getDoc,
+  query,
+  limit,
   writeBatch,
   serverTimestamp,
+  Timestamp,
+  FieldValue,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { StorageService } from './storageService';
 import {
   Ingredient,
@@ -51,18 +56,76 @@ export interface CloudSyncState {
   error: string | null;
 }
 
-export const FirebaseSyncService = {
-  /**
-   * Helper to clean data before saving to Firestore (removes undefined values)
-   */
-  sanitizeData<T extends Record<string, any>>(data: T): Record<string, any> {
-    const clean: Record<string, any> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) {
-        clean[key] = value;
+function isFirestoreSpecialValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (value instanceof Date || value instanceof Timestamp || value instanceof FieldValue) {
+    return true;
+  }
+  const anyVal = value as Record<string, unknown>;
+  return typeof anyVal._methodName === 'string' || typeof anyVal.toDate === 'function';
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object') return value;
+  if (isFirestoreSpecialValue(value)) return value;
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => sanitizeValue(item))
+      .filter((item) => item !== undefined);
+  }
+
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v !== undefined) {
+      const sanitized = sanitizeValue(v);
+      if (sanitized !== undefined) {
+        clean[k] = sanitized;
       }
     }
-    return clean;
+  }
+  return clean;
+}
+
+function normalizeFirestoreValue(value: unknown): unknown {
+  if (value === null || value === undefined || typeof value !== 'object') return value;
+  if (value instanceof Timestamp || typeof (value as { toDate?: unknown }).toDate === 'function') {
+    try {
+      return (value as { toDate: () => Date }).toDate().toISOString();
+    } catch {
+      return value;
+    }
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeFirestoreValue(item));
+  }
+  const normalized: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    normalized[k] = normalizeFirestoreValue(v);
+  }
+  return normalized;
+}
+
+function sortByDisplayOrder<T>(items: T[]): T[] {
+  const hasOrder = items.some((item) => typeof (item as any)?.displayOrder === 'number');
+  if (!hasOrder) return items;
+  return [...items].sort((a, b) => {
+    const orderA = typeof (a as any)?.displayOrder === 'number' ? (a as any).displayOrder : Number.MAX_SAFE_INTEGER;
+    const orderB = typeof (b as any)?.displayOrder === 'number' ? (b as any).displayOrder : Number.MAX_SAFE_INTEGER;
+    return orderA - orderB;
+  });
+}
+
+export const FirebaseSyncService = {
+  /**
+   * Deeply clean data before saving to Firestore (recursively removes undefined values from objects & arrays)
+   */
+  sanitizeData<T extends Record<string, any>>(data: T): Record<string, any> {
+    return (sanitizeValue(data) as Record<string, any>) || {};
   },
 
   /**
@@ -160,13 +223,13 @@ export const FirebaseSyncService = {
       colRef,
       (snapshot) => {
         const items = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
+          const data = normalizeFirestoreValue(docSnap.data()) as Record<string, any>;
           return {
             ...data,
             id: docSnap.id,
           } as unknown as T;
         });
-        onUpdate(items);
+        onUpdate(sortByDisplayOrder(items));
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, path);
@@ -191,7 +254,8 @@ export const FirebaseSyncService = {
       docRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          onUpdate({ ...snapshot.data(), id: snapshot.id } as unknown as T);
+          const data = normalizeFirestoreValue(snapshot.data()) as Record<string, any>;
+          onUpdate({ ...data, id: snapshot.id } as unknown as T);
         } else {
           onUpdate(null);
         }
@@ -209,8 +273,22 @@ export const FirebaseSyncService = {
   async hasUserData(userId: string): Promise<boolean> {
     if (!userId) return false;
     try {
-      const snap = await getDocs(collection(db, 'users', userId, COLLECTIONS.MENUS));
-      return !snap.empty;
+      const [settingsSnap, menusSnap, ingSnap, sauceSnap, expSnap, salesSnap] = await Promise.all([
+        getDoc(doc(db, 'users', userId, COLLECTIONS.SETTINGS, 'default')),
+        getDocs(query(collection(db, 'users', userId, COLLECTIONS.MENUS), limit(1))),
+        getDocs(query(collection(db, 'users', userId, COLLECTIONS.INGREDIENTS), limit(1))),
+        getDocs(query(collection(db, 'users', userId, COLLECTIONS.SAUCES), limit(1))),
+        getDocs(query(collection(db, 'users', userId, COLLECTIONS.EXPENSES), limit(1))),
+        getDocs(query(collection(db, 'users', userId, COLLECTIONS.DAILY_SALES), limit(1))),
+      ]);
+      return (
+        settingsSnap.exists() ||
+        !menusSnap.empty ||
+        !ingSnap.empty ||
+        !sauceSnap.empty ||
+        !expSnap.empty ||
+        !salesSnap.empty
+      );
     } catch (err) {
       console.warn('Error checking user cloud data:', err);
       return false;
@@ -456,8 +534,65 @@ export const FirebaseSyncService = {
     }
   },
 
-  // Legacy root-level pull for compatibility if needed
+  /**
+   * Replace an entire user-scoped collection cleanly (upserts current items and removes stale docs)
+   */
+  async replaceUserCollection<T extends { id?: string }>(
+    userId: string,
+    collectionName: string,
+    items: T[]
+  ): Promise<void> {
+    if (!userId) return;
+    const path = `users/${userId}/${collectionName}`;
+    try {
+      const existingSnap = await getDocs(collection(db, 'users', userId, collectionName));
+      const nextIds = new Set(
+        items.map((item, idx) => item.id || (item as any).ingredientId || `item_${Date.now()}_${idx}`)
+      );
+      const staleDocs = existingSnap.docs.filter((d) => !nextIds.has(d.id));
+      for (let i = 0; i < staleDocs.length; i += 400) {
+        const batch = writeBatch(db);
+        staleDocs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      if (items.length > 0) {
+        await this.batchSaveUser(userId, collectionName, items);
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  },
+
+  // Pull latest daily sales directly from Cloud Firestore (or fallback to LocalStorage when signed out)
   async pullDailySales(): Promise<{ success: boolean; data: DailySalesRecord[]; error?: string }> {
-    return { success: true, data: StorageService.getDailySales() };
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: true, data: StorageService.getDailySales() };
+    }
+    try {
+      const colRef = collection(db, 'users', user.uid, COLLECTIONS.DAILY_SALES);
+      let snap;
+      try {
+        snap = await getDocsFromServer(colRef);
+      } catch {
+        snap = await getDocs(colRef);
+      }
+      const items = snap.docs.map((docSnap) => {
+        const data = normalizeFirestoreValue(docSnap.data()) as Record<string, any>;
+        return {
+          ...data,
+          id: docSnap.id,
+        } as DailySalesRecord;
+      });
+      StorageService.saveDailySales(items);
+      return { success: true, data: items };
+    } catch (err: any) {
+      console.error('Failed to pull daily sales from Firestore:', err);
+      return {
+        success: false,
+        data: StorageService.getDailySales(),
+        error: err?.message || 'ไม่สามารถดึงข้อมูลยอดขายจาก Cloud ได้',
+      };
+    }
   },
 };

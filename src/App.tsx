@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -106,8 +106,61 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isCloudLoading, setIsCloudLoading] = useState<boolean>(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [isAutoMigrating, setIsAutoMigrating] = useState<boolean>(false);
+
+  // Synchronous refs so handlers & rapid edits never read stale state closures
+  const currentUserRef = useRef<FirebaseUser | null>(currentUser);
+  const settingsRef = useRef<RestaurantSettings>(settings);
+  const ingredientsRef = useRef<Ingredient[]>(ingredients);
+  const saucesRef = useRef<Sauce[]>(sauces);
+  const menusRef = useRef<MenuItem[]>(menus);
+  const suppliersRef = useRef<Supplier[]>(suppliers);
+  const inventoryRef = useRef<InventoryItem[]>(inventory);
+  const inventoryTransactionsRef = useRef<InventoryTransaction[]>(inventoryTransactions);
+  const purchasesRef = useRef<PurchaseRecord[]>(purchases);
+  const priceHistoryRef = useRef<PriceHistoryRecord[]>(priceHistory);
+  const expensesRef = useRef<ExpenseRecord[]>(expenses);
+  const salesOrdersRef = useRef<SaleOrder[]>(salesOrders);
+  const wasteLogRef = useRef<WasteRecord[]>(wasteLog);
+  const employeesRef = useRef<DomainEmployee[]>(employees);
+  const dailySalesRef = useRef<DailySalesRecord[]>(dailySales);
+
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { ingredientsRef.current = ingredients; }, [ingredients]);
+  useEffect(() => { saucesRef.current = sauces; }, [sauces]);
+  useEffect(() => { menusRef.current = menus; }, [menus]);
+  useEffect(() => { suppliersRef.current = suppliers; }, [suppliers]);
+  useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
+  useEffect(() => { inventoryTransactionsRef.current = inventoryTransactions; }, [inventoryTransactions]);
+  useEffect(() => { purchasesRef.current = purchases; }, [purchases]);
+  useEffect(() => { priceHistoryRef.current = priceHistory; }, [priceHistory]);
+  useEffect(() => { expensesRef.current = expenses; }, [expenses]);
+  useEffect(() => { salesOrdersRef.current = salesOrders; }, [salesOrders]);
+  useEffect(() => { wasteLogRef.current = wasteLog; }, [wasteLog]);
+  useEffect(() => { employeesRef.current = employees; }, [employees]);
+  useEffect(() => { dailySalesRef.current = dailySales; }, [dailySales]);
+
+  const getActiveUid = () => currentUserRef.current?.uid || auth.currentUser?.uid || null;
+
+  const runCloudSync = (task: (uid: string) => Promise<void>, label: string) => {
+    const uid = getActiveUid();
+    if (!uid) return;
+    setPendingSyncCount((c) => c + 1);
+    task(uid)
+      .then(() => {
+        setCloudError(null);
+      })
+      .catch((err: any) => {
+        console.error(`Firebase realtime sync failed [${label}]:`, err);
+        setCloudError(err?.message || `ไม่สามารถซิงค์ข้อมูล (${label}) ขึ้น Firebase ได้`);
+      })
+      .finally(() => {
+        setPendingSyncCount((c) => Math.max(0, c - 1));
+      });
+  };
 
   // Test Firestore connection on boot
   useEffect(() => {
@@ -117,12 +170,17 @@ export default function App() {
   // Firebase Authentication & Real-Time Firestore Sync (Requirements 1, 2, 3)
   useEffect(() => {
     let unsubs: (() => void)[] = [];
+    let activeRunId = 0;
 
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      activeRunId++;
+      const runId = activeRunId;
+
       // Clean up any existing subscriptions
       unsubs.forEach((u) => u());
       unsubs = [];
 
+      currentUserRef.current = user;
       setCurrentUser(user);
 
       if (!user) {
@@ -136,15 +194,37 @@ export default function App() {
       // 1. Initial check & auto-migration if cloud collections are brand new
       try {
         const hasData = await FirebaseSyncService.hasUserData(user.uid);
+        if (runId !== activeRunId) return;
         if (!hasData) {
           setIsAutoMigrating(true);
-          await FirebaseSyncService.migrateLocalDataToUser(user.uid);
+          const migRes = await FirebaseSyncService.migrateLocalDataToUser(user.uid);
+          if (!migRes.success && migRes.error) {
+            setCloudError(migRes.error);
+          }
+          if (runId !== activeRunId) return;
           setIsAutoMigrating(false);
         }
       } catch (err: any) {
         console.warn('Auto-migration error:', err);
         setIsAutoMigrating(false);
+        setCloudError(err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อข้อมูลเริ่มต้น');
       }
+
+      if (runId !== activeRunId) return;
+
+      // Track first snapshot arrival to clear loading state accurately
+      const pendingInitial = new Set(['settings', 'ingredients', 'sauces', 'menus', 'daily_sales', 'expenses']);
+      const markCollectionLoaded = (name: string) => {
+        if (pendingInitial.delete(name) && pendingInitial.size === 0) {
+          setIsCloudLoading(false);
+        }
+      };
+      const loadingFallbackTimer = setTimeout(() => {
+        if (runId === activeRunId) {
+          setIsCloudLoading(false);
+        }
+      }, 3000);
+      unsubs.push(() => clearTimeout(loadingFallbackTimer));
 
       // 2. Real-Time onSnapshot subscriptions for user-scoped collections (Requirement 3)
       try {
@@ -155,12 +235,17 @@ export default function App() {
             COLLECTIONS.SETTINGS,
             'default',
             (cloudSettings) => {
+              markCollectionLoaded('settings');
               if (cloudSettings) {
+                settingsRef.current = cloudSettings;
                 setSettings(cloudSettings);
                 StorageService.saveSettings(cloudSettings);
               }
             },
-            (err) => setCloudError(err.message || 'Error syncing settings')
+            (err) => {
+              markCollectionLoaded('settings');
+              setCloudError(err.message || 'Error syncing settings');
+            }
           )
         );
 
@@ -170,12 +255,15 @@ export default function App() {
             user.uid,
             COLLECTIONS.INGREDIENTS,
             (cloudIngs) => {
-              if (cloudIngs && cloudIngs.length > 0) {
-                setIngredients(cloudIngs);
-                StorageService.saveIngredients(cloudIngs);
-              }
+              markCollectionLoaded('ingredients');
+              ingredientsRef.current = cloudIngs;
+              setIngredients(cloudIngs);
+              StorageService.saveIngredients(cloudIngs);
             },
-            (err) => setCloudError(err.message || 'Error syncing ingredients')
+            (err) => {
+              markCollectionLoaded('ingredients');
+              setCloudError(err.message || 'Error syncing ingredients');
+            }
           )
         );
 
@@ -185,12 +273,15 @@ export default function App() {
             user.uid,
             COLLECTIONS.SAUCES,
             (cloudSauces) => {
-              if (cloudSauces && cloudSauces.length > 0) {
-                setSauces(cloudSauces);
-                StorageService.saveSauces(cloudSauces);
-              }
+              markCollectionLoaded('sauces');
+              saucesRef.current = cloudSauces;
+              setSauces(cloudSauces);
+              StorageService.saveSauces(cloudSauces);
             },
-            (err) => setCloudError(err.message || 'Error syncing sauces')
+            (err) => {
+              markCollectionLoaded('sauces');
+              setCloudError(err.message || 'Error syncing sauces');
+            }
           )
         );
 
@@ -200,12 +291,15 @@ export default function App() {
             user.uid,
             COLLECTIONS.MENUS,
             (cloudMenus) => {
-              if (cloudMenus && cloudMenus.length > 0) {
-                setMenus(cloudMenus);
-                StorageService.saveMenus(cloudMenus);
-              }
+              markCollectionLoaded('menus');
+              menusRef.current = cloudMenus;
+              setMenus(cloudMenus);
+              StorageService.saveMenus(cloudMenus);
             },
-            (err) => setCloudError(err.message || 'Error syncing menus')
+            (err) => {
+              markCollectionLoaded('menus');
+              setCloudError(err.message || 'Error syncing menus');
+            }
           )
         );
 
@@ -215,12 +309,15 @@ export default function App() {
             user.uid,
             COLLECTIONS.DAILY_SALES,
             (cloudSales) => {
-              if (cloudSales && cloudSales.length > 0) {
-                setDailySales(cloudSales);
-                StorageService.saveDailySales(cloudSales);
-              }
+              markCollectionLoaded('daily_sales');
+              dailySalesRef.current = cloudSales;
+              setDailySales(cloudSales);
+              StorageService.saveDailySales(cloudSales);
             },
-            (err) => setCloudError(err.message || 'Error syncing daily sales')
+            (err) => {
+              markCollectionLoaded('daily_sales');
+              setCloudError(err.message || 'Error syncing daily sales');
+            }
           )
         );
 
@@ -230,12 +327,15 @@ export default function App() {
             user.uid,
             COLLECTIONS.EXPENSES,
             (cloudExp) => {
-              if (cloudExp && cloudExp.length > 0) {
-                setExpenses(cloudExp);
-                StorageService.saveExpenses(cloudExp);
-              }
+              markCollectionLoaded('expenses');
+              expensesRef.current = cloudExp;
+              setExpenses(cloudExp);
+              StorageService.saveExpenses(cloudExp);
             },
-            (err) => setCloudError(err.message || 'Error syncing expenses')
+            (err) => {
+              markCollectionLoaded('expenses');
+              setCloudError(err.message || 'Error syncing expenses');
+            }
           )
         );
 
@@ -245,10 +345,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.EMPLOYEES,
             (cloudEmp) => {
-              if (cloudEmp && cloudEmp.length > 0) {
-                setEmployees(cloudEmp);
-                StorageService.saveEmployees(cloudEmp as any);
-              }
+              employeesRef.current = cloudEmp;
+              setEmployees(cloudEmp);
+              StorageService.saveEmployees(cloudEmp as any);
             },
             (err) => setCloudError(err.message || 'Error syncing employees')
           )
@@ -260,10 +359,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.PURCHASES,
             (cloudPurchases) => {
-              if (cloudPurchases && cloudPurchases.length > 0) {
-                setPurchases(cloudPurchases);
-                StorageService.savePurchases(cloudPurchases);
-              }
+              purchasesRef.current = cloudPurchases;
+              setPurchases(cloudPurchases);
+              StorageService.savePurchases(cloudPurchases);
             },
             (err) => setCloudError(err.message || 'Error syncing purchases')
           )
@@ -275,10 +373,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.INVENTORY,
             (cloudInv) => {
-              if (cloudInv && cloudInv.length > 0) {
-                setInventory(cloudInv);
-                StorageService.saveInventory(cloudInv);
-              }
+              inventoryRef.current = cloudInv;
+              setInventory(cloudInv);
+              StorageService.saveInventory(cloudInv);
             },
             (err) => setCloudError(err.message || 'Error syncing inventory')
           )
@@ -290,10 +387,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.WASTE_LOG,
             (cloudWaste) => {
-              if (cloudWaste && cloudWaste.length > 0) {
-                setWasteLog(cloudWaste);
-                StorageService.saveWasteLog(cloudWaste);
-              }
+              wasteLogRef.current = cloudWaste;
+              setWasteLog(cloudWaste);
+              StorageService.saveWasteLog(cloudWaste);
             },
             (err) => setCloudError(err.message || 'Error syncing waste log')
           )
@@ -305,10 +401,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.SUPPLIERS,
             (cloudSuppliers) => {
-              if (cloudSuppliers && cloudSuppliers.length > 0) {
-                setSuppliers(cloudSuppliers);
-                StorageService.saveSuppliers(cloudSuppliers);
-              }
+              suppliersRef.current = cloudSuppliers;
+              setSuppliers(cloudSuppliers);
+              StorageService.saveSuppliers(cloudSuppliers);
             },
             (err) => setCloudError(err.message || 'Error syncing suppliers')
           )
@@ -320,10 +415,9 @@ export default function App() {
             user.uid,
             COLLECTIONS.PRICE_HISTORY,
             (cloudHistory) => {
-              if (cloudHistory && cloudHistory.length > 0) {
-                setPriceHistory(cloudHistory);
-                StorageService.savePriceHistory(cloudHistory);
-              }
+              priceHistoryRef.current = cloudHistory;
+              setPriceHistory(cloudHistory);
+              StorageService.savePriceHistory(cloudHistory);
             },
             (err) => setCloudError(err.message || 'Error syncing price history')
           )
@@ -335,20 +429,21 @@ export default function App() {
             user.uid,
             COLLECTIONS.SALES_ORDERS,
             (cloudOrders) => {
-              if (cloudOrders && cloudOrders.length > 0) {
-                setSalesOrders(cloudOrders);
-                StorageService.saveSalesOrders(cloudOrders);
-              }
+              salesOrdersRef.current = cloudOrders;
+              setSalesOrders(cloudOrders);
+              StorageService.saveSalesOrders(cloudOrders);
             },
             (err) => setCloudError(err.message || 'Error syncing sales orders')
           )
         );
-      } finally {
+      } catch (err: any) {
         setIsCloudLoading(false);
+        setCloudError(err?.message || 'ไม่สามารถเริ่มซิงค์ข้อมูลเรียลไทม์ได้');
       }
     });
 
     return () => {
+      activeRunId++;
       unsubAuth();
       unsubs.forEach((u) => u());
     };
@@ -445,25 +540,29 @@ export default function App() {
 
   const allVariants = menus.flatMap((m) => m.variants);
 
-  // 3. State Update Handlers
+  // 3. State Update Handlers (All mutations sync immediately to Firestore in real-time)
   const handleSaveIngredient = (ingredient: Ingredient) => {
-    const existingIndex = ingredients.findIndex((i) => i.id === ingredient.id);
+    const prevIngredients = ingredientsRef.current;
+    const existingIndex = prevIngredients.findIndex((i) => i.id === ingredient.id);
     let updated: Ingredient[];
     if (existingIndex >= 0) {
-      updated = [...ingredients];
+      updated = [...prevIngredients];
       updated[existingIndex] = ingredient;
     } else {
-      updated = [ingredient, ...ingredients];
+      updated = [ingredient, ...prevIngredients];
     }
+    ingredientsRef.current = updated;
     setIngredients(updated);
     StorageService.saveIngredients(updated);
 
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.INGREDIENTS, ingredient.id, ingredient);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.INGREDIENTS, ingredient.id, ingredient),
+      'บันทึกวัตถุดิบ'
+    );
 
     // Also update or add inventory item if missing
-    const invIndex = inventory.findIndex((inv) => inv.ingredientId === ingredient.id);
+    const prevInventory = inventoryRef.current;
+    const invIndex = prevInventory.findIndex((inv) => inv.ingredientId === ingredient.id);
     if (invIndex === -1) {
       const newInv: InventoryItem = {
         id: `inv_${Date.now()}`,
@@ -476,93 +575,119 @@ export default function App() {
         costPerUnit: ingredient.costPerBaseUnit,
         lastUpdated: new Date().toISOString(),
       };
-      setInventory([...inventory, newInv]);
+      const nextInv = [...prevInventory, newInv];
+      inventoryRef.current = nextInv;
+      setInventory(nextInv);
+      StorageService.saveInventory(nextInv);
+      runCloudSync(
+        (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.INVENTORY, newInv.id!, newInv),
+        'สร้างรายการสต็อกวัตถุดิบ'
+      );
     }
   };
 
   const handleDeleteIngredient = (ingredientId: string) => {
-    setIngredients((prev) => {
-      const updated = prev.filter((i) => i.id !== ingredientId);
-      StorageService.saveIngredients(updated);
-      return updated;
-    });
-    setInventory((prev) => {
-      const updated = prev.filter((inv) => inv.ingredientId !== ingredientId);
-      StorageService.saveInventory(updated);
-      return updated;
-    });
-    if (currentUser) {
-      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.INGREDIENTS, ingredientId);
-    }
+    const updatedIngredients = ingredientsRef.current.filter((i) => i.id !== ingredientId);
+    ingredientsRef.current = updatedIngredients;
+    setIngredients(updatedIngredients);
+    StorageService.saveIngredients(updatedIngredients);
+
+    const invToDelete = inventoryRef.current.filter((inv) => inv.ingredientId === ingredientId);
+    const updatedInventory = inventoryRef.current.filter((inv) => inv.ingredientId !== ingredientId);
+    inventoryRef.current = updatedInventory;
+    setInventory(updatedInventory);
+    StorageService.saveInventory(updatedInventory);
+
+    runCloudSync(async (uid) => {
+      await FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.INGREDIENTS, ingredientId);
+      for (const inv of invToDelete) {
+        if (inv.id) {
+          await FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.INVENTORY, inv.id);
+        }
+      }
+    }, 'ลบวัตถุดิบ');
   };
 
   const handleReorderIngredients = (reordered: Ingredient[]) => {
-    setIngredients(reordered);
-    StorageService.saveIngredients(reordered);
-    if (currentUser) {
-      FirebaseSyncService.batchSaveUser(currentUser.uid, COLLECTIONS.INGREDIENTS, reordered);
-    }
+    const withOrder = reordered.map((item, index) => ({ ...item, displayOrder: index }));
+    ingredientsRef.current = withOrder;
+    setIngredients(withOrder);
+    StorageService.saveIngredients(withOrder);
+    runCloudSync(
+      (uid) => FirebaseSyncService.batchSaveUser(uid, COLLECTIONS.INGREDIENTS, withOrder),
+      'จัดเรียงวัตถุดิบ'
+    );
   };
 
   const handleRecordPriceChange = (record: PriceHistoryRecord) => {
-    setPriceHistory([record, ...priceHistory]);
-    StorageService.savePriceHistory([record, ...priceHistory]);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.PRICE_HISTORY, record.id, record);
-    }
+    const next = [record, ...priceHistoryRef.current];
+    priceHistoryRef.current = next;
+    setPriceHistory(next);
+    StorageService.savePriceHistory(next);
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.PRICE_HISTORY, record.id, record),
+      'บันทึกประวัติราคาวัตถุดิบ'
+    );
   };
 
   const handleSaveSauce = (sauce: Sauce) => {
-    const existingIndex = sauces.findIndex((s) => s.id === sauce.id);
+    const prevSauces = saucesRef.current;
+    const existingIndex = prevSauces.findIndex((s) => s.id === sauce.id);
     let updated: Sauce[];
     if (existingIndex >= 0) {
-      updated = [...sauces];
+      updated = [...prevSauces];
       updated[existingIndex] = sauce;
     } else {
-      updated = [...sauces, sauce];
+      updated = [...prevSauces, sauce];
     }
+    saucesRef.current = updated;
     setSauces(updated);
     StorageService.saveSauces(updated);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SAUCES, sauce.id, sauce);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.SAUCES, sauce.id, sauce),
+      'บันทึกสูตรซอส'
+    );
   };
 
   const handleSaveMenu = (menu: MenuItem) => {
-    setMenus((prevMenus) => {
-      const existingIndex = prevMenus.findIndex((m) => m.id === menu.id);
-      let updated: MenuItem[];
-      if (existingIndex >= 0) {
-        updated = [...prevMenus];
-        updated[existingIndex] = menu;
-      } else {
-        updated = [...prevMenus, menu];
-      }
-      StorageService.saveMenus(updated);
-      return updated;
-    });
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, menu.id, menu);
+    const prevMenus = menusRef.current;
+    const existingIndex = prevMenus.findIndex((m) => m.id === menu.id);
+    let updated: MenuItem[];
+    if (existingIndex >= 0) {
+      updated = [...prevMenus];
+      updated[existingIndex] = menu;
+    } else {
+      updated = [...prevMenus, menu];
     }
+    menusRef.current = updated;
+    setMenus(updated);
+    StorageService.saveMenus(updated);
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.MENUS, menu.id, menu),
+      'บันทึกเมนูอาหาร'
+    );
   };
 
   const handleDeleteMenu = (menuId: string) => {
-    setMenus((prevMenus) => {
-      const updated = prevMenus.filter((m) => m.id !== menuId);
-      StorageService.saveMenus(updated);
-      return updated;
-    });
-    if (currentUser) {
-      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.MENUS, menuId);
-    }
+    const updated = menusRef.current.filter((m) => m.id !== menuId);
+    menusRef.current = updated;
+    setMenus(updated);
+    StorageService.saveMenus(updated);
+    runCloudSync(
+      (uid) => FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.MENUS, menuId),
+      'ลบเมนูอาหาร'
+    );
   };
 
   const handleReorderMenus = (reordered: MenuItem[]) => {
-    setMenus(reordered);
-    StorageService.saveMenus(reordered);
-    if (currentUser) {
-      FirebaseSyncService.batchSaveUser(currentUser.uid, COLLECTIONS.MENUS, reordered);
-    }
+    const withOrder = reordered.map((menu, index) => ({ ...menu, displayOrder: index }));
+    menusRef.current = withOrder;
+    setMenus(withOrder);
+    StorageService.saveMenus(withOrder);
+    runCloudSync(
+      (uid) => FirebaseSyncService.batchSaveUser(uid, COLLECTIONS.MENUS, withOrder),
+      'จัดเรียงเมนูอาหาร'
+    );
   };
 
   const handleUpdateVariantPrice = (
@@ -571,27 +696,30 @@ export default function App() {
     prices: { sellingPrice: number; takeawayPrice: number; deliveryPrice: number }
   ) => {
     let targetMenu: MenuItem | undefined;
-    setMenus((prevMenus) => {
-      const updated = prevMenus.map((m) => {
-        if (m.id !== menuId) return m;
-        const updatedVariants = m.variants.map((v) => {
-          if (v.id !== variantId) return v;
-          return {
-            ...v,
-            sellingPrice: prices.sellingPrice,
-            takeawayPrice: prices.takeawayPrice,
-            deliveryPrice: prices.deliveryPrice,
-          };
-        });
-        const mUpdated = { ...m, variants: updatedVariants };
-        targetMenu = mUpdated;
-        return mUpdated;
+    const updated = menusRef.current.map((m) => {
+      if (m.id !== menuId) return m;
+      const updatedVariants = m.variants.map((v) => {
+        if (v.id !== variantId) return v;
+        return {
+          ...v,
+          sellingPrice: prices.sellingPrice,
+          takeawayPrice: prices.takeawayPrice,
+          deliveryPrice: prices.deliveryPrice,
+        };
       });
-      StorageService.saveMenus(updated);
-      return updated;
+      const mUpdated = { ...m, variants: updatedVariants };
+      targetMenu = mUpdated;
+      return mUpdated;
     });
-    if (currentUser && targetMenu) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, (targetMenu as MenuItem).id, targetMenu);
+    menusRef.current = updated;
+    setMenus(updated);
+    StorageService.saveMenus(updated);
+    if (targetMenu) {
+      const menuToSync = targetMenu;
+      runCloudSync(
+        (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.MENUS, menuToSync.id, menuToSync),
+        'อัปเดตราคาขายเมนู'
+      );
     }
   };
 
@@ -601,47 +729,63 @@ export default function App() {
     recipeItems: RecipeItem[]
   ) => {
     let targetMenu: MenuItem | undefined;
-    setMenus((prevMenus) => {
-      const updated = prevMenus.map((m) => {
-        if (m.id !== menuId) return m;
-        const updatedVariants = m.variants.map((v) => {
-          if (v.id !== variantId) return v;
-          return { ...v, recipeItems };
-        });
-        const mUpdated = { ...m, variants: updatedVariants };
-        targetMenu = mUpdated;
-        return mUpdated;
+    const updated = menusRef.current.map((m) => {
+      if (m.id !== menuId) return m;
+      const updatedVariants = m.variants.map((v) => {
+        if (v.id !== variantId) return v;
+        return { ...v, recipeItems };
       });
-      StorageService.saveMenus(updated);
-      return updated;
+      const mUpdated = { ...m, variants: updatedVariants };
+      targetMenu = mUpdated;
+      return mUpdated;
     });
-    if (currentUser && targetMenu) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.MENUS, (targetMenu as MenuItem).id, targetMenu);
+    menusRef.current = updated;
+    setMenus(updated);
+    StorageService.saveMenus(updated);
+    if (targetMenu) {
+      const menuToSync = targetMenu;
+      runCloudSync(
+        (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.MENUS, menuToSync.id, menuToSync),
+        'บันทึกสูตรอาหาร'
+      );
     }
   };
 
   const handleSavePurchase = (purchase: PurchaseRecord) => {
-    setPurchases((prev) => {
-      const updated = [purchase, ...prev];
-      StorageService.savePurchases(updated);
-      return updated;
-    });
+    const nextPurchases = [purchase, ...purchasesRef.current];
+    purchasesRef.current = nextPurchases;
+    setPurchases(nextPurchases);
+    StorageService.savePurchases(nextPurchases);
 
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.PURCHASES, purchase.id, purchase);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.PURCHASES, purchase.id, purchase),
+      'บันทึกรายการจัดซื้อ'
+    );
 
     // Update inventory quantity
-    const item = inventory.find((i) => i.ingredientId === purchase.ingredientId);
+    const prevInventory = inventoryRef.current;
+    const item = prevInventory.find((i) => i.ingredientId === purchase.ingredientId);
     if (item) {
       const updatedStock = item.currentStock + purchase.quantity;
-      const updated = inventory.map((inv) =>
-        inv.id === item.id
-          ? { ...inv, currentStock: updatedStock, lastUpdated: new Date().toISOString() }
-          : inv
+      const updatedInvItem: InventoryItem = {
+        ...item,
+        currentStock: updatedStock,
+        lastUpdated: new Date().toISOString(),
+      };
+      const updated = prevInventory.map((inv) =>
+        inv.id === item.id ? updatedInvItem : inv
       );
+      inventoryRef.current = updated;
       setInventory(updated);
       StorageService.saveInventory(updated);
+
+      const invDocId = updatedInvItem.id || updatedInvItem.ingredientId;
+      if (invDocId) {
+        runCloudSync(
+          (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.INVENTORY, invDocId, updatedInvItem),
+          'อัปเดตสต็อกจากการจัดซื้อ'
+        );
+      }
 
       // Record transaction
       const txn: InventoryTransaction = {
@@ -656,169 +800,287 @@ export default function App() {
         user: 'Tony (Owner)',
         cost: purchase.totalPrice,
       };
-      setInventoryTransactions([txn, ...inventoryTransactions]);
-      StorageService.saveInventoryTransactions([txn, ...inventoryTransactions]);
+      const nextTxns = [txn, ...inventoryTransactionsRef.current];
+      inventoryTransactionsRef.current = nextTxns;
+      setInventoryTransactions(nextTxns);
+      StorageService.saveInventoryTransactions(nextTxns);
     }
   };
 
   const handleUpdateIngredientPriceOnly = (ingredientId: string, newPrice: number) => {
-    const updated = ingredients.map((ing) => {
+    let targetIng: Ingredient | undefined;
+    const updated = ingredientsRef.current.map((ing) => {
       if (ing.id !== ingredientId) return ing;
       const updatedIng = { ...ing, purchasePrice: newPrice };
       const calc = calculateIngredientCost(updatedIng);
-      return {
+      const nextIng: Ingredient = {
         ...updatedIng,
         actualCost: calc.actualCost,
         costPerBaseUnit: calc.costPerBaseUnit,
         updatedAt: new Date().toISOString(),
       };
+      targetIng = nextIng;
+      return nextIng;
     });
+    ingredientsRef.current = updated;
     setIngredients(updated);
+    StorageService.saveIngredients(updated);
+    if (targetIng) {
+      const ingToSync = targetIng;
+      runCloudSync(
+        (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.INGREDIENTS, ingToSync.id, ingToSync),
+        'อัปเดตราคาวัตถุดิบ'
+      );
+    }
   };
 
   const handleSaveAdjustment = (txn: InventoryTransaction, waste?: WasteRecord) => {
-    setInventoryTransactions([txn, ...inventoryTransactions]);
+    const nextTxns = [txn, ...inventoryTransactionsRef.current];
+    inventoryTransactionsRef.current = nextTxns;
+    setInventoryTransactions(nextTxns);
+    StorageService.saveInventoryTransactions(nextTxns);
 
     if (waste) {
-      setWasteLog([waste, ...wasteLog]);
+      const nextWaste = [waste, ...wasteLogRef.current];
+      wasteLogRef.current = nextWaste;
+      setWasteLog(nextWaste);
+      StorageService.saveWasteLog(nextWaste);
+      runCloudSync(
+        (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.WASTE_LOG, waste.id, waste),
+        'บันทึกของเสีย'
+      );
     }
 
     // Update currentStock in inventory
-    const updated = inventory.map((item) => {
-      if (item.ingredientId !== txn.ingredientId) return item;
-      const newStock = Math.max(0, item.currentStock + txn.quantity);
-      return { ...item, currentStock: newStock, lastUpdated: new Date().toISOString() };
+    const delta = (txn as any).quantityChange ?? txn.quantity ?? 0;
+    const changedItems: InventoryItem[] = [];
+    const updated = inventoryRef.current.map((item) => {
+      const matchesById = (txn as any).inventoryItemId && item.id === (txn as any).inventoryItemId;
+      const matchesByIng = txn.ingredientId && item.ingredientId === txn.ingredientId;
+      if (!matchesById && !matchesByIng) return item;
+      const newStock = Math.max(0, item.currentStock + delta);
+      const nextItem = { ...item, currentStock: newStock, lastUpdated: new Date().toISOString() };
+      changedItems.push(nextItem);
+      return nextItem;
     });
+    inventoryRef.current = updated;
     setInventory(updated);
+    StorageService.saveInventory(updated);
+
+    if (changedItems.length > 0) {
+      runCloudSync(
+        (uid) => FirebaseSyncService.batchSaveUser(uid, COLLECTIONS.INVENTORY, changedItems),
+        'ปรับยอดสต็อก'
+      );
+    }
   };
 
   const handleSaveExpense = (expense: ExpenseRecord) => {
-    const nextExpenses = [expense, ...expenses];
+    const nextExpenses = [expense, ...expensesRef.current];
+    expensesRef.current = nextExpenses;
     setExpenses(nextExpenses);
     StorageService.saveExpenses(nextExpenses);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, expense.id, expense);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.EXPENSES, expense.id, expense),
+      'บันทึกค่าใช้จ่าย'
+    );
   };
 
   const handleDeleteExpense = (id: string) => {
-    const nextExpenses = expenses.filter((e) => e.id !== id);
+    const nextExpenses = expensesRef.current.filter((e) => e.id !== id);
+    expensesRef.current = nextExpenses;
     setExpenses(nextExpenses);
     StorageService.saveExpenses(nextExpenses);
-    if (currentUser) {
-      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, id);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.EXPENSES, id),
+      'ลบค่าใช้จ่าย'
+    );
   };
 
   const handleUpdateExpense = (updatedExp: ExpenseRecord) => {
-    const nextExpenses = expenses.map((e) => (e.id === updatedExp.id ? updatedExp : e));
+    const nextExpenses = expensesRef.current.map((e) => (e.id === updatedExp.id ? updatedExp : e));
+    expensesRef.current = nextExpenses;
     setExpenses(nextExpenses);
     StorageService.saveExpenses(nextExpenses);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EXPENSES, updatedExp.id, updatedExp);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.EXPENSES, updatedExp.id, updatedExp),
+      'แก้ไขค่าใช้จ่าย'
+    );
   };
 
   const handleSaveSaleOrder = (order: SaleOrder) => {
-    const nextOrders = [order, ...salesOrders];
+    const nextOrders = [order, ...salesOrdersRef.current];
+    salesOrdersRef.current = nextOrders;
     setSalesOrders(nextOrders);
     StorageService.saveSalesOrders(nextOrders);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SALES_ORDERS, order.id, order);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.SALES_ORDERS, order.id, order),
+      'บันทึกรายการขาย'
+    );
   };
 
   const handleAddDailySalesRecord = (rec: DailySalesRecord) => {
-    setDailySales((prev) => {
-      const next = upsertDailySalesRecord(prev, rec);
-      StorageService.saveDailySales(next);
-      return next;
-    });
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.DAILY_SALES, rec.id, rec);
-    }
+    const prev = dailySalesRef.current;
+    const next = upsertDailySalesRecord(prev, rec);
+    const savedRecord =
+      next.find(
+        (r) => r.date === rec.date && (r.channelId === rec.channelId || !r.channelId || !rec.channelId)
+      ) || rec;
+    dailySalesRef.current = next;
+    setDailySales(next);
+    StorageService.saveDailySales(next);
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.DAILY_SALES, savedRecord.id, savedRecord),
+      'บันทึกยอดขายรายวัน'
+    );
   };
 
   const handleDeleteDailySalesRecord = (id: string) => {
-    setDailySales((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      StorageService.saveDailySales(next);
-      return next;
-    });
-    if (currentUser) {
-      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.DAILY_SALES, id);
-    }
+    const next = dailySalesRef.current.filter((s) => s.id !== id);
+    dailySalesRef.current = next;
+    setDailySales(next);
+    StorageService.saveDailySales(next);
+    runCloudSync(
+      (uid) => FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.DAILY_SALES, id),
+      'ลบยอดขายรายวัน'
+    );
+  };
+
+  const handleSalesUpdated = (updatedSales: DailySalesRecord[]) => {
+    dailySalesRef.current = updatedSales;
+    setDailySales(updatedSales);
+    StorageService.saveDailySales(updatedSales);
+    runCloudSync(
+      (uid) => FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.DAILY_SALES, updatedSales),
+      'ซิงค์ยอดขายจากคลาวด์'
+    );
   };
 
   const handleAddEmployee = (newEmp: DomainEmployee) => {
-    setEmployees((prev) => {
-      const next = [newEmp, ...prev];
-      StorageService.saveEmployees(next as any);
-      return next;
-    });
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.EMPLOYEES, newEmp.id, newEmp);
-    }
+    const next = [newEmp, ...employeesRef.current];
+    employeesRef.current = next;
+    setEmployees(next);
+    StorageService.saveEmployees(next as any);
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.EMPLOYEES, newEmp.id, newEmp),
+      'เพิ่มพนักงาน'
+    );
   };
 
   const handleDeleteEmployee = (id: string) => {
-    setEmployees((prev) => {
-      const next = prev.filter((e) => e.id !== id);
-      StorageService.saveEmployees(next as any);
-      return next;
-    });
-    if (currentUser) {
-      FirebaseSyncService.deleteUserDoc(currentUser.uid, COLLECTIONS.EMPLOYEES, id);
-    }
+    const next = employeesRef.current.filter((e) => e.id !== id);
+    employeesRef.current = next;
+    setEmployees(next);
+    StorageService.saveEmployees(next as any);
+    runCloudSync(
+      (uid) => FirebaseSyncService.deleteUserDoc(uid, COLLECTIONS.EMPLOYEES, id),
+      'ลบพนักงาน'
+    );
   };
 
   const handleSaveSettings = (newSettings: RestaurantSettings) => {
+    settingsRef.current = newSettings;
     setSettings(newSettings);
     StorageService.saveSettings(newSettings);
-    if (currentUser) {
-      FirebaseSyncService.saveUserDoc(currentUser.uid, COLLECTIONS.SETTINGS, 'default', newSettings);
-    }
+    runCloudSync(
+      (uid) => FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.SETTINGS, 'default', newSettings),
+      'บันทึกการตั้งค่าระบบ'
+    );
   };
 
   const handleIngredientsImported = (newIngredients: Ingredient[]) => {
-    // Merge or prepend imported ingredients
-    const existingIds = new Set(ingredients.map((i) => i.id));
+    const prevIngredients = ingredientsRef.current;
+    const existingIds = new Set(prevIngredients.map((i) => i.id));
     const toAdd = newIngredients.filter((i) => !existingIds.has(i.id));
-    setIngredients([...toAdd, ...ingredients]);
+    const next = [...toAdd, ...prevIngredients];
+    ingredientsRef.current = next;
+    setIngredients(next);
+    StorageService.saveIngredients(next);
+    if (toAdd.length > 0) {
+      runCloudSync(
+        (uid) => FirebaseSyncService.batchSaveUser(uid, COLLECTIONS.INGREDIENTS, toAdd),
+        'นำเข้าวัตถุดิบ'
+      );
+    }
+  };
+
+  const handleReloadAllData = () => {
+    const nextSettings = StorageService.getSettings();
+    const nextIngredients = StorageService.getIngredients();
+    const nextSauces = StorageService.getSauces();
+    const nextMenus = StorageService.getMenus();
+    const nextSuppliers = StorageService.getSuppliers();
+    const nextInventory = StorageService.getInventory();
+    const nextTxns = StorageService.getInventoryTransactions();
+    const nextPurchases = StorageService.getPurchases();
+    const nextPriceHistory = StorageService.getPriceHistory();
+    const nextExpenses = StorageService.getExpenses();
+    const nextSalesOrders = StorageService.getSalesOrders();
+    const nextWasteLog = StorageService.getWasteLog();
+    const nextEmployees = StorageService.getEmployees();
+    const nextDailySales = StorageService.getDailySales();
+
+    settingsRef.current = nextSettings;
+    ingredientsRef.current = nextIngredients;
+    saucesRef.current = nextSauces;
+    menusRef.current = nextMenus;
+    suppliersRef.current = nextSuppliers;
+    inventoryRef.current = nextInventory;
+    inventoryTransactionsRef.current = nextTxns;
+    purchasesRef.current = nextPurchases;
+    priceHistoryRef.current = nextPriceHistory;
+    expensesRef.current = nextExpenses;
+    salesOrdersRef.current = nextSalesOrders;
+    wasteLogRef.current = nextWasteLog;
+    employeesRef.current = nextEmployees;
+    dailySalesRef.current = nextDailySales;
+
+    setSettings(nextSettings);
+    setIngredients(nextIngredients);
+    setSauces(nextSauces);
+    setMenus(nextMenus);
+    setSuppliers(nextSuppliers);
+    setInventory(nextInventory);
+    setInventoryTransactions(nextTxns);
+    setPurchases(nextPurchases);
+    setPriceHistory(nextPriceHistory);
+    setExpenses(nextExpenses);
+    setSalesOrders(nextSalesOrders);
+    setWasteLog(nextWasteLog);
+    setEmployees(nextEmployees);
+    setDailySales(nextDailySales);
+  };
+
+  const syncAllCurrentDataToCloud = () => {
+    runCloudSync(async (uid) => {
+      await FirebaseSyncService.saveUserDoc(uid, COLLECTIONS.SETTINGS, 'default', settingsRef.current);
+      await Promise.all([
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.INGREDIENTS, ingredientsRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.SAUCES, saucesRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.MENUS, menusRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.DAILY_SALES, dailySalesRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.EXPENSES, expensesRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.EMPLOYEES, employeesRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.INVENTORY, inventoryRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.PURCHASES, purchasesRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.WASTE_LOG, wasteLogRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.SUPPLIERS, suppliersRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.PRICE_HISTORY, priceHistoryRef.current),
+        FirebaseSyncService.replaceUserCollection(uid, COLLECTIONS.SALES_ORDERS, salesOrdersRef.current),
+      ]);
+    }, 'ซิงค์ข้อมูลทั้งหมดขึ้น Cloud');
   };
 
   const handleResetDefaults = () => {
     StorageService.resetToDefaults();
-    setSettings(StorageService.getSettings());
-    setIngredients(StorageService.getIngredients());
-    setSauces(StorageService.getSauces());
-    setMenus(StorageService.getMenus());
-    setSuppliers(StorageService.getSuppliers());
-    setInventory(StorageService.getInventory());
-    setInventoryTransactions([]);
-    setPurchases([]);
-    setPriceHistory([]);
-    setExpenses(StorageService.getExpenses());
-    setSalesOrders(StorageService.getSalesOrders());
-    setWasteLog(StorageService.getWasteLog());
+    handleReloadAllData();
+    syncAllCurrentDataToCloud();
     setCurrentTab('dashboard');
   };
 
-  const handleReloadAllData = () => {
-    setSettings(StorageService.getSettings());
-    setIngredients(StorageService.getIngredients());
-    setSauces(StorageService.getSauces());
-    setMenus(StorageService.getMenus());
-    setSuppliers(StorageService.getSuppliers());
-    setInventory(StorageService.getInventory());
-    setInventoryTransactions(StorageService.getInventoryTransactions());
-    setPurchases(StorageService.getPurchases());
-    setPriceHistory(StorageService.getPriceHistory());
-    setExpenses(StorageService.getExpenses());
-    setSalesOrders(StorageService.getSalesOrders());
-    setWasteLog(StorageService.getWasteLog());
-    setEmployees(StorageService.getEmployees());
-    setDailySales(StorageService.getDailySales());
+  const handleRestoreBackupAndSync = () => {
+    handleReloadAllData();
+    syncAllCurrentDataToCloud();
   };
 
   const handleNavigateToRecipeBuilder = (variantId: string) => {
@@ -839,7 +1101,7 @@ export default function App() {
       <Navbar
         settings={settings}
         currentTab={currentTab}
-        onUpdateRole={(role) => setSettings({ ...settings, userRole: role })}
+        onUpdateRole={(role) => handleSaveSettings({ ...settingsRef.current, userRole: role })}
         reviewItemsCount={reviewRequiredCount}
         lowStockCount={0}
         onOpenMobileNav={() => setIsMobileNavOpen(true)}
@@ -847,7 +1109,7 @@ export default function App() {
         onOpenIconModal={() => setIsIconModalOpen(true)}
         onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
         currentUser={currentUser}
-        isCloudLoading={isCloudLoading}
+        isCloudLoading={isCloudLoading || pendingSyncCount > 0}
       />
 
       {/* Cloud Sync Status / Notifications Banner (Requirement 3: Loading states & Clear error messages in UI) */}
@@ -917,7 +1179,7 @@ export default function App() {
           onCloseMobile={() => setIsMobileNavOpen(false)}
           reviewCount={reviewRequiredCount}
           lowStockCount={0}
-          onReloadData={handleReloadAllData}
+          onReloadData={handleRestoreBackupAndSync}
           onOpenIconModal={() => setIsIconModalOpen(true)}
           onOpenFirebaseSync={() => setIsFirebaseModalOpen(true)}
           currentUser={currentUser}
@@ -1002,7 +1264,7 @@ export default function App() {
           {currentTab === 'overhead_breakeven' && (
             <BreakEvenView
               expenses={expenses as any}
-              employees={StorageService.getEmployees() as any}
+              employees={employees as any}
               sales={dailySales}
               settings={settings as any}
               activeLanguage="th"
@@ -1048,7 +1310,7 @@ export default function App() {
               activeLanguage="th"
               onNavigate={(tabId) => setCurrentTab(tabId)}
               onNavigateToTab={(tabId) => setCurrentTab(tabId)}
-              onSalesUpdated={(updatedSales) => setDailySales(updatedSales)}
+              onSalesUpdated={handleSalesUpdated}
             />
           )}
 
@@ -1060,7 +1322,7 @@ export default function App() {
               employees={employees as any}
               settings={settings}
               activeLanguage="th"
-              onSalesUpdated={(updatedSales) => setDailySales(updatedSales)}
+              onSalesUpdated={handleSalesUpdated}
             />
           )}
 
@@ -1082,20 +1344,7 @@ export default function App() {
               ingredients={ingredients}
               transactions={inventoryTransactions}
               wasteLog={wasteLog}
-              onSaveAdjustment={(txn, waste) => {
-                const nextTxns = [txn, ...inventoryTransactions];
-                setInventoryTransactions(nextTxns);
-                const nextInv = inventory.map((item) =>
-                  item.id === txn.inventoryItemId
-                    ? { ...item, currentStock: Math.max(0, item.currentStock + txn.quantityChange), lastUpdated: new Date().toISOString() }
-                    : item
-                );
-                setInventory(nextInv);
-                if (waste) {
-                  const nextWaste = [waste, ...wasteLog];
-                  setWasteLog(nextWaste);
-                }
-              }}
+              onSaveAdjustment={handleSaveAdjustment}
             />
           )}
 
@@ -1108,9 +1357,7 @@ export default function App() {
               priceHistory={priceHistory}
               settings={settings}
               onSavePurchase={handleSavePurchase}
-              onUpdateIngredientPrice={(id, price) =>
-                setIngredients((prev) => prev.map((i) => (i.id === id ? { ...i, purchasePrice: price } : i)))
-              }
+              onUpdateIngredientPrice={handleUpdateIngredientPriceOnly}
               onRecordPriceChange={handleRecordPriceChange}
             />
           )}
@@ -1124,9 +1371,9 @@ export default function App() {
               expenses={expenses}
               salesOrders={salesOrders}
               settings={settings}
-              onIngredientsImported={(newIngredients) => setIngredients(newIngredients)}
+              onIngredientsImported={handleIngredientsImported}
               onEditIngredient={(ing) => handleSaveIngredient(ing)}
-              onResetDefaults={handleReloadAllData}
+              onResetDefaults={handleResetDefaults}
             />
           )}
 
